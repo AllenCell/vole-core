@@ -9,19 +9,63 @@ const entryToTuple = <P, V>(entry?: Entry<P, V>): [P, V] | undefined => entry &&
 const parentIndexOf = (i: number) => Math.ceil(i / 2) - 1;
 const childIndexOf = (i: number) => i * 2 + 1;
 
+class IndexMap<T extends Exclude<unknown, number | undefined>> {
+  private contents: (T | number)[] = [];
+  private nextIndex = 0;
+
+  insert(value: T): number {
+    if (this.nextIndex < this.contents.length) {
+      // reuse an index
+      const index = this.nextIndex;
+      this.nextIndex = this.contents[this.nextIndex] as number;
+      this.contents[index] = value;
+      return index;
+    } else {
+      // push onto the end
+      const index = this.contents.length;
+      this.contents.push(value);
+      this.nextIndex += 1;
+      return index;
+    }
+  }
+
+  get(index: number | undefined): T | undefined {
+    if (index === undefined) {
+      return undefined;
+    }
+
+    const result = this.contents[index];
+
+    if (result === undefined || typeof result === "number") {
+      return undefined;
+    }
+
+    return result;
+  }
+
+  remove(index: number | undefined): T | undefined {
+    const entry = this.get(index);
+
+    if (entry === undefined) {
+      return undefined;
+    }
+
+    // `get` asserts that `index` is a number
+    this.contents[index as number] = this.nextIndex;
+    this.nextIndex = index as number;
+    return entry;
+  }
+}
+
 export class PriorityQueue<P, V> {
-  private contents: (Entry<P, V> | number)[];
+  private contents: IndexMap<Entry<P, V>>;
   private indexes: Map<V, number>;
   private heap: number[];
-  private nextIndex: number;
-  private compare: (i: P, j: P) => boolean;
 
-  constructor(compare: (i: P, j: P) => boolean) {
-    this.compare = compare;
-    this.contents = [];
+  constructor(private compare: (i: P, j: P) => boolean) {
+    this.contents = new IndexMap();
     this.indexes = new Map();
     this.heap = [];
-    this.nextIndex = 0;
   }
 
   get length() {
@@ -37,18 +81,13 @@ export class PriorityQueue<P, V> {
   }
 
   private removeIndex(index: number | undefined): Entry<P, V> | undefined {
-    if (index === undefined) {
-      return undefined;
-    }
+    const result = this.contents.remove(index);
 
-    const result = this.contents[index];
-    if (typeof result === "number") {
+    if (result === undefined) {
       return undefined;
     }
 
     this.indexes.delete(result.value);
-    this.contents[index] = this.nextIndex;
-    this.nextIndex = index;
     this.heap[result.heapIndex] = this.heap.pop() as number;
     this.siftDown(result.heapIndex);
 
@@ -56,20 +95,8 @@ export class PriorityQueue<P, V> {
   }
 
   insert(priority: P, value: V) {
-    const index = this.nextIndex;
-    const entry = { priority, value, heapIndex: this.length };
-
-    if (index < this.contents.length) {
-      // reuse an index
-      const nextFree = this.contents[this.nextIndex] as number;
-      this.contents[this.nextIndex] = entry;
-      this.nextIndex = nextFree;
-    } else {
-      // push onto the end
-      this.contents.push(entry);
-      this.nextIndex += 1;
-    }
-
+    const entry = { priority, value, heapIndex: this.heap.length };
+    const index = this.contents.insert(entry);
     this.indexes.set(value, index);
     this.heap.push(index);
     this.siftUp(entry);
@@ -81,8 +108,8 @@ export class PriorityQueue<P, V> {
       return false;
     }
 
-    const entry = this.contents[index];
-    if (typeof entry === "number") {
+    const entry = this.contents.get(index);
+    if (entry === undefined) {
       return false;
     }
 
@@ -97,13 +124,17 @@ export class PriorityQueue<P, V> {
     return true;
   }
 
-  // peek(): [P, V] {
-  //   return this.contents[this.heap[0]] as [P, V];
-  // }
+  peek(): [P, V] | undefined {
+    const entry = this.contents.get(this.heap[0]);
+    if (entry === undefined) {
+      return undefined;
+    }
+
+    return entryToTuple(entry);
+  }
 
   pop(): [P, V] | undefined {
-    const index = this.heap[0];
-    return entryToTuple(this.removeIndex(index));
+    return entryToTuple(this.removeIndex(this.heap[0]));
   }
 
   remove(value: V): P | undefined {
