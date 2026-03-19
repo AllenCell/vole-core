@@ -1,5 +1,27 @@
 import { DataTexture } from "three";
 
+export type DataManagerLimits = {
+  size: number;
+  deviceSize: number;
+  concurrentRequests: number;
+  concurrentPrefetches: number;
+};
+
+const ONE_GIGABYTE = 1024 * 1024 * 1024;
+
+export const DEFAULT_DATA_MANAGER_LIMITS: DataManagerLimits = {
+  size: ONE_GIGABYTE,
+  deviceSize: ONE_GIGABYTE,
+  concurrentRequests: 10,
+  concurrentPrefetches: 4,
+};
+
+export const validateDataManagerLimits = (limits: DataManagerLimits): DataManagerLimits => ({
+  ...limits,
+  deviceSize: Math.min(limits.size, limits.deviceSize),
+  concurrentPrefetches: Math.min(limits.concurrentRequests, limits.concurrentPrefetches),
+});
+
 export const enum ChunkPriorityClass {
   RECENT = 0,
   PREFETCH = 1,
@@ -12,9 +34,12 @@ export type ChunkPriority = {
   score: number;
 };
 
+export const MIN_CHUNK_PRIORITY: ChunkPriority = { class: ChunkPriorityClass.RECENT, score: 0 };
 /** Returns true iff `a > b` */
-export const compareChunkPriority = (a: ChunkPriority, b: ChunkPriority) =>
+export const chunkPriorityGreater = (a: ChunkPriority, b: ChunkPriority) =>
   a.class !== b.class ? a.class > b.class : a.score > b.score;
+export const chunkPriorityLess = (a: ChunkPriority, b: ChunkPriority) =>
+  a.class !== b.class ? a.class < b.class : a.score < b.score;
 
 export const enum ChunkState {
   QUEUED = "queued",
@@ -33,8 +58,6 @@ export type ChunkEntry = ChunkData & {
   subscriberPriorities: [number, ChunkPriority][];
   priority: ChunkPriority;
 };
-
-// export interface DataSubscriber {}
 
 export type ChunkId = {
   sourceId: number;
