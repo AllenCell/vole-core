@@ -78,13 +78,6 @@ export class PriorityQueue<P, V> {
     }
   }
 
-  insert(priority: P, value: V) {
-    const entry = { priority, value, heapIndex: this.heap.length };
-    this.keys.set(value, entry);
-    this.heap.push(entry);
-    this.siftUp(entry);
-  }
-
   update(value: V, newPriority: P): boolean {
     const entry = this.keys.get(value);
     if (entry === undefined) {
@@ -100,6 +93,17 @@ export class PriorityQueue<P, V> {
     }
 
     return true;
+  }
+
+  insert(value: V, priority: P) {
+    if (this.update(value, priority)) {
+      return;
+    }
+
+    const entry = { priority, value, heapIndex: this.heap.length };
+    this.keys.set(value, entry);
+    this.heap.push(entry);
+    this.siftUp(entry);
   }
 
   peek(): [P, V] | undefined {
