@@ -27,6 +27,7 @@ export class PriorityQueue<P, V> {
     return this.heap.length;
   }
 
+  /** Useful common primitive for `siftUp` and `siftDown`: compares two entries and swaps them if out of order. */
   private trySwap(entry: Entry<P, V>, swapEntry?: Entry<P, V>, shouldSwap = this.gt): boolean {
     if (swapEntry !== undefined && shouldSwap(entry.priority, swapEntry.priority)) {
       this.heap[entry.heapIndex] = swapEntry;
@@ -39,6 +40,7 @@ export class PriorityQueue<P, V> {
     return false;
   }
 
+  /** Moves `entry` *up* to the correct position within the heap. */
   private siftUp(entry: Entry<P, V>) {
     let parentEntry: Entry<P, V> | undefined;
 
@@ -49,6 +51,7 @@ export class PriorityQueue<P, V> {
     this.heap[entry.heapIndex] = entry;
   }
 
+  /** Moves `entry` *down* to the correct position within the heap. */
   private siftDown(entry: Entry<P, V>) {
     let childEntry: Entry<P, V> | undefined;
 
@@ -78,6 +81,7 @@ export class PriorityQueue<P, V> {
     }
   }
 
+  /** Updates the priority of value `value` to `newPriority`, or returns `false` if no such value is in the queue. */
   update(value: V, newPriority: P): boolean {
     const entry = this.keys.get(value);
     if (entry === undefined) {
@@ -95,6 +99,7 @@ export class PriorityQueue<P, V> {
     return true;
   }
 
+  /** Adds a new `value` to the queue with the given `priority`. */
   insert(value: V, priority: P) {
     if (this.update(value, priority)) {
       return;
@@ -106,16 +111,19 @@ export class PriorityQueue<P, V> {
     this.siftUp(entry);
   }
 
+  /** Returns the highest-priority item in the queue, without removing it. */
   peek(): [P, V] | undefined {
     return entryToTuple(this.heap[0]);
   }
 
+  /** Removes and returns the highest-priority item in the queue. */
   pop(): [P, V] | undefined {
     const entry = this.heap[0];
     this.removeEntry(entry);
     return entryToTuple(entry);
   }
 
+  /** Removes the item with value `value` from the queue. */
   remove(value: V): P | undefined {
     const entry = this.keys.get(value);
     this.removeEntry(entry);
