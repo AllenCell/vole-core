@@ -11,58 +11,58 @@ const entryToTuple = <P, V>(entry?: Entry<P, V>): [P, V] | undefined => entry &&
 const parentIndexOf = (i: number) => Math.ceil(i / 2) - 1;
 const childIndexOf = (i: number) => i * 2 + 1;
 
-class IndexMap<T> {
-  private contents: (T | number)[] = [];
-  private nextIndex = 0;
+// class IndexMap<T> {
+//   private contents: (T | number)[] = [];
+//   private nextIndex = 0;
 
-  insert(value: T): number {
-    if (this.nextIndex < this.contents.length) {
-      // reuse an index
-      const index = this.nextIndex;
-      this.nextIndex = this.contents[this.nextIndex] as number;
-      this.contents[index] = value;
-      return index;
-    } else {
-      // push onto the end
-      const index = this.contents.length;
-      this.contents.push(value);
-      this.nextIndex += 1;
-      return index;
-    }
-  }
+//   insert(value: T): number {
+//     if (this.nextIndex < this.contents.length) {
+//       // reuse an index
+//       const index = this.nextIndex;
+//       this.nextIndex = this.contents[this.nextIndex] as number;
+//       this.contents[index] = value;
+//       return index;
+//     } else {
+//       // push onto the end
+//       const index = this.contents.length;
+//       this.contents.push(value);
+//       this.nextIndex += 1;
+//       return index;
+//     }
+//   }
 
-  get(index: number | undefined): T | undefined {
-    if (index === undefined) {
-      return undefined;
-    }
+//   get(index: number | undefined): T | undefined {
+//     if (index === undefined) {
+//       return undefined;
+//     }
 
-    const result = this.contents[index];
+//     const result = this.contents[index];
 
-    if (result === undefined || typeof result === "number") {
-      return undefined;
-    }
+//     if (result === undefined || typeof result === "number") {
+//       return undefined;
+//     }
 
-    return result;
-  }
+//     return result;
+//   }
 
-  remove(index: number | undefined): T | undefined {
-    const entry = this.get(index);
+//   remove(index: number | undefined): T | undefined {
+//     const entry = this.get(index);
 
-    if (entry === undefined) {
-      return undefined;
-    }
+//     if (entry === undefined) {
+//       return undefined;
+//     }
 
-    // `get` asserts that `index` is a number
-    this.contents[index as number] = this.nextIndex;
-    this.nextIndex = index as number;
-    return entry;
-  }
-}
+//     // `get` asserts that `index` is a number
+//     this.contents[index as number] = this.nextIndex;
+//     this.nextIndex = index as number;
+//     return entry;
+//   }
+// }
 
 export class PriorityQueue<P, V> {
-  private contents: IndexMap<Entry<P, V>> = new IndexMap();
-  private indexes: Map<V, number> = new Map();
-  private heap: number[] = [];
+  // private contents: IndexMap<Entry<P, V>> = new IndexMap();
+  private keys: Map<V, Entry<P, V>> = new Map();
+  private heap: Entry<P, V>[] = [];
 
   private gt: ComparisonFn<P>;
   private lt: ComparisonFn<P>;
@@ -76,9 +76,9 @@ export class PriorityQueue<P, V> {
     return this.heap.length;
   }
 
-  private trySwap(entry: Entry<P, V>, swapIndex: number, swapEntry?: Entry<P, V>, shouldSwap = this.gt): boolean {
+  private trySwap(entry: Entry<P, V>, swapEntry?: Entry<P, V>, shouldSwap = this.gt): boolean {
     if (swapEntry !== undefined && shouldSwap(entry.priority, swapEntry.priority)) {
-      this.heap[entry.heapIndex] = swapIndex;
+      this.heap[entry.heapIndex] = swapEntry;
       const newHeapIndex = swapEntry.heapIndex;
       swapEntry.heapIndex = entry.heapIndex;
       entry.heapIndex = newHeapIndex;
@@ -88,105 +88,82 @@ export class PriorityQueue<P, V> {
     return false;
   }
 
-  private siftUp(index: number, entry: Entry<P, V>) {
-    let parentIndex: number;
+  private siftUp(entry: Entry<P, V>) {
     let parentEntry: Entry<P, V> | undefined;
 
     do {
-      const parentHeapIndex = parentIndexOf(entry.heapIndex);
-      parentIndex = this.heap[parentHeapIndex];
-      parentEntry = this.contents.get(parentIndex);
-    } while (this.trySwap(entry, parentIndex, parentEntry));
+      parentEntry = this.heap[parentIndexOf(entry.heapIndex)];
+    } while (this.trySwap(entry, parentEntry));
 
-    this.heap[entry.heapIndex] = index;
+    this.heap[entry.heapIndex] = entry;
   }
 
-  private siftDown(index: number, entry: Entry<P, V>) {
-    let childIndex: number;
+  private siftDown(entry: Entry<P, V>) {
     let childEntry: Entry<P, V> | undefined;
 
     do {
       const childHeapIndex = childIndexOf(entry.heapIndex);
-      const cIndex1 = this.heap[childHeapIndex];
-      const cIndex2 = this.heap[childHeapIndex + 1];
-      const cEntry1 = this.contents.get(cIndex1);
-      const cEntry2 = this.contents.get(cIndex2);
+      const cEntry1 = this.heap[childHeapIndex];
+      const cEntry2 = this.heap[childHeapIndex + 1];
+      const use2 = cEntry1 !== undefined && cEntry2 !== undefined && this.gt(cEntry2.priority, cEntry1.priority);
+      childEntry = use2 ? cEntry2 : cEntry1;
+    } while (this.trySwap(entry, childEntry, this.lt));
 
-      if (cEntry1 !== undefined && cEntry2 !== undefined && this.gt(cEntry2.priority, cEntry1.priority)) {
-        childIndex = cIndex2;
-        childEntry = cEntry2;
-      } else {
-        childIndex = cIndex1;
-        childEntry = cEntry1;
-      }
-    } while (this.trySwap(entry, childIndex, childEntry, this.lt));
-
-    this.heap[entry.heapIndex] = index;
+    this.heap[entry.heapIndex] = entry;
   }
 
-  private removeIndex(index: number | undefined): Entry<P, V> | undefined {
-    const result = this.contents.remove(index);
-
-    if (result === undefined) {
-      return undefined;
+  private removeEntry(entry?: Entry<P, V>) {
+    if (entry === undefined) {
+      return;
     }
 
-    this.indexes.delete(result.value);
+    this.keys.delete(entry.value);
+    const siftEntry = this.heap.pop();
 
-    // Replace the removed entry with the last in the heap, then sift it back down
-    const siftIndex = this.heap.pop() as number;
-    this.heap[result.heapIndex] = siftIndex;
-    const siftedEntry = this.contents.get(siftIndex);
-    if (siftedEntry !== undefined) {
-      // TODO don't like this. rework?
-      siftedEntry.heapIndex = result.heapIndex;
-      this.siftDown(siftIndex, siftedEntry);
+    if (siftEntry !== undefined && siftEntry !== entry) {
+      this.heap[entry.heapIndex] = siftEntry;
+      siftEntry.heapIndex = entry.heapIndex;
+      this.siftDown(siftEntry);
     }
-
-    return result;
   }
 
   insert(priority: P, value: V) {
     const entry = { priority, value, heapIndex: this.heap.length };
-    const index = this.contents.insert(entry);
-    this.indexes.set(value, index);
-    this.heap.push(index);
-    this.siftUp(index, entry);
+    this.keys.set(value, entry);
+    this.heap.push(entry);
+    this.siftUp(entry);
   }
 
   update(value: V, newPriority: P): boolean {
-    const index = this.indexes.get(value);
-    const entry = this.contents.get(index);
-    if (entry === undefined || index === undefined) {
+    const entry = this.keys.get(value);
+    if (entry === undefined) {
       return false;
     }
 
     const priorityIncreased = this.gt(newPriority, entry.priority);
     entry.priority = newPriority;
     if (priorityIncreased) {
-      this.siftUp(index, entry);
+      this.siftUp(entry);
     } else {
-      this.siftDown(index, entry);
+      this.siftDown(entry);
     }
 
     return true;
   }
 
   peek(): [P, V] | undefined {
-    const entry = this.contents.get(this.heap[0]);
-    if (entry === undefined) {
-      return undefined;
-    }
-
-    return entryToTuple(entry);
+    return entryToTuple(this.heap[0]);
   }
 
   pop(): [P, V] | undefined {
-    return entryToTuple(this.removeIndex(this.heap[0]));
+    const entry = this.heap[0];
+    this.removeEntry(entry);
+    return entryToTuple(entry);
   }
 
   remove(value: V): P | undefined {
-    const index = this.indexes.get(value);
-    return this.removeIndex(index)?.priority;
+    const entry = this.keys.get(value);
+    this.removeEntry(entry);
+    return entry?.priority;
   }
 }
