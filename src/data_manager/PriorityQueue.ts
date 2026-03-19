@@ -4,12 +4,14 @@ type Entry<P, V> = {
   heapIndex: number;
 };
 
+type ComparisonFn<P> = (i: P, j: P) => boolean;
+
 const entryToTuple = <P, V>(entry?: Entry<P, V>): [P, V] | undefined => entry && [entry.priority, entry.value];
 
 const parentIndexOf = (i: number) => Math.ceil(i / 2) - 1;
 const childIndexOf = (i: number) => i * 2 + 1;
 
-class IndexMap<T extends Exclude<unknown, number | undefined>> {
+class IndexMap<T> {
   private contents: (T | number)[] = [];
   private nextIndex = 0;
 
@@ -58,26 +60,67 @@ class IndexMap<T extends Exclude<unknown, number | undefined>> {
 }
 
 export class PriorityQueue<P, V> {
-  private contents: IndexMap<Entry<P, V>>;
-  private indexes: Map<V, number>;
-  private heap: number[];
+  private contents: IndexMap<Entry<P, V>> = new IndexMap();
+  private indexes: Map<V, number> = new Map();
+  private heap: number[] = [];
 
-  constructor(private compare: (i: P, j: P) => boolean) {
-    this.contents = new IndexMap();
-    this.indexes = new Map();
-    this.heap = [];
+  private gt: ComparisonFn<P>;
+  private lt: ComparisonFn<P>;
+
+  constructor(greaterThan: ComparisonFn<P>) {
+    this.gt = greaterThan;
+    this.lt = (i, j) => greaterThan(j, i);
   }
 
   get length() {
     return this.heap.length;
   }
 
-  private siftUp(entry: Entry<P, V>) {
-    // TODO
+  private trySwap(entry: Entry<P, V>, swapHeapIndex: number, shouldSwap = this.gt): boolean {
+    const swapIndex = this.heap[swapHeapIndex];
+    const swapEntry = this.contents.get(swapIndex);
+
+    if (swapEntry !== undefined && shouldSwap(entry.priority, swapEntry.priority)) {
+      this.heap[entry.heapIndex] = swapIndex;
+      const newHeapIndex = swapEntry.heapIndex;
+      swapEntry.heapIndex = entry.heapIndex;
+      entry.heapIndex = newHeapIndex;
+      return true;
+    }
+
+    return false;
   }
 
-  private siftDown(heapIndex: number) {
-    // TODO
+  private siftUp(index: number, entry: Entry<P, V>) {
+    let parentHeapIndex = entry.heapIndex;
+
+    do {
+      parentHeapIndex = parentIndexOf(parentHeapIndex);
+    } while (this.trySwap(entry, parentHeapIndex));
+
+    this.heap[entry.heapIndex] = index;
+  }
+
+  private siftDown(index: number, entry: Entry<P, V>) {
+    let childHeapIndex = entry.heapIndex;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      childHeapIndex = childIndexOf(childHeapIndex);
+
+      if (this.trySwap(entry, childHeapIndex, this.lt)) {
+        continue;
+      }
+
+      childHeapIndex += 1;
+      if (this.trySwap(entry, childHeapIndex, this.lt)) {
+        continue;
+      }
+
+      break;
+    }
+
+    this.heap[entry.heapIndex] = index;
   }
 
   private removeIndex(index: number | undefined): Entry<P, V> | undefined {
@@ -88,8 +131,17 @@ export class PriorityQueue<P, V> {
     }
 
     this.indexes.delete(result.value);
-    this.heap[result.heapIndex] = this.heap.pop() as number;
-    this.siftDown(result.heapIndex);
+    console.log(this.heap.slice(0, 15));
+
+    // Replace the removed entry with the last in the heap, then sift it back down
+    const siftIndex = this.heap.pop() as number;
+    this.heap[result.heapIndex] = siftIndex;
+    const siftedEntry = this.contents.get(siftIndex);
+    if (siftedEntry !== undefined) {
+      // TODO don't like this. rework?
+      siftedEntry.heapIndex = result.heapIndex;
+      this.siftDown(siftIndex, siftedEntry);
+    }
 
     return result;
   }
@@ -99,26 +151,22 @@ export class PriorityQueue<P, V> {
     const index = this.contents.insert(entry);
     this.indexes.set(value, index);
     this.heap.push(index);
-    this.siftUp(entry);
+    this.siftUp(index, entry);
   }
 
   update(value: V, newPriority: P): boolean {
     const index = this.indexes.get(value);
-    if (index === undefined) {
-      return false;
-    }
-
     const entry = this.contents.get(index);
-    if (entry === undefined) {
+    if (entry === undefined || index === undefined) {
       return false;
     }
 
-    const priorityIncreased = this.compare(newPriority, entry.priority);
+    const priorityIncreased = this.gt(newPriority, entry.priority);
     entry.priority = newPriority;
     if (priorityIncreased) {
-      this.siftUp(entry);
+      this.siftUp(index, entry);
     } else {
-      this.siftDown(entry.heapIndex);
+      this.siftDown(index, entry);
     }
 
     return true;
