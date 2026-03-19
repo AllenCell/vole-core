@@ -10,7 +10,7 @@ const setup = (): [PriorityQueue<number, string>, Map<number, string>, number[]]
   for (let i = 0; i < ENTRY_COUNT; i++) {
     const priority = Math.random();
     const key = i.toString();
-    queue.insert(priority, key);
+    queue.insert(key, priority);
     entryMap.set(priority, key);
     priorities.push(priority);
   }
