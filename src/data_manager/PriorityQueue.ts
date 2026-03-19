@@ -76,10 +76,7 @@ export class PriorityQueue<P, V> {
     return this.heap.length;
   }
 
-  private trySwap(entry: Entry<P, V>, swapHeapIndex: number, shouldSwap = this.gt): boolean {
-    const swapIndex = this.heap[swapHeapIndex];
-    const swapEntry = this.contents.get(swapIndex);
-
+  private trySwap(entry: Entry<P, V>, swapIndex: number, swapEntry?: Entry<P, V>, shouldSwap = this.gt): boolean {
     if (swapEntry !== undefined && shouldSwap(entry.priority, swapEntry.priority)) {
       this.heap[entry.heapIndex] = swapIndex;
       const newHeapIndex = swapEntry.heapIndex;
@@ -92,33 +89,37 @@ export class PriorityQueue<P, V> {
   }
 
   private siftUp(index: number, entry: Entry<P, V>) {
-    let parentHeapIndex = entry.heapIndex;
+    let parentIndex: number;
+    let parentEntry: Entry<P, V> | undefined;
 
     do {
-      parentHeapIndex = parentIndexOf(parentHeapIndex);
-    } while (this.trySwap(entry, parentHeapIndex));
+      const parentHeapIndex = parentIndexOf(entry.heapIndex);
+      parentIndex = this.heap[parentHeapIndex];
+      parentEntry = this.contents.get(parentIndex);
+    } while (this.trySwap(entry, parentIndex, parentEntry));
 
     this.heap[entry.heapIndex] = index;
   }
 
   private siftDown(index: number, entry: Entry<P, V>) {
-    let childHeapIndex = entry.heapIndex;
+    let childIndex: number;
+    let childEntry: Entry<P, V> | undefined;
 
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      childHeapIndex = childIndexOf(childHeapIndex);
+    do {
+      const childHeapIndex = childIndexOf(entry.heapIndex);
+      const cIndex1 = this.heap[childHeapIndex];
+      const cIndex2 = this.heap[childHeapIndex + 1];
+      const cEntry1 = this.contents.get(cIndex1);
+      const cEntry2 = this.contents.get(cIndex2);
 
-      if (this.trySwap(entry, childHeapIndex, this.lt)) {
-        continue;
+      if (cEntry1 !== undefined && cEntry2 !== undefined && this.gt(cEntry2.priority, cEntry1.priority)) {
+        childIndex = cIndex2;
+        childEntry = cEntry2;
+      } else {
+        childIndex = cIndex1;
+        childEntry = cEntry1;
       }
-
-      childHeapIndex += 1;
-      if (this.trySwap(entry, childHeapIndex, this.lt)) {
-        continue;
-      }
-
-      break;
-    }
+    } while (this.trySwap(entry, childIndex, childEntry, this.lt));
 
     this.heap[entry.heapIndex] = index;
   }
@@ -131,7 +132,6 @@ export class PriorityQueue<P, V> {
     }
 
     this.indexes.delete(result.value);
-    console.log(this.heap.slice(0, 15));
 
     // Replace the removed entry with the last in the heap, then sift it back down
     const siftIndex = this.heap.pop() as number;
