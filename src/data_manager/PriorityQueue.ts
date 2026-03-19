@@ -11,56 +11,7 @@ const entryToTuple = <P, V>(entry?: Entry<P, V>): [P, V] | undefined => entry &&
 const parentIndexOf = (i: number) => Math.ceil(i / 2) - 1;
 const childIndexOf = (i: number) => i * 2 + 1;
 
-// class IndexMap<T> {
-//   private contents: (T | number)[] = [];
-//   private nextIndex = 0;
-
-//   insert(value: T): number {
-//     if (this.nextIndex < this.contents.length) {
-//       // reuse an index
-//       const index = this.nextIndex;
-//       this.nextIndex = this.contents[this.nextIndex] as number;
-//       this.contents[index] = value;
-//       return index;
-//     } else {
-//       // push onto the end
-//       const index = this.contents.length;
-//       this.contents.push(value);
-//       this.nextIndex += 1;
-//       return index;
-//     }
-//   }
-
-//   get(index: number | undefined): T | undefined {
-//     if (index === undefined) {
-//       return undefined;
-//     }
-
-//     const result = this.contents[index];
-
-//     if (result === undefined || typeof result === "number") {
-//       return undefined;
-//     }
-
-//     return result;
-//   }
-
-//   remove(index: number | undefined): T | undefined {
-//     const entry = this.get(index);
-
-//     if (entry === undefined) {
-//       return undefined;
-//     }
-
-//     // `get` asserts that `index` is a number
-//     this.contents[index as number] = this.nextIndex;
-//     this.nextIndex = index as number;
-//     return entry;
-//   }
-// }
-
 export class PriorityQueue<P, V> {
-  // private contents: IndexMap<Entry<P, V>> = new IndexMap();
   private keys: Map<V, Entry<P, V>> = new Map();
   private heap: Entry<P, V>[] = [];
 
