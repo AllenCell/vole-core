@@ -3,6 +3,7 @@ import type { DataTexture, TypedArray } from "three";
 export type DataManagerLimits = {
   size: number;
   deviceSize: number;
+  devicePrefetchSize: number;
   concurrentRequests: number;
   concurrentPrefetches: number;
 };
@@ -12,6 +13,7 @@ const ONE_GIGABYTE = 1024 * 1024 * 1024;
 export const DEFAULT_DATA_MANAGER_LIMITS: DataManagerLimits = {
   size: ONE_GIGABYTE,
   deviceSize: ONE_GIGABYTE,
+  devicePrefetchSize: ONE_GIGABYTE / 2,
   concurrentRequests: 10,
   concurrentPrefetches: 4,
 };
@@ -19,6 +21,7 @@ export const DEFAULT_DATA_MANAGER_LIMITS: DataManagerLimits = {
 export const validateDataManagerLimits = (limits: DataManagerLimits): DataManagerLimits => ({
   ...limits,
   deviceSize: Math.min(limits.size, limits.deviceSize),
+  devicePrefetchSize: Math.min(limits.size, limits.deviceSize, limits.devicePrefetchSize),
   concurrentPrefetches: Math.min(limits.concurrentRequests, limits.concurrentPrefetches),
 });
 
@@ -47,26 +50,39 @@ export type ChunkPriority = {
   score: number;
 };
 
-export const limitForPriority = (limits: DataManagerLimits, { level }: ChunkPriority) =>
+export const requestLimitForPriority = (limits: DataManagerLimits, { level }: ChunkPriority): number =>
   level === ChunkPriorityLevel.VISIBLE
     ? limits.concurrentRequests
     : level === ChunkPriorityLevel.PREFETCH
     ? limits.concurrentPrefetches
+    : 1;
+
+export const deviceSizeLimitForPriority = (limits: DataManagerLimits, { level }: ChunkPriority): number =>
+  level === ChunkPriorityLevel.VISIBLE
+    ? limits.deviceSize
+    : level === ChunkPriorityLevel.PREFETCH
+    ? limits.devicePrefetchSize
     : 0;
 
 export const MIN_CHUNK_PRIORITY: ChunkPriority = { level: ChunkPriorityLevel.RECENT, score: 0 };
 /** Returns true iff `a > b` */
 export const chunkPriorityGreater = (a: ChunkPriority, b: ChunkPriority) =>
   a.level !== b.level ? a.level > b.level : a.score > b.score;
+/** Returns true iff `a < b` */
 export const chunkPriorityLess = (a: ChunkPriority, b: ChunkPriority) =>
   a.level !== b.level ? a.level < b.level : a.score < b.score;
 
 export const enum ChunkState {
+  /** Chunk is queued to be loaded. */
   QUEUED = "queued",
+  /** Chunk is currently loading. */
   LOADING = "loading",
-  WORKER = "worker",
+  /** Chunk is cached in memory. */
   MEMORY = "memory",
+  /** Chunk is cached in memory *and* uploaded to the GPU. */
   DEVICE = "device",
+  /** Chunk has been temporarily handed off to a worker. Currently unused. */
+  WORKER = "worker",
 }
 
 export type ChunkData =
