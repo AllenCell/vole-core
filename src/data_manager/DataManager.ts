@@ -1,6 +1,6 @@
 import type { TypedArray } from "three";
 
-import type { ChunkId, ChunkPriority, ChunkEntry, DataManagerLimits } from "./types.js";
+import type { ChunkId, ChunkPriority, ChunkEntry, DataManagerLimits, LocalChunkId } from "./types.js";
 import {
   chunkIdToString,
   ChunkState,
@@ -9,19 +9,14 @@ import {
   MIN_CHUNK_PRIORITY,
   validateDataManagerLimits,
   DEFAULT_DATA_MANAGER_LIMITS,
-  ChunkPriorityClass,
   stringToChunkId,
+  limitForPriority,
+  ChunkPriorityLevel,
 } from "./types.js";
 import { PriorityQueue } from "./PriorityQueue.js";
-import { CreateLoaderOptions } from "../loaders/index.js";
 
-type SourceId = number;
-
-interface SourceContext {
-  createSource: (path: string | string[], options?: Omit<CreateLoaderOptions, "cache" | "queue">) => Promise<SourceId>;
-  requestChunk: (id: ChunkId) => void;
-  abortChunk: (id: ChunkId) => void;
-  onChunkLoad: (id: ChunkId, data: TypedArray) => void;
+export interface IChunkSource {
+  getChunk(id: LocalChunkId, abortSignal?: AbortSignal): Promise<TypedArray>;
 }
 
 type ChunkQueue = PriorityQueue<ChunkPriority, string>;
@@ -31,96 +26,113 @@ class ChunkQueues {
   evict: ChunkQueue = new PriorityQueue(chunkPriorityLess);
   deviceLoad: ChunkQueue = new PriorityQueue(chunkPriorityGreater);
   deviceEvict: ChunkQueue = new PriorityQueue(chunkPriorityLess);
+  recentCounter = 0;
 
+  /** Resolves a chunk's overall priority based on all requests for it, then updates its queue position. */
   update(key: string, entry: ChunkEntry) {
     const nextPriority = entry.subscriberPriorities.reduce((prevPriority, [_, priority]) => {
       return chunkPriorityGreater(priority, prevPriority) ? priority : prevPriority;
     }, MIN_CHUNK_PRIORITY);
 
-    if (nextPriority.class === entry.priority.class && nextPriority.score === entry.priority.score) {
+    if (nextPriority.level === ChunkPriorityLevel.RECENT) {
+      nextPriority.score = this.recentCounter;
+      this.recentCounter += 1;
+    } else if (nextPriority.level === entry.priority.level && nextPriority.score === entry.priority.score) {
       return;
     }
 
     entry.priority = nextPriority;
 
-    switch (entry.state) {
+    switch (entry.data.state) {
       case ChunkState.QUEUED:
+        this.load.insert(key, nextPriority);
+        break;
+      case ChunkState.MEMORY:
+        this.deviceLoad.insert(key, nextPriority);
+        this.evict.insert(key, nextPriority);
+        break;
+      case ChunkState.DEVICE:
+        this.deviceEvict.insert(key, nextPriority);
+        break;
       case ChunkState.LOADING:
       case ChunkState.WORKER:
-      case ChunkState.MEMORY:
-      case ChunkState.DEVICE:
     }
   }
 }
 
 export class DataManager {
-  private chunks: Map<string, ChunkEntry>;
-  private loadQueue: PriorityQueue<ChunkPriority, string>;
-  private requestCount: number;
-  private context: SourceContext;
+  private chunks = new Map<string, ChunkEntry>();
+  private queues = new ChunkQueues();
+  private sources: IChunkSource[] = [];
+  private requests = new Map<string, AbortController>();
+  private memorySize = 0;
+  private deviceSize = 0;
 
   public limits: DataManagerLimits;
 
-  constructor(context: SourceContext, limits?: DataManagerLimits) {
-    this.limits = {
+  constructor(limits?: Partial<DataManagerLimits>) {
+    this.limits = validateDataManagerLimits({
       ...DEFAULT_DATA_MANAGER_LIMITS,
-      ...(limits ? validateDataManagerLimits(limits) : {}),
-    };
-    this.context = context;
-    this.chunks = new Map();
-    this.loadQueue = new PriorityQueue(chunkPriorityGreater);
-    this.requestCount = 0;
+      ...(limits ?? {}),
+    });
   }
 
-  private trySubmitOneRequest(): boolean {
-    const nextRequest = this.loadQueue.peek();
-    if (nextRequest === undefined) {
-      return false;
-    }
+  private updateDeviceData() {}
 
-    const [priority, key] = nextRequest;
-    const { concurrentRequests, concurrentPrefetches } = this.limits;
-    const requestLimit =
-      priority.class === ChunkPriorityClass.VISIBLE
-        ? concurrentRequests
-        : priority.class === ChunkPriorityClass.PREFETCH
-        ? concurrentPrefetches
-        : 0;
-
-    if (this.requestCount >= requestLimit) {
-      return false;
-    }
-
-    this.loadQueue.pop();
-    this.context.requestChunk(stringToChunkId(key));
-    this.requestCount++;
-
-    return true;
+  private onChunkLoad(id: ChunkId, data: TypedArray) {
+    // If this just freed up our request quota, make sure to fill it back up
+    this.requests.delete(chunkIdToString(id));
+    this.submitRequests();
   }
 
+  submitRequests() {
+    let nextRequest = this.queues.load.peek();
+
+    while (nextRequest !== undefined && this.requests.size < limitForPriority(this.limits, nextRequest[0])) {
+      this.queues.load.pop();
+
+      const key = nextRequest[1];
+      const id = stringToChunkId(key);
+      const source = this.sources[id.sourceId];
+      const abortController = new AbortController();
+      this.requests.set(key, abortController);
+
+      source
+        .getChunk(id, abortController.signal)
+        .then((data) => this.onChunkLoad(id, data))
+        .catch(() => {
+          this.chunks.delete(key);
+          this.requests.delete(key);
+        });
+
+      nextRequest = this.queues.load.peek();
+    }
+  }
+
+  /**
+   *
+   */
   requestChunk(subscriberId: number, chunkId: ChunkId, priority: ChunkPriority) {
     const chunkIdString = chunkIdToString(chunkId);
     let chunkEntry = this.chunks.get(chunkIdString);
 
     if (chunkEntry === undefined) {
       chunkEntry = {
-        state: ChunkState.QUEUED,
+        data: { state: ChunkState.QUEUED },
         subscriberPriorities: [[subscriberId, priority]],
-        priority,
+        priority: MIN_CHUNK_PRIORITY,
       };
       this.chunks.set(chunkIdString, chunkEntry);
-      this.loadQueue.insert(chunkIdString, priority);
+      this.queues.load.insert(chunkIdString, priority);
     } else {
-      if (chunkPriorityGreater(priority, chunkEntry.priority)) {
-        chunkEntry.priority = priority;
-      }
-
       const subscriberPriorityIndex = chunkEntry.subscriberPriorities.findIndex(([id]) => id === subscriberId);
       if (subscriberPriorityIndex === -1) {
         chunkEntry.subscriberPriorities.push([subscriberId, priority]);
       } else {
         chunkEntry.subscriberPriorities[subscriberPriorityIndex][1] = priority;
       }
+
+      this.queues.update(chunkIdString, chunkEntry);
     }
   }
 }
