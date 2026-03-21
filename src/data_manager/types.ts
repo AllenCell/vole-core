@@ -1,4 +1,4 @@
-import { DataTexture } from "three";
+import type { DataTexture, TypedArray } from "three";
 
 export type DataManagerLimits = {
   size: number;
@@ -22,24 +22,44 @@ export const validateDataManagerLimits = (limits: DataManagerLimits): DataManage
   concurrentPrefetches: Math.min(limits.concurrentRequests, limits.concurrentPrefetches),
 });
 
-export const enum ChunkPriorityClass {
+export const enum ChunkPriorityLevel {
+  /**
+   * Chunks that were recently loaded but which aren't currently needed.
+   *
+   * A chunk is automatically assigned a priority at this level when one or more subscribers request them (at the
+   * `VISIBLE` or `PREFETCH` level), their data is loaded, and then all requests are removed. Subscribers shouldn't use
+   * this level explicitly when making requests -- if the chunk isn't already cached, the request will be ignored!
+   */
   RECENT = 0,
+  /**
+   * Chunks that aren't currently visible, but that are expected to become necessary in the future.
+   *
+   * Besides being loaded after `VISIBLE` chunks, chunks prioritized at this level may be subject to lower request
+   * quotas and/or memory limits, depending on the `DataManager`'s configuration.
+   */
   PREFETCH = 1,
+  /** Chunks that are currently needed for rendering. */
   VISIBLE = 2,
-  LENGTH,
 }
 
 export type ChunkPriority = {
-  class: ChunkPriorityClass;
+  level: ChunkPriorityLevel;
   score: number;
 };
 
-export const MIN_CHUNK_PRIORITY: ChunkPriority = { class: ChunkPriorityClass.RECENT, score: 0 };
+export const limitForPriority = (limits: DataManagerLimits, { level }: ChunkPriority) =>
+  level === ChunkPriorityLevel.VISIBLE
+    ? limits.concurrentRequests
+    : level === ChunkPriorityLevel.PREFETCH
+    ? limits.concurrentPrefetches
+    : 0;
+
+export const MIN_CHUNK_PRIORITY: ChunkPriority = { level: ChunkPriorityLevel.RECENT, score: 0 };
 /** Returns true iff `a > b` */
 export const chunkPriorityGreater = (a: ChunkPriority, b: ChunkPriority) =>
-  a.class !== b.class ? a.class > b.class : a.score > b.score;
+  a.level !== b.level ? a.level > b.level : a.score > b.score;
 export const chunkPriorityLess = (a: ChunkPriority, b: ChunkPriority) =>
-  a.class !== b.class ? a.class < b.class : a.score < b.score;
+  a.level !== b.level ? a.level < b.level : a.score < b.score;
 
 export const enum ChunkState {
   QUEUED = "queued",
@@ -49,21 +69,24 @@ export const enum ChunkState {
   DEVICE = "device",
 }
 
-type ChunkData =
-  | { state: ChunkState.QUEUED | ChunkState.LOADING | ChunkState.WORKER }
-  | { state: ChunkState.MEMORY; memory: ArrayBuffer }
+export type ChunkData =
+  | { state: ChunkState.QUEUED | ChunkState.WORKER }
+  | { state: ChunkState.LOADING; controller: AbortController }
+  | { state: ChunkState.MEMORY; memory: TypedArray }
   | { state: ChunkState.DEVICE; texture: DataTexture };
 
-export type ChunkEntry = ChunkData & {
+export type ChunkEntry = {
+  data: ChunkData;
   subscriberPriorities: [number, ChunkPriority][];
   priority: ChunkPriority;
 };
 
-export type ChunkId = {
-  sourceId: number;
+export type LocalChunkId = {
   multiscaleIndex: number;
   tczyx: [number, number, number, number, number];
 };
+
+export type ChunkId = LocalChunkId & { sourceId: number };
 
 export const chunkIdToString = (id: ChunkId): string => `${id.sourceId}:${id.multiscaleIndex}:${id.tczyx.join(",")}`;
 
