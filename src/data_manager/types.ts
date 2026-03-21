@@ -1,4 +1,4 @@
-import type { DataTexture, TypedArray } from "three";
+import { Data3DTexture, TypedArray } from "three";
 
 export type DataManagerLimits = {
   size: number;
@@ -89,7 +89,7 @@ export type ChunkData =
   | { state: ChunkState.QUEUED | ChunkState.WORKER }
   | { state: ChunkState.LOADING; controller: AbortController }
   | { state: ChunkState.MEMORY; memory: TypedArray }
-  | { state: ChunkState.DEVICE; texture: DataTexture };
+  | { state: ChunkState.DEVICE; texture: Data3DTexture };
 
 export type ChunkEntry = {
   data: ChunkData;
