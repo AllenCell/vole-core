@@ -1,4 +1,17 @@
-import type { Data3DTexture, TypedArray } from "three";
+import {
+  ByteType,
+  Data3DTexture,
+  FloatType,
+  IntType,
+  PixelFormatGPU,
+  RedFormat,
+  RedIntegerFormat,
+  ShortType,
+  TypedArray,
+  UnsignedByteType,
+  UnsignedIntType,
+  UnsignedShortType,
+} from "three";
 
 import type { ChunkId, ChunkPriority, ChunkEntry, DataManagerLimits, LocalChunkId } from "./types.js";
 import {
@@ -15,8 +28,11 @@ import {
   deviceSizeLimitForPriority,
 } from "./types.js";
 import { PriorityQueue } from "./PriorityQueue.js";
+import { VolumeDims } from "../VolumeDims.js";
+import { NumberType } from "../types.js";
 
 export interface ChunkSource {
+  getDims(): VolumeDims[];
   getChunk(id: LocalChunkId, signal?: AbortSignal): Promise<TypedArray>;
 }
 
@@ -36,12 +52,27 @@ const swapRemove = <T>(arr: T[], index: number) => {
   }
 };
 
+// TODO this should go in a utils module somewhere
+const dataTypeToTextureProperties: { [ty in Exclude<NumberType, "float64">]: [number, number, PixelFormatGPU] } = {
+  int8: [ByteType, RedIntegerFormat, "R8I"],
+  int16: [ShortType, RedIntegerFormat, "R16I"],
+  int32: [IntType, RedIntegerFormat, "R32I"],
+  uint8: [UnsignedByteType, RedIntegerFormat, "R8UI"],
+  uint16: [UnsignedShortType, RedIntegerFormat, "R16UI"],
+  uint32: [UnsignedIntType, RedIntegerFormat, "R32UI"],
+  float32: [FloatType, RedFormat, "R32F"],
+};
+
 type ChunkQueue = PriorityQueue<ChunkPriority, string>;
 
 class ChunkQueues {
+  /** Chunks waiting to be loaded */
   load: ChunkQueue = new PriorityQueue(chunkPriorityGreater);
+  /** Chunks in memory that may be evicted */
   evict: ChunkQueue = new PriorityQueue(chunkPriorityLess);
+  /** Chunks in memory waiting to be uploaded to the GPU */
   deviceLoad: ChunkQueue = new PriorityQueue(chunkPriorityGreater);
+  /** Chunks on the GPU that may be evicted */
   deviceEvict: ChunkQueue = new PriorityQueue(chunkPriorityLess);
 }
 
@@ -105,6 +136,13 @@ export class DataManager {
     }
   }
 
+  /**
+   * Submits queued chunk requests.
+   *
+   * Request queueing and submission happen in separate steps to allow all requests to be queued and sorted into
+   * priority order before submitting. If requests were submitted immediately upon being added to the queue, the first
+   * requests in a batch would submit in the order they were queued, not priority order.
+   */
   submitRequests() {
     let nextRequest = this.queues.load.peek();
 
@@ -114,11 +152,18 @@ export class DataManager {
       const [priority, key] = nextRequest;
       if (priority.level === ChunkPriorityLevel.RECENT) {
         // Ignore requests at the `RECENT` level. That's supposed to be for chunks that are already loaded!
+        this.chunks.delete(key);
         continue;
       }
 
+      const chunkEntry = this.chunks.get(key);
+      if (chunkEntry === undefined) {
+        continue;
+      }
+      chunkEntry.data = { state: ChunkState.LOADING };
+
       const id = stringToChunkId(key);
-      const source = this.sources[id.sourceId];
+      const source = this.sources[id.source];
       const abortController = new AbortController();
       this.requests.set(key, abortController);
 
@@ -134,6 +179,7 @@ export class DataManager {
     }
   }
 
+  /** Resolves which chunks should be uploaded to the GPU, and which should be evicted. */
   private updateDeviceData() {
     // STEP 1: pull eligible chunks out of the `deviceLoad` queue
     const loads: [string, ChunkEntry][] = [];
@@ -150,13 +196,13 @@ export class DataManager {
       const loadEntry = this.chunks.get(loadKey);
       // type safety requires these next two `if`s, but neither should be true unless this class has a bug
       if (loadEntry === undefined) {
-        console.warn(`chunk ${loadKey} queued for device upload without data`);
+        console.error(`chunk ${loadKey} queued for device upload without data`);
         this.queues.deviceLoad.pop();
         this.queues.evict.remove(loadKey);
         continue;
       }
       if (loadEntry.data.state !== ChunkState.MEMORY) {
-        console.warn(
+        console.error(
           `chunk ${loadKey} queued for device upload in invalid state (expected "memory", found ${loadEntry.data.state})`
         );
         this.queues.deviceLoad.pop();
@@ -169,8 +215,9 @@ export class DataManager {
       const nextEvictPriority = this.queues.deviceEvict.peek()?.[0] ?? MIN_CHUNK_PRIORITY;
       if (
         // queue this chunk if there's space for it...
-        !(this.deviceSize + chunkSize < deviceSizeLimitForPriority(this.limits, loadPriority)) &&
+        !(this.deviceSize + chunkSize <= deviceSizeLimitForPriority(this.limits, loadPriority)) &&
         // ...or if its priority is greater than the lowest-priority chunk that's already on the GPU.
+        // (this implies that at least one chunk will be evicted from the GPU in the next step)
         !(loadPriority.level !== ChunkPriorityLevel.RECENT && chunkPriorityGreater(loadPriority, nextEvictPriority))
       ) {
         // otherwise, we're done
@@ -184,8 +231,7 @@ export class DataManager {
       loads.push([loadKey, loadEntry]);
     }
 
-    // STEP 2: evict chunks that have been pushed off the GPU, keeping hold of their textures in case they're reusable
-    const freedTextures: Data3DTexture[] = [];
+    // STEP 2: evict chunks that have been pushed off the GPU
     let nextEvict = this.queues.deviceEvict.peek();
     while (nextEvict !== undefined && this.deviceSize >= deviceSizeLimitForPriority(this.limits, nextEvict[0])) {
       const [evictPriority, evictKey] = nextEvict;
@@ -196,10 +242,10 @@ export class DataManager {
       const evictEntry = this.chunks.get(evictKey);
       if (evictEntry !== undefined) {
         if (evictEntry.data.state === ChunkState.DEVICE) {
-          // this chunk was previously on the GPU; demote to `MEMORY` and save its texture
+          // this chunk was previously on the GPU; demote to `MEMORY` and destroy its texture
           const memory = evictEntry.data.texture.image.data;
           this.deviceSize -= memory.byteLength;
-          freedTextures.push(evictEntry.data.texture);
+          evictEntry.data.texture.dispose();
           evictEntry.data = { state: ChunkState.MEMORY, memory };
         } else if (evictEntry.data.state === ChunkState.MEMORY) {
           // this chunk was promoted in the previous step; put it back
@@ -207,23 +253,51 @@ export class DataManager {
           const index = loads.findIndex(([_, entry]) => entry === evictEntry);
           swapRemove(loads, index);
         } else {
-          console.warn(
+          // again, if either of the following errors are ever printed, there's a bug somewhere in this file
+          console.error(
             `chunk ${evictKey} queued for device evict in invalid state (expected "device" or "memory", found ${evictEntry.data.state})`
           );
         }
       } else {
-        console.warn(`chunk ${evictKey} queued for device evict without data`);
+        console.error(`chunk ${evictKey} queued for device evict without data`);
       }
 
       nextEvict = this.queues.deviceEvict.peek();
     }
 
-    // STEP 3: now we can actually set up textures
+    // STEP 3: create textures for newly-promoted chunks
     for (const [loadKey, loadEntry] of loads) {
-      // TODO
-    }
+      const loadId = stringToChunkId(loadKey);
+      const source = this.sources[loadId.source];
+      if (source === undefined) {
+        console.error(`chunk ${loadKey} queued for device upload with invalid source (id ${loadId.source})`);
+        this.queues.deviceEvict.remove(loadKey);
+        this.chunks.delete(loadKey);
+        continue;
+      }
 
-    freedTextures.forEach((tex) => tex.dispose());
+      const multiscaleDims = source.getDims()[loadId.multiscale];
+      if (multiscaleDims === undefined) {
+        console.error(
+          `chunk ${loadKey} queued for device upload with invalid multiscale index (source id ${loadId.source}, multiscale index ${loadId.multiscale})`
+        );
+        this.queues.deviceEvict.remove(loadKey);
+        this.chunks.delete(loadKey);
+        continue;
+      }
+      const [_t, _c, sizeZ, sizeY, sizeX] = multiscaleDims.spacing;
+      const data = (loadEntry.data as { memory: TypedArray }).memory.buffer as ArrayBuffer;
+      const dtype = multiscaleDims.dataType;
+      const [texType, texFormat, texInternalFormat] = dataTypeToTextureProperties[dtype];
+
+      const texture = new Data3DTexture(data, sizeX, sizeY, sizeZ);
+      texture.type = texType;
+      texture.format = texFormat;
+      texture.internalFormat = texInternalFormat;
+      texture.needsUpdate = true;
+
+      loadEntry.data = { state: ChunkState.DEVICE, texture };
+    }
   }
 
   private onChunkLoad(id: ChunkId, data: TypedArray) {
@@ -233,7 +307,9 @@ export class DataManager {
   }
 
   /**
+   * Queues a request for a chunk with the given `chunkId` at priority level `priority`.
    *
+   * Chunk requests are not guaranteed to submit until the next call to `submitRequests`.
    */
   queueChunkRequest(subscriberId: number, chunkId: ChunkId, priority: ChunkPriority) {
     const chunkIdString = chunkIdToString(chunkId);

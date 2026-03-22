@@ -86,8 +86,7 @@ export const enum ChunkState {
 }
 
 export type ChunkData =
-  | { state: ChunkState.QUEUED | ChunkState.WORKER }
-  | { state: ChunkState.LOADING; controller: AbortController }
+  | { state: ChunkState.QUEUED | ChunkState.WORKER | ChunkState.LOADING }
   | { state: ChunkState.MEMORY; memory: TypedArray }
   | { state: ChunkState.DEVICE; texture: Data3DTexture };
 
@@ -98,20 +97,20 @@ export type ChunkEntry = {
 };
 
 export type LocalChunkId = {
-  multiscaleIndex: number;
+  multiscale: number;
   tczyx: [number, number, number, number, number];
 };
 
-export type ChunkId = LocalChunkId & { sourceId: number };
+export type ChunkId = LocalChunkId & { source: number };
 
-export const chunkIdToString = (id: ChunkId): string => `${id.sourceId}:${id.multiscaleIndex}:${id.tczyx.join(",")}`;
+export const chunkIdToString = (id: ChunkId): string => `${id.source}:${id.multiscale}:${id.tczyx.join(",")}`;
 
 export const stringToChunkId = (id: string): ChunkId => {
   const [sourceId, multiscaleIndex, tczyx] = id.split(":");
   const [t, c, z, y, x] = tczyx.split(",");
   return {
-    sourceId: parseInt(sourceId),
-    multiscaleIndex: parseInt(multiscaleIndex),
+    source: parseInt(sourceId),
+    multiscale: parseInt(multiscaleIndex),
     tczyx: [parseInt(t), parseInt(c), parseInt(z), parseInt(y), parseInt(x)],
   };
 };
