@@ -77,12 +77,21 @@ class ChunkQueues {
 }
 
 export class DataManager {
+  /** Data and current state for every chunk of data tracked and managed by this class. */
   private chunks = new Map<string, ChunkEntry>();
   private queues = new ChunkQueues();
   private sources: ChunkSource[] = [];
+  /**
+   * Information about each in-flight request.
+   *
+   * This could be stored in `chunks`, but requests don't necessarily correspond one-to-one with chunks.
+   */
   private requests = new Map<string, AbortController>();
+  /** The amount of chunk data currently cached in memory, in bytes */
   private memorySize = 0;
+  /** The amount of GPU texture memory managed by this class, in bytes */
   private deviceSize = 0;
+  /** A counter for assigning chunks a priority at the `RECENT` level. */
   private recentCounter = 0;
 
   public limits: DataManagerLimits;
