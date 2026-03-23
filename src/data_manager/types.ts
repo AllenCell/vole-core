@@ -11,10 +11,29 @@ export type DataManagerLimits = {
 const ONE_GIGABYTE = 1024 * 1024 * 1024;
 
 export const DEFAULT_DATA_MANAGER_LIMITS: DataManagerLimits = {
+  /** The maximum amount of data that can be kept in memory, in bytes. */
   size: ONE_GIGABYTE,
+  /**
+   * The maximum amount of data that can be kept on the GPU, in bytes.
+   *
+   * Cannot be set higher than `size`.
+   */
   deviceSize: ONE_GIGABYTE,
+  /**
+   * The maximum amount of data that can be kept on the GPU if at least some GPU data has the `PREFETCH` priority.
+   *
+   * Setting this lower than `deviceSize` keeps the data manager from prematurely filling up GPU memory with prefetched
+   * data that may never be used. Cannot be set higher than `deviceSize`.
+   */
   devicePrefetchSize: ONE_GIGABYTE / 2,
+  /** The maximum number of concurrent requests. */
   concurrentRequests: 10,
+  /**
+   * The maximum number of concurrent requests if at least one request has the `PREFETCH` priority.
+   *
+   * Setting this lower than `concurrentRequests` ensures that some concurrency always remains available for requests
+   * with the `VISIBLE` priority. Cannot be set higher than `concurrentRequests`.
+   */
   concurrentPrefetches: 4,
 };
 
