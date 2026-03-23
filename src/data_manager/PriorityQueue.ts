@@ -9,7 +9,7 @@ const entryToTuple = <P, V>(entry?: Entry<P, V>): [P, V] | undefined => entry &&
 const parentIndexOf = (i: number) => Math.ceil(i / 2) - 1;
 const childIndexOf = (i: number) => i * 2 + 1;
 
-export class PriorityQueue<P, V> {
+export default class PriorityQueue<P, V> {
   private keys: Map<V, Entry<P, V>> = new Map();
   private heap: Entry<P, V>[] = [];
 
