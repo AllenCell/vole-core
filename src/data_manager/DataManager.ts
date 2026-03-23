@@ -166,6 +166,7 @@ export class DataManager {
     }
 
     if (nextPriority.level !== entry.priority.level || nextPriority.score !== entry.priority.score) {
+      entry.priority = { ...nextPriority };
       this.updateChunkInQueue(key, entry);
     }
   }
@@ -370,9 +371,83 @@ export class DataManager {
     }
   }
 
-  private onChunkLoad(id: ChunkId, data: TypedArray) {
+  /** Evicts cached data to stay under the size limit. */
+  private evictCacheData() {
+    while (this.memorySize > this.limits.size) {
+      const nextEvict = this.queues.evict.pop();
+      if (nextEvict === undefined) {
+        // should never get here (checked above that the chunk isn't larger than the entire cache)
+        break;
+      }
+      const evictKey = nextEvict[1];
+
+      this.queues.deviceLoad.remove(evictKey);
+      const evictEntry = this.chunks.get(evictKey);
+      // yup... below `if` makes the type system happy, but if they ever evaluate to `true` that's a bug in this class.
+      if (evictEntry === undefined) {
+        console.error(`chunk ${evictKey} queued for eviction without data`);
+        continue;
+      }
+
+      switch (evictEntry.data.state) {
+        case ChunkState.MEMORY:
+          // If we find any state other than this one, it's a bug!
+          this.memorySize -= evictEntry.data.memory.byteLength;
+          break;
+        case ChunkState.DEVICE:
+          console.error(`chunk ${evictKey} queued for eviction while in the "device" state`);
+          this.deviceSize -= evictEntry.data.texture.image.data.byteLength;
+          this.memorySize -= evictEntry.data.texture.image.data.byteLength;
+          evictEntry.data.texture.dispose();
+          this.queues.deviceEvict.remove(evictKey);
+          // TODO if subscribers get "chunk removed from GPU" events, one should go here
+          break;
+        case ChunkState.LOADING:
+          console.error(`chunk ${evictKey} queued for eviction while in the "loading" state`);
+          // TODO cancel request
+          break;
+        default:
+          // TODO `WORKER` state may be weird to manage here
+          console.error(
+            `chunk ${evictKey} queued for eviction in an invalid state (expected "memory", found ${evictEntry.data.state})`
+          );
+      }
+
+      this.chunks.delete(evictKey);
+    }
+  }
+
+  private onChunkLoad(id: ChunkId, memory: TypedArray) {
+    const key = chunkIdToString(id);
+    this.requests.delete(key);
+    if (memory.byteLength > this.limits.size) {
+      console.error(`received chunk ${key} which is larger than the cache limit`);
+      return;
+    }
+    const data = { state: ChunkState.MEMORY as const, memory };
+
+    let chunkEntry = this.chunks.get(key);
+    if (chunkEntry === undefined) {
+      console.error(`received chunk ${key} without data manager entry`);
+      chunkEntry = {
+        data,
+        subscriberPriorities: [],
+        priority: { level: ChunkPriorityLevel.RECENT, score: this.recentCounter },
+      };
+      this.chunks.set(key, chunkEntry);
+      this.recentCounter += 1;
+    } else {
+      chunkEntry.data = data;
+    }
+
+    this.queues.deviceLoad.insert(key, chunkEntry.priority);
+    this.queues.evict.insert(key, chunkEntry.priority);
+
+    this.memorySize += memory.byteLength;
+
+    this.updateDeviceData();
+    this.evictCacheData();
     // If this just freed up our request quota, make sure to fill it back up
-    this.requests.delete(chunkIdToString(id));
     this.submitRequests();
   }
 
@@ -380,20 +455,20 @@ export class DataManager {
    * Declares that subscriber `subscriber` requires chunk `chunkId` at priority level `priority`.
    *
    * If the chunk is not already in memory, this will queue the chunk to be loaded. Chunk load requests are not
-   * guaranteed to submit until the next call to `submitRequests`.
+   * submitted until the next call to `submitRequests`.
    */
   queueChunkRequest(subscriber: IDataSubscriber, chunkId: ChunkId, priority: ChunkPriority) {
     const subscriberId = this.getIdForSubscriber(subscriber);
     const chunkIdString = chunkIdToString(chunkId);
-    let chunkEntry = this.chunks.get(chunkIdString);
+    const chunkEntry = this.chunks.get(chunkIdString);
 
     if (chunkEntry === undefined) {
-      chunkEntry = {
+      const newChunkEntry: ChunkEntry = {
         data: { state: ChunkState.QUEUED },
-        subscriberPriorities: [[subscriberId, priority]],
-        priority: priority,
+        subscriberPriorities: [[subscriberId, { ...priority }]],
+        priority: { ...priority },
       };
-      this.chunks.set(chunkIdString, chunkEntry);
+      this.chunks.set(chunkIdString, newChunkEntry);
       this.queues.load.insert(chunkIdString, priority);
     } else {
       const subscriberPriorityIndex = chunkEntry.subscriberPriorities.findIndex(([id]) => id === subscriberId);
