@@ -27,7 +27,7 @@ import {
   ChunkPriorityLevel,
   deviceSizeLimitForPriority,
 } from "./types.js";
-import { PriorityQueue } from "./PriorityQueue.js";
+import PriorityQueue from "./PriorityQueue.js";
 import { VolumeDims } from "../VolumeDims.js";
 import { NumberType } from "../types.js";
 
@@ -97,7 +97,7 @@ class ChunkQueues {
   deviceEvict: ChunkQueue = new PriorityQueue(chunkPriorityLess);
 }
 
-export class DataManager {
+export default class DataManager {
   /** Data and current state for every chunk of data tracked and managed by this class. */
   private chunks = new Map<string, ChunkEntry>();
   private queues = new ChunkQueues();
