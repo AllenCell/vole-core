@@ -31,8 +31,14 @@ import PriorityQueue from "./PriorityQueue.js";
 import { VolumeDims } from "../VolumeDims.js";
 import { NumberType } from "../types.js";
 
+// TODO not modifying original `VolumeDims` for compatibility, but at some point this will either need to be
+//   incorporated into `VolumeDims` or replaced with an entirely new type
+export type ExtVolumeDims = VolumeDims & { chunkShape: [number, number, number, number, number] };
+
 export interface IChunkSource {
-  getDims(): VolumeDims[];
+  getDims(): ExtVolumeDims[];
+  // TODO this is three's `TypedArray`. Is that a good one to rely on for this fairly important interface?
+  //   What does the current loader interface use?
   getChunk(id: LocalChunkId, signal?: AbortSignal): Promise<TypedArray>;
 }
 
@@ -192,7 +198,7 @@ export default class DataManager {
     // TODO fix config so we don't need this
     // see @typescript-eslint/naming-convention, @typescript-eslint/no-unused-vars
     // eslint-disable-next-line
-    const [_t, _c, z, y, x] = multiscale.spacing;
+    const [_t, _c, z, y, x] = multiscale.chunkShape;
     const { dataType } = multiscale;
     return { x, y, z, dataType };
   }
