@@ -567,6 +567,11 @@ export default class DataManager {
     return id;
   }
 
+  /** Returns the dimensions of the given source. */
+  getSourceDims(sourceId: number): ExtVolumeDims[] | undefined {
+    return this.sources[sourceId]?.source.getDims();
+  }
+
   /** Subscribes `subscriber` to data events from the source with id `sourceId` */
   subscribeToSource(subscriber: IDataSubscriber, sourceId: number): boolean {
     const sourceEntry = this.sources[sourceId];
