@@ -81,7 +81,7 @@ export const enum ChunkState {
   MEMORY = "memory",
   /** Chunk is cached in memory *and* uploaded to the GPU. */
   DEVICE = "device",
-  /** Chunk has been temporarily handed off to a worker. Currently unused. */
+  /** Chunk has been temporarily handed off to a worker. Unused, for now. */
   WORKER = "worker",
 }
 
