@@ -7,13 +7,12 @@ import {
   RedFormat,
   RedIntegerFormat,
   ShortType,
-  TypedArray,
   UnsignedByteType,
   UnsignedIntType,
   UnsignedShortType,
 } from "three";
 
-import type { ChunkId, ChunkPriority, ChunkEntry, DataManagerLimits, LocalChunkId } from "./types.js";
+import type { ChunkId, ChunkPriority, ChunkEntry, DataManagerLimits, LocalChunkId, Chunk } from "./types.js";
 import {
   chunkIdToString,
   ChunkState,
@@ -29,7 +28,7 @@ import {
 } from "./types.js";
 import PriorityQueue from "./PriorityQueue.js";
 import { VolumeDims } from "../VolumeDims.js";
-import { NumberType } from "../types.js";
+import { NumberType, TypedArray } from "../types.js";
 
 // TODO not modifying original `VolumeDims` for compatibility, but at some point this will either need to be
 //   incorporated into `VolumeDims` or replaced with an entirely new type
@@ -37,15 +36,13 @@ export type ExtVolumeDims = VolumeDims & { chunkShape: [number, number, number, 
 
 export interface IChunkSource {
   getDims(): ExtVolumeDims[];
-  // TODO this is three's `TypedArray`. Is that a good one to rely on for this fairly important interface?
-  //   What does the current loader interface use?
-  getChunk(id: LocalChunkId, signal?: AbortSignal): Promise<TypedArray>;
+  getChunk(id: LocalChunkId, signal?: AbortSignal): Promise<Chunk<NumberType>>;
 }
 
 export interface IDataSubscriber {
   // eslint-disable-next-line @typescript-eslint/naming-convention
   _subscriberId?: number;
-  onChunkLoaded?: (id: ChunkId, data: TypedArray) => void;
+  onChunkLoaded?: (id: ChunkId, chunk: Chunk<NumberType>) => void;
   onChunkOnGpu?: (id: ChunkId, texture: Data3DTexture) => void;
   // TODO events for when chunks are evicted?
 }
@@ -68,7 +65,7 @@ const swapRemove = <T>(arr: T[], index: number) => {
   }
 };
 
-// TODO this should go in a utils module somewhere
+// TODO these maps should go in a utils module somewhere
 const dataTypeToTextureProperties: { [T in Exclude<NumberType, "float64">]: [number, number, PixelFormatGPU] } = {
   int8: [ByteType, RedIntegerFormat, "R8I"],
   int16: [ShortType, RedIntegerFormat, "R16I"],
@@ -342,7 +339,10 @@ export default class DataManager {
           const memory = evictEntry.data.texture.image.data;
           this.deviceSize -= memory.byteLength;
           evictEntry.data.texture.dispose();
-          evictEntry.data = { state: ChunkState.MEMORY, memory };
+          const { dtype } = evictEntry.data;
+          // TODO verify: is this still the same typed array? or do we have to recreate it?
+          //   See also `getChunkBuffer`
+          evictEntry.data = { state: ChunkState.MEMORY, memory, dtype };
         } else if (evictEntry.data.state === ChunkState.MEMORY) {
           // this chunk was promoted in the previous step; put it back
           this.deviceSize -= evictEntry.data.memory.byteLength;
@@ -377,7 +377,7 @@ export default class DataManager {
 
       const { x, y, z, dataType } = dims;
       const [texType, texFormat, texInternalFormat] = dataTypeToTextureProperties[dataType];
-      const data = (loadEntry.data as { memory: TypedArray }).memory.buffer as ArrayBuffer;
+      const data = (loadEntry.data as { memory: TypedArray<NumberType> }).memory.buffer as ArrayBuffer;
 
       const texture = new Data3DTexture(data, x, y, z);
       texture.type = texType;
@@ -387,7 +387,7 @@ export default class DataManager {
 
       this.sources[loadId.source].subscribers.forEach((s) => s.onChunkOnGpu?.(loadId, texture));
 
-      loadEntry.data = { state: ChunkState.DEVICE, texture };
+      loadEntry.data = { state: ChunkState.DEVICE, texture, dtype: dataType };
     }
   }
 
@@ -437,8 +437,9 @@ export default class DataManager {
     }
   }
 
-  private onChunkLoad(id: ChunkId, memory: TypedArray) {
+  private onChunkLoad(id: ChunkId, chunk: Chunk<NumberType>) {
     const key = chunkIdToString(id);
+    const { data: memory, dtype } = chunk;
     this.requests.delete(key);
     if (memory.byteLength > this.limits.size) {
       console.error(`received chunk ${key} which is larger than the cache limit`);
@@ -449,7 +450,7 @@ export default class DataManager {
       console.error(`received chunk ${key} with invalid source id ${id.source}`);
       return;
     }
-    const data = { state: ChunkState.MEMORY as const, memory };
+    const data = { state: ChunkState.MEMORY as const, memory, dtype };
 
     let chunkEntry = this.chunks.get(key);
     if (chunkEntry === undefined) {
@@ -469,7 +470,7 @@ export default class DataManager {
     this.queues.evict.insert(key, chunkEntry.priority);
 
     this.memorySize += memory.byteLength;
-    sourceEntry.subscribers.forEach((s) => s.onChunkLoaded?.(id, memory));
+    sourceEntry.subscribers.forEach((s) => s.onChunkLoaded?.(id, chunk));
 
     this.updateDeviceData();
     this.evictCacheData();
@@ -527,7 +528,7 @@ export default class DataManager {
   }
 
   /** Get a chunk's data buffer, if it is in memory. */
-  getChunkBuffer(chunkId: ChunkId): TypedArray | undefined {
+  getChunkBuffer(chunkId: ChunkId): TypedArray<NumberType> | undefined {
     const key = chunkIdToString(chunkId);
     const entry = this.chunks.get(key);
     if (entry === undefined) {
@@ -538,7 +539,8 @@ export default class DataManager {
       return entry.data.memory;
     } else if (entry.data.state === ChunkState.DEVICE) {
       // TODO this is wrong -- may just return a `UInt8Array` regardless of underlying data type?
-      return entry.data.texture.image.data;
+      // return entry.data.texture.image.data;
+      return undefined;
     }
 
     return undefined;
