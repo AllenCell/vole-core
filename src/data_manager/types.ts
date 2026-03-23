@@ -1,4 +1,5 @@
-import { Data3DTexture, TypedArray } from "three";
+import type { Data3DTexture } from "three";
+import { NumberType, TypedArray } from "../types";
 
 export type DataManagerLimits = {
   size: number;
@@ -106,8 +107,8 @@ export const enum ChunkState {
 
 export type ChunkData =
   | { state: ChunkState.QUEUED | ChunkState.WORKER | ChunkState.LOADING }
-  | { state: ChunkState.MEMORY; memory: TypedArray }
-  | { state: ChunkState.DEVICE; texture: Data3DTexture };
+  | { state: ChunkState.MEMORY; memory: TypedArray<NumberType>; dtype: NumberType }
+  | { state: ChunkState.DEVICE; texture: Data3DTexture; dtype: NumberType };
 
 export type ChunkEntry = {
   data: ChunkData;
@@ -132,4 +133,9 @@ export const stringToChunkId = (id: string): ChunkId => {
     multiscale: parseInt(multiscaleIndex),
     tczyx: [parseInt(t), parseInt(c), parseInt(z), parseInt(y), parseInt(x)],
   };
+};
+
+export type Chunk<T extends NumberType> = {
+  data: TypedArray<T>;
+  dtype: T;
 };
