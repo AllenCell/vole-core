@@ -39,9 +39,16 @@ export interface IChunkSource {
 export interface IDataSubscriber {
   // eslint-disable-next-line @typescript-eslint/naming-convention
   _subscriberId?: number;
-  onChunkLoaded?: (id: ChunkId) => void;
-  onChunkOnDevice?: (id: ChunkId) => void;
+  onChunkLoaded?: (id: ChunkId, data: TypedArray) => void;
+  onChunkOnGpu?: (id: ChunkId, texture: Data3DTexture) => void;
+  // TODO events for when chunks are evicted?
 }
+
+// TODO move to types file? along with above interfaces...?
+type SourceEntry = {
+  source: IChunkSource;
+  subscribers: IDataSubscriber[];
+};
 
 const swapRemove = <T>(arr: T[], index: number) => {
   if (index < 0) {
@@ -94,7 +101,7 @@ export class DataManager {
   /** Data and current state for every chunk of data tracked and managed by this class. */
   private chunks = new Map<string, ChunkEntry>();
   private queues = new ChunkQueues();
-  private sources: IChunkSource[] = [];
+  private sources: SourceEntry[] = [];
   /**
    * Information about each in-flight request.
    *
@@ -172,12 +179,12 @@ export class DataManager {
   }
 
   private getChunkSpatialDims(chunkId: ChunkId): { x: number; y: number; z: number; dataType: NumberType } | undefined {
-    const source = this.sources[chunkId.source];
-    if (source === undefined) {
+    const sourceEntry = this.sources[chunkId.source];
+    if (sourceEntry === undefined) {
       return undefined;
     }
 
-    const multiscale = source.getDims()[chunkId.multiscale];
+    const multiscale = sourceEntry.source.getDims()[chunkId.multiscale];
     if (multiscale === undefined) {
       return undefined;
     }
@@ -236,11 +243,16 @@ export class DataManager {
       }
       chunkEntry.data = { state: ChunkState.LOADING };
 
-      const source = this.sources[requestId.source];
+      const sourceEntry = this.sources[requestId.source];
+      if (sourceEntry === undefined) {
+        console.error(`chunk ${requestKey} queued for load with invalid source id ${requestId.source}`);
+        this.chunks.delete(requestKey);
+        continue;
+      }
       const abortController = new AbortController();
       this.requests.set(requestKey, abortController);
 
-      source
+      sourceEntry.source
         .getChunk(requestId, abortController.signal)
         .then((data) => this.onChunkLoad(requestId, data))
         .catch(() => {
@@ -367,6 +379,8 @@ export class DataManager {
       texture.internalFormat = texInternalFormat;
       texture.needsUpdate = true;
 
+      this.sources[loadId.source].subscribers.forEach((s) => s.onChunkOnGpu?.(loadId, texture));
+
       loadEntry.data = { state: ChunkState.DEVICE, texture };
     }
   }
@@ -424,6 +438,11 @@ export class DataManager {
       console.error(`received chunk ${key} which is larger than the cache limit`);
       return;
     }
+    const sourceEntry = this.sources[id.source];
+    if (sourceEntry === undefined) {
+      console.error(`received chunk ${key} with invalid source id ${id.source}`);
+      return;
+    }
     const data = { state: ChunkState.MEMORY as const, memory };
 
     let chunkEntry = this.chunks.get(key);
@@ -444,6 +463,7 @@ export class DataManager {
     this.queues.evict.insert(key, chunkEntry.priority);
 
     this.memorySize += memory.byteLength;
+    sourceEntry.subscribers.forEach((s) => s.onChunkLoaded?.(id, memory));
 
     this.updateDeviceData();
     this.evictCacheData();
@@ -498,5 +518,70 @@ export class DataManager {
 
     swapRemove(chunkEntry.subscriberPriorities, index);
     this.updateChunkPriority(chunkKey, chunkEntry);
+  }
+
+  /** Get a chunk's data buffer, if it is in memory. */
+  getChunkBuffer(chunkId: ChunkId): TypedArray | undefined {
+    const key = chunkIdToString(chunkId);
+    const entry = this.chunks.get(key);
+    if (entry === undefined) {
+      return undefined;
+    }
+
+    if (entry.data.state === ChunkState.MEMORY) {
+      return entry.data.memory;
+    } else if (entry.data.state === ChunkState.DEVICE) {
+      // TODO this is wrong -- may just return a `UInt8Array` regardless of underlying data type?
+      return entry.data.texture.image.data;
+    }
+
+    return undefined;
+  }
+
+  /** Get a chunk's texture, if it is on the GPU. */
+  getChunkTexture(chunkId: ChunkId): Data3DTexture | undefined {
+    const key = chunkIdToString(chunkId);
+    const entry = this.chunks.get(key);
+    if (entry?.data.state === ChunkState.DEVICE) {
+      return entry.data.texture;
+    }
+    return undefined;
+  }
+
+  /**
+   * Add a chunk source to this data manager.
+   *
+   * Returns the ID that will be used to identify this source in chunk requests and event subscriptions.
+   */
+  addSource(source: IChunkSource): number {
+    const id = this.sources.length;
+    this.sources.push({ source, subscribers: [] });
+    return id;
+  }
+
+  /** Subscribes `subscriber` to data events from the source with id `sourceId` */
+  subscribeToSource(subscriber: IDataSubscriber, sourceId: number): boolean {
+    const sourceEntry = this.sources[sourceId];
+    if (sourceEntry === undefined) {
+      return false;
+    }
+
+    if (sourceEntry.subscribers.findIndex((s) => s === subscriber) === -1) {
+      sourceEntry.subscribers.push(subscriber);
+    }
+
+    return true;
+  }
+
+  /** Unsubscribes `subscriber` from data events from the source with id `sourceId` */
+  unsubscribeFromSource(subscriber: IDataSubscriber, sourceId: number): boolean {
+    const sourceEntry = this.sources[sourceId];
+    if (sourceEntry === undefined) {
+      return false;
+    }
+
+    const subscriberIndex = sourceEntry.subscribers.findIndex((s) => s === subscriber);
+    swapRemove(sourceEntry.subscribers, subscriberIndex);
+    return true;
   }
 }
