@@ -31,13 +31,16 @@ import { PriorityQueue } from "./PriorityQueue.js";
 import { VolumeDims } from "../VolumeDims.js";
 import { NumberType } from "../types.js";
 
-export interface ChunkSource {
+export interface IChunkSource {
   getDims(): VolumeDims[];
   getChunk(id: LocalChunkId, signal?: AbortSignal): Promise<TypedArray>;
 }
 
-export interface DataSubscriber {
-  dataSubscriberId?: number;
+export interface IDataSubscriber {
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  _subscriberId?: number;
+  onChunkLoaded?: (id: ChunkId) => void;
+  onChunkOnDevice?: (id: ChunkId) => void;
 }
 
 const swapRemove = <T>(arr: T[], index: number) => {
@@ -53,7 +56,7 @@ const swapRemove = <T>(arr: T[], index: number) => {
 };
 
 // TODO this should go in a utils module somewhere
-const dataTypeToTextureProperties: { [ty in Exclude<NumberType, "float64">]: [number, number, PixelFormatGPU] } = {
+const dataTypeToTextureProperties: { [T in Exclude<NumberType, "float64">]: [number, number, PixelFormatGPU] } = {
   int8: [ByteType, RedIntegerFormat, "R8I"],
   int16: [ShortType, RedIntegerFormat, "R16I"],
   int32: [IntType, RedIntegerFormat, "R32I"],
@@ -61,6 +64,17 @@ const dataTypeToTextureProperties: { [ty in Exclude<NumberType, "float64">]: [nu
   uint16: [UnsignedShortType, RedIntegerFormat, "R16UI"],
   uint32: [UnsignedIntType, RedIntegerFormat, "R32UI"],
   float32: [FloatType, RedFormat, "R32F"],
+};
+
+const dataTypeToByteLength: { [T in NumberType]: number } = {
+  int8: 1,
+  int16: 2,
+  int32: 4,
+  uint8: 1,
+  uint16: 2,
+  uint32: 4,
+  float32: 4,
+  float64: 8,
 };
 
 type ChunkQueue = PriorityQueue<ChunkPriority, string>;
@@ -80,7 +94,7 @@ export class DataManager {
   /** Data and current state for every chunk of data tracked and managed by this class. */
   private chunks = new Map<string, ChunkEntry>();
   private queues = new ChunkQueues();
-  private sources: ChunkSource[] = [];
+  private sources: IChunkSource[] = [];
   /**
    * Information about each in-flight request.
    *
@@ -93,6 +107,8 @@ export class DataManager {
   private deviceSize = 0;
   /** A counter for assigning chunks a priority at the `RECENT` level. */
   private recentCounter = 0;
+  /** A counter for assigning subscriber IDs. */
+  private subscriberCount = 0;
 
   public limits: DataManagerLimits;
 
@@ -101,6 +117,15 @@ export class DataManager {
       ...DEFAULT_DATA_MANAGER_LIMITS,
       ...(limits ?? {}),
     });
+  }
+
+  /** Gets the id of data subscriber `subscriber`, assigning it one if it doesn't have one. */
+  private getIdForSubscriber(subscriber: IDataSubscriber): number {
+    if (subscriber._subscriberId === undefined) {
+      subscriber._subscriberId = this.subscriberCount;
+      this.subscriberCount += 1;
+    }
+    return subscriber._subscriberId;
   }
 
   /**
@@ -122,7 +147,7 @@ export class DataManager {
         break;
       case ChunkState.LOADING:
         if (entry.priority.level === ChunkPriorityLevel.RECENT) {
-          // TODO cancel request
+          // TODO cancel request here
         }
         break;
       case ChunkState.WORKER:
@@ -145,6 +170,34 @@ export class DataManager {
     }
   }
 
+  private getChunkSpatialDims(chunkId: ChunkId): { x: number; y: number; z: number; dataType: NumberType } | undefined {
+    const source = this.sources[chunkId.source];
+    if (source === undefined) {
+      return undefined;
+    }
+
+    const multiscale = source.getDims()[chunkId.multiscale];
+    if (multiscale === undefined) {
+      return undefined;
+    }
+
+    // TODO fix config so we don't need this
+    // see @typescript-eslint/naming-convention, @typescript-eslint/no-unused-vars
+    // eslint-disable-next-line
+    const [_t, _c, z, y, x] = multiscale.spacing;
+    const { dataType } = multiscale;
+    return { x, y, z, dataType };
+  }
+
+  private estimateChunkSize(chunkId: ChunkId): number {
+    const dims = this.getChunkSpatialDims(chunkId);
+    if (dims === undefined) {
+      return 0;
+    }
+    const { x, y, z, dataType } = dims;
+    return x * y * z * dataTypeToByteLength[dataType];
+  }
+
   /**
    * Submits queued chunk requests.
    *
@@ -153,38 +206,53 @@ export class DataManager {
    * requests in a batch would submit in the order they were queued, not priority order.
    */
   submitRequests() {
-    let nextRequest = this.queues.load.peek();
+    const nextRequest = this.queues.load.peek();
+    if (nextRequest === undefined) {
+      return;
+    }
+    let [requestPriority, requestKey] = nextRequest;
+    let requestId = stringToChunkId(requestKey);
+    const nextEvictPriority = this.queues.evict.peek()?.[0] ?? MIN_CHUNK_PRIORITY;
 
-    while (nextRequest !== undefined && this.requests.size < requestLimitForPriority(this.limits, nextRequest[0])) {
+    while (
+      // keep submitting requests while concurrency is available and...
+      this.requests.size < requestLimitForPriority(this.limits, requestPriority) &&
+      // ...either space will be available or this chunk has higher priority than an already cached chunk
+      (this.memorySize + this.estimateChunkSize(requestId) < this.limits.size ||
+        chunkPriorityGreater(requestPriority, nextEvictPriority))
+    ) {
       this.queues.load.pop();
 
-      const [priority, key] = nextRequest;
-      if (priority.level === ChunkPriorityLevel.RECENT) {
+      if (requestPriority.level === ChunkPriorityLevel.RECENT) {
         // Ignore requests at the `RECENT` level. That's supposed to be for chunks that are already loaded!
-        this.chunks.delete(key);
+        this.chunks.delete(requestKey);
         continue;
       }
 
-      const chunkEntry = this.chunks.get(key);
+      const chunkEntry = this.chunks.get(requestKey);
       if (chunkEntry === undefined) {
         continue;
       }
       chunkEntry.data = { state: ChunkState.LOADING };
 
-      const id = stringToChunkId(key);
-      const source = this.sources[id.source];
+      const source = this.sources[requestId.source];
       const abortController = new AbortController();
-      this.requests.set(key, abortController);
+      this.requests.set(requestKey, abortController);
 
       source
-        .getChunk(id, abortController.signal)
-        .then((data) => this.onChunkLoad(id, data))
+        .getChunk(requestId, abortController.signal)
+        .then((data) => this.onChunkLoad(requestId, data))
         .catch(() => {
-          this.chunks.delete(key);
-          this.requests.delete(key);
+          this.chunks.delete(requestKey);
+          this.requests.delete(requestKey);
         });
 
-      nextRequest = this.queues.load.peek();
+      const nextRequest = this.queues.load.peek();
+      if (nextRequest === undefined) {
+        return;
+      }
+      [requestPriority, requestKey] = nextRequest;
+      requestId = stringToChunkId(requestKey);
     }
   }
 
@@ -277,29 +345,22 @@ export class DataManager {
     // STEP 3: create textures for newly-promoted chunks
     for (const [loadKey, loadEntry] of loads) {
       const loadId = stringToChunkId(loadKey);
-      const source = this.sources[loadId.source];
-      if (source === undefined) {
-        console.error(`chunk ${loadKey} queued for device upload with invalid source (id ${loadId.source})`);
-        this.queues.deviceEvict.remove(loadKey);
-        this.chunks.delete(loadKey);
-        continue;
-      }
+      const dims = this.getChunkSpatialDims(loadId);
 
-      const multiscaleDims = source.getDims()[loadId.multiscale];
-      if (multiscaleDims === undefined) {
+      if (dims === undefined) {
         console.error(
-          `chunk ${loadKey} queued for device upload with invalid multiscale index (source id ${loadId.source}, multiscale index ${loadId.multiscale})`
+          `chunk ${loadKey} queued for device upload with invalid source id or multiscale index (id ${loadId.source}, multiscale index ${loadId.multiscale})`
         );
         this.queues.deviceEvict.remove(loadKey);
         this.chunks.delete(loadKey);
         continue;
       }
-      const [_t, _c, sizeZ, sizeY, sizeX] = multiscaleDims.spacing;
-      const data = (loadEntry.data as { memory: TypedArray }).memory.buffer as ArrayBuffer;
-      const dtype = multiscaleDims.dataType;
-      const [texType, texFormat, texInternalFormat] = dataTypeToTextureProperties[dtype];
 
-      const texture = new Data3DTexture(data, sizeX, sizeY, sizeZ);
+      const { x, y, z, dataType } = dims;
+      const [texType, texFormat, texInternalFormat] = dataTypeToTextureProperties[dataType];
+      const data = (loadEntry.data as { memory: TypedArray }).memory.buffer as ArrayBuffer;
+
+      const texture = new Data3DTexture(data, x, y, z);
       texture.type = texType;
       texture.format = texFormat;
       texture.internalFormat = texInternalFormat;
@@ -316,11 +377,13 @@ export class DataManager {
   }
 
   /**
-   * Queues a request for a chunk with the given `chunkId` at priority level `priority`.
+   * Declares that subscriber `subscriber` requires chunk `chunkId` at priority level `priority`.
    *
-   * Chunk requests are not guaranteed to submit until the next call to `submitRequests`.
+   * If the chunk is not already in memory, this will queue the chunk to be loaded. Chunk load requests are not
+   * guaranteed to submit until the next call to `submitRequests`.
    */
-  queueChunkRequest(subscriberId: number, chunkId: ChunkId, priority: ChunkPriority) {
+  queueChunkRequest(subscriber: IDataSubscriber, chunkId: ChunkId, priority: ChunkPriority) {
+    const subscriberId = this.getIdForSubscriber(subscriber);
     const chunkIdString = chunkIdToString(chunkId);
     let chunkEntry = this.chunks.get(chunkIdString);
 
@@ -328,7 +391,7 @@ export class DataManager {
       chunkEntry = {
         data: { state: ChunkState.QUEUED },
         subscriberPriorities: [[subscriberId, priority]],
-        priority: MIN_CHUNK_PRIORITY,
+        priority: priority,
       };
       this.chunks.set(chunkIdString, chunkEntry);
       this.queues.load.insert(chunkIdString, priority);
@@ -344,5 +407,21 @@ export class DataManager {
     }
   }
 
-  removeChunkRequest(subscriberId: number, chunkId: ChunkId, priority: ChunkPriority) {}
+  /** Declares that subscriber `subscriber` no longer requires chunk `chunkId`. */
+  removeChunkRequest(subscriber: IDataSubscriber, chunkId: ChunkId) {
+    const subscriberId = this.getIdForSubscriber(subscriber);
+    const chunkKey = chunkIdToString(chunkId);
+    const chunkEntry = this.chunks.get(chunkKey);
+    if (chunkEntry === undefined) {
+      return;
+    }
+
+    const index = chunkEntry.subscriberPriorities.findIndex(([id]) => id === subscriberId);
+    if (index < 0) {
+      return;
+    }
+
+    swapRemove(chunkEntry.subscriberPriorities, index);
+    this.updateChunkPriority(chunkKey, chunkEntry);
+  }
 }
