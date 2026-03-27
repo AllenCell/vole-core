@@ -3,7 +3,7 @@ import { PriorityQueue } from "../data_manager/PriorityQueue.js";
 const ENTRY_COUNT = 100;
 
 const setup = (): [PriorityQueue<number, string>, Map<number, string>, number[]] => {
-  const queue = new PriorityQueue<number, string>((i, j) => i > j);
+  const queue = new PriorityQueue<number, string>((i, j) => j - i);
   const entryMap = new Map<number, string>();
   const priorities: number[] = [];
 
