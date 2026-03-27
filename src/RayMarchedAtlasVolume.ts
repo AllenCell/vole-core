@@ -22,7 +22,6 @@ import {
   WebGLRenderer,
 } from "three";
 
-import FusedChannelData from "./FusedChannelData.js";
 import {
   rayMarchingVertexShaderSrc,
   rayMarchingFragmentShaderSrc,
@@ -34,6 +33,7 @@ import type { VolumeRenderImpl } from "./VolumeRenderImpl.js";
 
 import type { FuseChannel } from "./types.js";
 import { VolumeRenderSettings, SettingsFlags } from "./VolumeRenderSettings.js";
+import DynamicFusedChannelData from "./DynamicFusedChannelData.js";
 
 const BOUNDING_BOX_DEFAULT_COLOR = new Color(0xffff00);
 
@@ -47,7 +47,7 @@ export default class RayMarchedAtlasVolume implements VolumeRenderImpl {
   private tickMarksMesh: LineSegments;
   private geometryTransformNode: Group;
   private uniforms: ReturnType<typeof rayMarchingShaderUniforms>;
-  private channelData!: FusedChannelData;
+  private channelData!: DynamicFusedChannelData;
   private emptyPositionTex: DataTexture;
 
   /**
@@ -110,7 +110,7 @@ export default class RayMarchedAtlasVolume implements VolumeRenderImpl {
     // (re)create channel data
     if (!this.channelData || this.channelData.width !== atlasSize.x || this.channelData.height !== atlasSize.y) {
       this.channelData?.cleanup();
-      this.channelData = new FusedChannelData(atlasSize.x, atlasSize.y);
+      this.channelData = new DynamicFusedChannelData(atlasSize.x, atlasSize.y);
     }
   }
 
