@@ -4,8 +4,6 @@ type Entry<P, V> = {
   heapIndex: number;
 };
 
-type ComparisonFn<P> = (i: P, j: P) => boolean;
-
 const entryToTuple = <P, V>(entry?: Entry<P, V>): [P, V] | undefined => entry && [entry.priority, entry.value];
 
 const parentIndexOf = (i: number) => Math.ceil(i / 2) - 1;
@@ -15,12 +13,12 @@ export class PriorityQueue<P, V> {
   private keys: Map<V, Entry<P, V>> = new Map();
   private heap: Entry<P, V>[] = [];
 
-  private gt: ComparisonFn<P>;
-  private lt: ComparisonFn<P>;
+  private gt: (a: P, b: P) => boolean;
+  private lt: (a: P, b: P) => boolean;
 
-  constructor(greaterThan: ComparisonFn<P>) {
-    this.gt = greaterThan;
-    this.lt = (i, j) => greaterThan(j, i);
+  constructor(compare: (a: P, b: P) => number) {
+    this.gt = (a, b) => compare(a, b) < 0;
+    this.lt = (a, b) => compare(a, b) > 0;
   }
 
   get length() {
