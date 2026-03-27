@@ -84,7 +84,7 @@ export const deviceSizeLimitForPriority = (limits: DataManagerLimits, { level }:
     ? limits.devicePrefetchSize
     : 0;
 
-export const MIN_CHUNK_PRIORITY: ChunkPriority = { level: ChunkPriorityLevel.RECENT, score: 0 };
+export const getMinChunkPriority = (): ChunkPriority => ({ level: ChunkPriorityLevel.RECENT, score: 0 });
 /** Returns true iff `a > b` */
 export const chunkPriorityGreater = (a: ChunkPriority, b: ChunkPriority) =>
   a.level !== b.level ? a.level > b.level : a.score > b.score;

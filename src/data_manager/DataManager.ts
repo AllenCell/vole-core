@@ -18,7 +18,7 @@ import {
   ChunkState,
   chunkPriorityGreater,
   chunkPriorityLess,
-  MIN_CHUNK_PRIORITY,
+  getMinChunkPriority,
   validateDataManagerLimits,
   DEFAULT_DATA_MANAGER_LIMITS,
   stringToChunkId,
@@ -65,7 +65,7 @@ const swapRemove = <T>(arr: T[], index: number) => {
   }
 };
 
-// TODO these maps should go in a utils module somewhere
+// TODO these maps should go in a utils module somewhere (src/types.ts?)
 const dataTypeToTextureProperties: { [T in Exclude<NumberType, "float64">]: [number, number, PixelFormatGPU] } = {
   int8: [ByteType, RedIntegerFormat, "R8I"],
   int16: [ShortType, RedIntegerFormat, "R16I"],
@@ -168,7 +168,7 @@ export default class DataManager {
   private updateChunkPriority(key: string, entry: ChunkEntry) {
     const nextPriority = entry.subscriberPriorities.reduce((prevPriority, [_, priority]) => {
       return chunkPriorityGreater(priority, prevPriority) ? priority : prevPriority;
-    }, MIN_CHUNK_PRIORITY);
+    }, getMinChunkPriority());
 
     if (nextPriority.level === ChunkPriorityLevel.RECENT) {
       nextPriority.score = this.recentCounter;
@@ -223,7 +223,7 @@ export default class DataManager {
     }
     let [requestPriority, requestKey] = nextRequest;
     let requestId = stringToChunkId(requestKey);
-    const nextEvictPriority = this.queues.evict.peek()?.[0] ?? MIN_CHUNK_PRIORITY;
+    const nextEvictPriority = this.queues.evict.peek()?.[0] ?? getMinChunkPriority();
 
     while (
       // keep submitting requests while concurrency is available and...
@@ -305,7 +305,7 @@ export default class DataManager {
       }
 
       const chunkSize = loadEntry.data.memory.byteLength;
-      const nextEvictPriority = this.queues.deviceEvict.peek()?.[0] ?? MIN_CHUNK_PRIORITY;
+      const nextEvictPriority = this.queues.deviceEvict.peek()?.[0] ?? getMinChunkPriority();
       if (
         // queue this chunk if there's space for it...
         !(this.deviceSize + chunkSize <= deviceSizeLimitForPriority(this.limits, loadPriority)) &&
