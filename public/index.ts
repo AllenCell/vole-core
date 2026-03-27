@@ -26,6 +26,9 @@ import { State, TestDataSpec } from "./types.js";
 import VolumeLoaderContext from "../src/workers/VolumeLoaderContext.js";
 import { DATARANGE_UINT8, ColorizeFeature, type NumberType } from "../src/types.js";
 import { RawArrayLoaderOptions } from "../src/loaders/RawArrayLoader.js";
+import DataManager, { IDataSubscriber } from "../src/data_manager/DataManager.js";
+import OMEZarrSource from "../src/data_manager/OMEZarrSource.js";
+import { ChunkId, ChunkPriority, ChunkPriorityLevel } from "../src/data_manager/types.js";
 
 const CACHE_MAX_SIZE = 1_000_000_000;
 const CONCURRENCY_LIMIT = 8;
@@ -909,6 +912,50 @@ function showChannelUI(volume: Volume) {
   }
 }
 
+async function testDataManager() {
+  const dataManager = new DataManager();
+  const zarrSource = await OMEZarrSource.new(
+    // "https://animatedcell-test-data.s3.us-west-2.amazonaws.com/variance/1.zarr"
+    "https://uk1s3.embassy.ebi.ac.uk/idr/zarr/v0.4/idr0048A/9846152.zarr/"
+  );
+  const sourceId = dataManager.addSource(zarrSource);
+  const mockSubscriber: IDataSubscriber = {
+    onChunkLoaded: (id, chunk) => console.log("load", id, chunk),
+    onChunkOnGpu: (id, texture) => console.log("on device", id, texture),
+  };
+  dataManager.subscribeToSource(mockSubscriber, sourceId);
+
+  const dims = zarrSource.getDims();
+  const multiscale = dims.length - 2;
+  const levelDims = dims[multiscale];
+  const [_dt, _dc, dz, dy, dx] = levelDims.shape;
+  const [_ct, _cc, cz, cy, cx] = levelDims.chunkShape;
+  const chunksX = Math.ceil(dx / cx);
+  const chunksY = Math.ceil(dy / cy);
+  const chunksZ = Math.ceil(dz / cz);
+  console.log("dims", chunksX, chunksY, chunksZ);
+
+  for (let z = 0; z < chunksZ; z++) {
+    for (let y = 0; y < chunksY; y++) {
+      for (let x = 0; x < chunksX; x++) {
+        const id: ChunkId = {
+          source: sourceId,
+          multiscale,
+          tczyx: [0, 0, z, y, x],
+        };
+        const priority: ChunkPriority = {
+          level: ChunkPriorityLevel.VISIBLE,
+          score: z * y * x,
+        };
+        console.log("request", id, priority);
+        dataManager.queueChunkRequest(mockSubscriber, id, priority);
+      }
+    }
+  }
+
+  dataManager.submitRequests();
+}
+
 function loadImageData(jsonData: ImageInfo, volumeData: Uint8Array<ArrayBuffer>[]) {
   const vol = new Volume(jsonData);
   myState.volume = vol;
@@ -1255,6 +1302,8 @@ function setupColorizeControls() {
 }
 
 function main() {
+  testDataManager();
+
   const el = document.getElementById("vol-e");
   if (!el) {
     return;
