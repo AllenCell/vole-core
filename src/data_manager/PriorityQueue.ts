@@ -13,21 +13,15 @@ export class PriorityQueue<P, V> {
   private keys: Map<V, Entry<P, V>> = new Map();
   private heap: Entry<P, V>[] = [];
 
-  private gt: (a: P, b: P) => boolean;
-  private lt: (a: P, b: P) => boolean;
-
-  constructor(compare: (a: P, b: P) => number) {
-    this.gt = (a, b) => compare(a, b) < 0;
-    this.lt = (a, b) => compare(a, b) > 0;
-  }
+  constructor(private compare: (a: P, b: P) => number) {}
 
   get length() {
     return this.heap.length;
   }
 
   /** Useful common primitive for `siftUp` and `siftDown`: compares two entries and swaps them if out of order. */
-  private trySwap(entry: Entry<P, V>, swapEntry?: Entry<P, V>, shouldSwap = this.gt): boolean {
-    if (swapEntry !== undefined && shouldSwap(entry.priority, swapEntry.priority)) {
+  private trySwap(entry: Entry<P, V>, swapEntry?: Entry<P, V>, mul = 1): boolean {
+    if (swapEntry !== undefined && this.compare(entry.priority, swapEntry.priority) * mul < 0) {
       this.heap[entry.heapIndex] = swapEntry;
       const newHeapIndex = swapEntry.heapIndex;
       swapEntry.heapIndex = entry.heapIndex;
@@ -55,11 +49,11 @@ export class PriorityQueue<P, V> {
 
     do {
       const childHeapIndex = childIndexOf(entry.heapIndex);
-      const cEntry1 = this.heap[childHeapIndex];
-      const cEntry2 = this.heap[childHeapIndex + 1];
-      const use2 = cEntry1 !== undefined && cEntry2 !== undefined && this.gt(cEntry2.priority, cEntry1.priority);
-      childEntry = use2 ? cEntry2 : cEntry1;
-    } while (this.trySwap(entry, childEntry, this.lt));
+      const cEnt1 = this.heap[childHeapIndex];
+      const cEnt2 = this.heap[childHeapIndex + 1];
+      const use2 = cEnt1 !== undefined && cEnt2 !== undefined && this.compare(cEnt2.priority, cEnt1.priority) < 0;
+      childEntry = use2 ? cEnt2 : cEnt1;
+    } while (this.trySwap(entry, childEntry, -1));
 
     this.heap[entry.heapIndex] = entry;
   }
@@ -75,7 +69,7 @@ export class PriorityQueue<P, V> {
     if (siftEntry !== undefined && siftEntry !== entry) {
       this.heap[entry.heapIndex] = siftEntry;
       siftEntry.heapIndex = entry.heapIndex;
-      if (this.gt(entry.priority, siftEntry.priority)) {
+      if (this.compare(entry.priority, siftEntry.priority) < 0) {
         this.siftDown(siftEntry);
       } else {
         this.siftUp(siftEntry);
@@ -90,7 +84,7 @@ export class PriorityQueue<P, V> {
       return false;
     }
 
-    const priorityIncreased = this.gt(newPriority, entry.priority);
+    const priorityIncreased = this.compare(newPriority, entry.priority) < 0;
     entry.priority = newPriority;
     if (priorityIncreased) {
       this.siftUp(entry);
