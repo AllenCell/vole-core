@@ -77,7 +77,11 @@ export class PriorityQueue<P, V> {
     if (siftEntry !== undefined && siftEntry !== entry) {
       this.heap[entry.heapIndex] = siftEntry;
       siftEntry.heapIndex = entry.heapIndex;
-      this.siftDown(siftEntry);
+      if (this.gt(entry.priority, siftEntry.priority)) {
+        this.siftDown(siftEntry);
+      } else {
+        this.siftUp(siftEntry);
+      }
     }
   }
 
