@@ -953,7 +953,7 @@ async function testDataManager() {
     }
   }
 
-  dataManager.submitRequests();
+  dataManager.update();
 }
 
 function loadImageData(jsonData: ImageInfo, volumeData: Uint8Array<ArrayBuffer>[]) {
