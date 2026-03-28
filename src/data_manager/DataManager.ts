@@ -16,8 +16,8 @@ import type { ChunkId, ChunkPriority, ChunkEntry, DataManagerLimits, LocalChunkI
 import {
   chunkIdToString,
   ChunkState,
-  chunkPriorityGreater,
-  chunkPriorityLess,
+  comparePriority,
+  reverseComparePriority,
   getMinChunkPriority,
   validateDataManagerLimits,
   DEFAULT_DATA_MANAGER_LIMITS,
@@ -91,13 +91,13 @@ type ChunkQueue = PriorityQueue<ChunkPriority, string>;
 
 class ChunkQueues {
   /** Chunks waiting to be loaded */
-  load: ChunkQueue = new PriorityQueue(chunkPriorityGreater);
+  load: ChunkQueue = new PriorityQueue(comparePriority);
   /** Chunks in memory that may be evicted */
-  evict: ChunkQueue = new PriorityQueue(chunkPriorityLess);
+  evict: ChunkQueue = new PriorityQueue(reverseComparePriority);
   /** Chunks in memory waiting to be uploaded to the GPU */
-  deviceLoad: ChunkQueue = new PriorityQueue(chunkPriorityGreater);
+  deviceLoad: ChunkQueue = new PriorityQueue(comparePriority);
   /** Chunks on the GPU that may be evicted */
-  deviceEvict: ChunkQueue = new PriorityQueue(chunkPriorityLess);
+  deviceEvict: ChunkQueue = new PriorityQueue(reverseComparePriority);
 }
 
 export default class DataManager {
@@ -167,7 +167,7 @@ export default class DataManager {
   /** Resolves a chunk's overall priority based on all requests for it, then updates its queue position. */
   private updateChunkPriority(key: string, entry: ChunkEntry) {
     const nextPriority = entry.subscriberPriorities.reduce((prevPriority, [_, priority]) => {
-      return chunkPriorityGreater(priority, prevPriority) ? priority : prevPriority;
+      return comparePriority(priority, prevPriority) < 0 ? priority : prevPriority;
     }, getMinChunkPriority());
 
     if (nextPriority.level === ChunkPriorityLevel.RECENT) {
@@ -230,7 +230,7 @@ export default class DataManager {
       this.requests.size < requestLimitForPriority(this.limits, requestPriority) &&
       // ...either space will be available or this chunk has higher priority than an already cached chunk
       (this.memorySize + this.estimateChunkSize(requestId) < this.limits.size ||
-        chunkPriorityGreater(requestPriority, nextEvictPriority))
+        comparePriority(requestPriority, nextEvictPriority) < 0)
     ) {
       this.queues.load.pop();
 
@@ -311,7 +311,7 @@ export default class DataManager {
         !(this.deviceSize + chunkSize <= deviceSizeLimitForPriority(this.limits, loadPriority)) &&
         // ...or if its priority is greater than the lowest-priority chunk that's already on the GPU.
         // (this implies that at least one chunk will be evicted from the GPU in the next step)
-        !(loadPriority.level !== ChunkPriorityLevel.RECENT && chunkPriorityGreater(loadPriority, nextEvictPriority))
+        !(loadPriority.level !== ChunkPriorityLevel.RECENT && comparePriority(loadPriority, nextEvictPriority) < 0)
       ) {
         // otherwise, we're done
         break;
