@@ -210,69 +210,10 @@ export default class DataManager {
   }
 
   /**
-   * Submits queued chunk requests.
+   * Resolves which chunks should be uploaded to the GPU, and which should be evicted from it.
    *
-   * Request queueing and submission happen in separate steps to allow all requests to be queued and sorted into
-   * priority order before submitting. If requests were submitted immediately upon being added to the queue, the first
-   * requests in a batch would submit in the order they were queued, not priority order.
+   * In other words, this function drives the `deviceLoad` and `deviceEvict` queues.
    */
-  submitRequests() {
-    const nextRequest = this.queues.load.peek();
-    if (nextRequest === undefined) {
-      return;
-    }
-    let [requestPriority, requestKey] = nextRequest;
-    let requestId = stringToChunkId(requestKey);
-    const nextEvictPriority = this.queues.evict.peek()?.[0] ?? getMinChunkPriority();
-
-    while (
-      // keep submitting requests while concurrency is available and...
-      this.requests.size < requestLimitForPriority(this.limits, requestPriority) &&
-      // ...either space will be available or this chunk has higher priority than an already cached chunk
-      (this.memorySize + this.estimateChunkSize(requestId) < this.limits.size ||
-        comparePriority(requestPriority, nextEvictPriority) < 0)
-    ) {
-      this.queues.load.pop();
-
-      if (requestPriority.level === ChunkPriorityLevel.RECENT) {
-        // Ignore requests at the `RECENT` level. That's supposed to be for chunks that are already loaded!
-        this.chunks.delete(requestKey);
-        continue;
-      }
-
-      const chunkEntry = this.chunks.get(requestKey);
-      if (chunkEntry === undefined) {
-        continue;
-      }
-      chunkEntry.data = { state: ChunkState.LOADING };
-
-      const sourceEntry = this.sources[requestId.source];
-      if (sourceEntry === undefined) {
-        console.error(`chunk ${requestKey} queued for load with invalid source id ${requestId.source}`);
-        this.chunks.delete(requestKey);
-        continue;
-      }
-      const abortController = new AbortController();
-      this.requests.set(requestKey, abortController);
-
-      sourceEntry.source
-        .getChunk(requestId, abortController.signal)
-        .then((data) => this.onChunkLoad(requestId, data))
-        .catch(() => {
-          this.chunks.delete(requestKey);
-          this.requests.delete(requestKey);
-        });
-
-      const nextRequest = this.queues.load.peek();
-      if (nextRequest === undefined) {
-        return;
-      }
-      [requestPriority, requestKey] = nextRequest;
-      requestId = stringToChunkId(requestKey);
-    }
-  }
-
-  /** Resolves which chunks should be uploaded to the GPU, and which should be evicted. */
   private updateDeviceData() {
     // STEP 1: pull eligible chunks out of the `deviceLoad` queue
     const loads: [string, ChunkEntry][] = [];
@@ -391,8 +332,12 @@ export default class DataManager {
     }
   }
 
-  /** Evicts cached data to stay under the size limit. */
-  private evictCacheData() {
+  /**
+   * Evicts data cached in memory to stay under the size limit.
+   *
+   * In other words, this function drives the `evict` queue.
+   */
+  private evictCachedData() {
     while (this.memorySize > this.limits.size) {
       const nextEvict = this.queues.evict.pop();
       if (nextEvict === undefined) {
@@ -437,6 +382,80 @@ export default class DataManager {
     }
   }
 
+  /**
+   * Submits requests for chunks that are queued to load.
+   *
+   * In other words, this function drives the `load` queue.
+   */
+  private submitRequests() {
+    const nextRequest = this.queues.load.peek();
+    if (nextRequest === undefined) {
+      return;
+    }
+    let [requestPriority, requestKey] = nextRequest;
+    let requestId = stringToChunkId(requestKey);
+    const nextEvictPriority = this.queues.evict.peek()?.[0] ?? getMinChunkPriority();
+
+    while (
+      // keep submitting requests while concurrency is available and...
+      this.requests.size < requestLimitForPriority(this.limits, requestPriority) &&
+      // ...either space will be available or this chunk has higher priority than an already cached chunk
+      (this.memorySize + this.estimateChunkSize(requestId) < this.limits.size ||
+        comparePriority(requestPriority, nextEvictPriority) < 0)
+    ) {
+      this.queues.load.pop();
+
+      if (requestPriority.level === ChunkPriorityLevel.RECENT) {
+        // Ignore requests at the `RECENT` level. That's supposed to be for chunks that are already loaded!
+        this.chunks.delete(requestKey);
+        continue;
+      }
+
+      const chunkEntry = this.chunks.get(requestKey);
+      if (chunkEntry === undefined) {
+        continue;
+      }
+      chunkEntry.data = { state: ChunkState.LOADING };
+
+      const sourceEntry = this.sources[requestId.source];
+      if (sourceEntry === undefined) {
+        console.error(`chunk ${requestKey} queued for load with invalid source id ${requestId.source}`);
+        this.chunks.delete(requestKey);
+        continue;
+      }
+      const abortController = new AbortController();
+      this.requests.set(requestKey, abortController);
+
+      sourceEntry.source
+        .getChunk(requestId, abortController.signal)
+        .then((data) => this.onChunkLoad(requestId, data))
+        .catch(() => {
+          this.chunks.delete(requestKey);
+          this.requests.delete(requestKey);
+        });
+
+      const nextRequest = this.queues.load.peek();
+      if (nextRequest === undefined) {
+        return;
+      }
+      [requestPriority, requestKey] = nextRequest;
+      requestId = stringToChunkId(requestKey);
+    }
+  }
+
+  /**
+   * Drives progress on all queued requests, including creating textures, evicting data, and submitting requests.
+   *
+   * Request queueing and submission happen in separate steps to allow all requests to be queued and sorted into
+   * priority order before submitting. If requests were submitted immediately upon being added to the queue, the first
+   * requests in a batch would submit in the order they were queued, not priority order.
+   */
+  update() {
+    this.updateDeviceData();
+    this.evictCachedData();
+    this.submitRequests();
+  }
+
   private onChunkLoad(id: ChunkId, chunk: Chunk<NumberType>) {
     const key = chunkIdToString(id);
     const { data: memory, dtype } = chunk;
@@ -472,17 +491,14 @@ export default class DataManager {
     this.memorySize += memory.byteLength;
     sourceEntry.subscribers.forEach((s) => s.onChunkLoaded?.(id, chunk));
 
-    this.updateDeviceData();
-    this.evictCacheData();
-    // If this just freed up our request quota, make sure to fill it back up
-    this.submitRequests();
+    this.update();
   }
 
   /**
    * Declares that subscriber `subscriber` requires chunk `chunkId` at priority level `priority`.
    *
    * If the chunk is not already in memory, this will queue the chunk to be loaded. Chunk load requests are not
-   * submitted until the next call to `submitRequests`.
+   * submitted until the next call to `update`.
    */
   queueChunkRequest(subscriber: IDataSubscriber, chunkId: ChunkId, priority: ChunkPriority) {
     const subscriberId = this.getIdForSubscriber(subscriber);
@@ -509,7 +525,11 @@ export default class DataManager {
     }
   }
 
-  /** Declares that subscriber `subscriber` no longer requires chunk `chunkId`. */
+  /**
+   * Declares that subscriber `subscriber` no longer requires chunk `chunkId`.
+   *
+   * The `DataManager` will not respond to this change until the next call to `update`.
+   */
   removeChunkRequest(subscriber: IDataSubscriber, chunkId: ChunkId) {
     const subscriberId = this.getIdForSubscriber(subscriber);
     const chunkKey = chunkIdToString(chunkId);
