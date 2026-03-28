@@ -85,12 +85,12 @@ export const deviceSizeLimitForPriority = (limits: DataManagerLimits, { level }:
     : 0;
 
 export const getMinChunkPriority = (): ChunkPriority => ({ level: ChunkPriorityLevel.RECENT, score: 0 });
-/** Returns true iff `a > b` */
-export const chunkPriorityGreater = (a: ChunkPriority, b: ChunkPriority) =>
-  a.level !== b.level ? a.level > b.level : a.score > b.score;
-/** Returns true iff `a < b` */
-export const chunkPriorityLess = (a: ChunkPriority, b: ChunkPriority) =>
-  a.level !== b.level ? a.level < b.level : a.score < b.score;
+/** Result is less than `0` if `a > b`, greater than `0` if `a < b`, or `0` if `a === b` */
+export const comparePriority = (a: ChunkPriority, b: ChunkPriority): number =>
+  a.level !== b.level ? b.level - a.level : b.score - a.score;
+/** Result is greater than `0` if `a > b`, less than `0` if `a < b`, or `0` if `a === b` */
+export const reverseComparePriority = (a: ChunkPriority, b: ChunkPriority): number =>
+  a.level !== b.level ? a.level - b.level : a.score - b.score;
 
 export const enum ChunkState {
   /** Chunk is queued to be loaded. */
