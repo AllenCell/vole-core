@@ -22,6 +22,7 @@ import {
 } from "three";
 import { renderToBufferVertShader } from "./constants/basicShaders";
 import { NumberType } from "./types";
+import fuseShaderSrcUI from "./constants/shaders/dynamic_fuseUI.frag";
 
 type ChannelSettings = {
   index: number;
@@ -103,9 +104,9 @@ export default class DynamicFusedChannelData {
       wrapT: ClampToEdgeWrapping,
     });
 
-    this.fuseMaterialF = setupFuseMaterial();
-    this.fuseMaterialUI = setupFuseMaterial();
-    this.fuseMaterialI = setupFuseMaterial();
+    this.fuseMaterialF = setupFuseMaterial(fuseShaderSrcUI);
+    this.fuseMaterialUI = setupFuseMaterial(fuseShaderSrcUI);
+    this.fuseMaterialI = setupFuseMaterial(fuseShaderSrcUI);
   }
 
   getFusedTexture(): Texture {
