@@ -23,6 +23,8 @@ import {
 import { renderToBufferVertShader } from "./constants/basicShaders";
 import { NumberType } from "./types";
 import fuseShaderSrcUI from "./constants/shaders/dynamic_fuseUI.frag";
+import Channel from "./Channel";
+import DataManager from "./data_manager/DataManager";
 
 type ChannelSettings = {
   index: number;
@@ -135,5 +137,10 @@ export default class DynamicFusedChannelData {
     }
   }
 
-  gpuFuse(renderer: WebGLRenderer): void {}
+  setChannelAsMask(idx: number, channel: Channel): boolean {
+    console.log("setChannelAsMask", idx, channel);
+    return true;
+  }
+
+  gpuFuse(renderer: WebGLRenderer, data: DataManager): void {}
 }
