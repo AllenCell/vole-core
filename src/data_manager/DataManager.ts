@@ -217,8 +217,7 @@ export default class DataManager {
   private updateDeviceData() {
     // STEP 1: pull eligible chunks out of the `deviceLoad` queue
     const loads: [string, ChunkEntry][] = [];
-    // Sorry eslint! This one's just easier if we loop unconditionally and break when done.
-    // eslint-disable-next-line no-constant-condition
+    // This one's easier if we just loop unconditionally and `break` when done.
     while (true) {
       const nextLoad = this.queues.deviceLoad.peek();
       if (nextLoad === undefined) {
@@ -278,7 +277,7 @@ export default class DataManager {
         if (evictEntry.data.state === ChunkState.DEVICE) {
           // this chunk was previously on the GPU; demote to `MEMORY` and destroy its texture
           const memory = evictEntry.data.texture.image.data;
-          this.deviceSize -= memory.byteLength;
+          this.deviceSize -= memory?.byteLength ?? 0;
           evictEntry.data.texture.dispose();
           const { dtype } = evictEntry.data;
           // TODO verify: is this still the same typed array? or do we have to recreate it?
@@ -318,7 +317,7 @@ export default class DataManager {
 
       const { x, y, z, dataType } = dims;
       const [texType, texFormat, texInternalFormat] = dataTypeToTextureProperties[dataType];
-      const data = (loadEntry.data as { memory: TypedArray<NumberType> }).memory.buffer as ArrayBuffer;
+      const data = (loadEntry.data as { memory: TypedArray<NumberType> }).memory;
 
       const texture = new Data3DTexture(data, x, y, z);
       texture.type = texType;
@@ -361,8 +360,8 @@ export default class DataManager {
           break;
         case ChunkState.DEVICE:
           console.error(`chunk ${evictKey} queued for eviction while in the "device" state`);
-          this.deviceSize -= evictEntry.data.texture.image.data.byteLength;
-          this.memorySize -= evictEntry.data.texture.image.data.byteLength;
+          this.deviceSize -= evictEntry.data.texture.image.data?.byteLength ?? 0;
+          this.memorySize -= evictEntry.data.texture.image.data?.byteLength ?? 0;
           evictEntry.data.texture.dispose();
           this.queues.deviceEvict.remove(evictKey);
           // TODO if subscribers get "chunk removed from GPU" events, one should go here
