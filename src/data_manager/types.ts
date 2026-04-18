@@ -1,5 +1,5 @@
 import type { Data3DTexture } from "three";
-import { NumberType, TypedArray } from "../types";
+import type { NumberType, TypedArray } from "../types.ts";
 
 export type DataManagerLimits = {
   size: number;
@@ -74,15 +74,15 @@ export const requestLimitForPriority = (limits: DataManagerLimits, { level }: Ch
   level === ChunkPriorityLevel.VISIBLE
     ? limits.concurrentRequests
     : level === ChunkPriorityLevel.PREFETCH
-    ? limits.concurrentPrefetches
-    : 1;
+      ? limits.concurrentPrefetches
+      : 1;
 
 export const deviceSizeLimitForPriority = (limits: DataManagerLimits, { level }: ChunkPriority): number =>
   level === ChunkPriorityLevel.VISIBLE
     ? limits.deviceSize
     : level === ChunkPriorityLevel.PREFETCH
-    ? limits.devicePrefetchSize
-    : 0;
+      ? limits.devicePrefetchSize
+      : 0;
 
 export const getMinChunkPriority = (): ChunkPriority => ({ level: ChunkPriorityLevel.RECENT, score: 0 });
 /** Result is less than `0` if `a > b`, greater than `0` if `a < b`, or `0` if `a === b` */
