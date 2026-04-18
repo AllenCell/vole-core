@@ -1,17 +1,17 @@
 import * as zarr from "zarrita";
 
-import { RelaxedFetchStore } from "../loaders/zarr_utils/wrappers";
-import type { ExtVolumeDims, IChunkSource } from "./DataManager";
+import { RelaxedFetchStore } from "../loaders/zarr_utils/wrappers.js";
+import type { ExtVolumeDims, IChunkSource } from "./DataManager.js";
 import {
   assertMetadataHasMultiscales,
   toOMEZarrMetaV4,
   validateOMEZarrMetadata,
-} from "../loaders/zarr_utils/validation";
-import type { NumericZarrArray, OMEMultiscale, OmeroTransitionalMetadata } from "../loaders/zarr_utils/types";
-import { getScale, orderByDimension, orderByTCZYX, remapAxesToTCZYX } from "../loaders/zarr_utils/utils";
-import { unitNameToSymbol } from "../loaders/VolumeLoaderUtils";
-import type { Chunk, LocalChunkId } from "./types";
-import type { NumberType } from "../types";
+} from "../loaders/zarr_utils/validation.js";
+import type { NumericZarrArray, OMEMultiscale, OmeroTransitionalMetadata } from "../loaders/zarr_utils/types.js";
+import { getScale, orderByDimension, orderByTCZYX, remapAxesToTCZYX } from "../loaders/zarr_utils/utils.js";
+import { unitNameToSymbol } from "../loaders/VolumeLoaderUtils.js";
+import type { Chunk, LocalChunkId } from "./types.js";
+import type { NumberType } from "../types.js";
 
 const PLACEHOLDER_NAME = "zarr source";
 const PLACEHOLDER_SCENE_INDEX = 0;
