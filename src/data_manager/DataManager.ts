@@ -28,7 +28,7 @@ import {
 } from "./types.js";
 import PriorityQueue from "./PriorityQueue.js";
 import { VolumeDims } from "../VolumeDims.js";
-import { NumberType, TypedArray } from "../types.js";
+import { ARRAY_CONSTRUCTORS, type NumberType, type TypedArray } from "../types.js";
 
 // TODO not modifying original `VolumeDims` for compatibility, but at some point this will either need to be
 //   incorporated into `VolumeDims` or replaced with an entirely new type
@@ -276,12 +276,11 @@ export default class DataManager {
       if (evictEntry !== undefined) {
         if (evictEntry.data.state === ChunkState.DEVICE) {
           // this chunk was previously on the GPU; demote to `MEMORY` and destroy its texture
-          const memory = evictEntry.data.texture.image.data;
-          this.deviceSize -= memory?.byteLength ?? 0;
+          const array = evictEntry.data.texture.image.data as TypedArray<NumberType> | null;
+          const memory = array ?? new ARRAY_CONSTRUCTORS[evictEntry.data.dtype](0);
+          this.deviceSize -= memory?.byteLength;
           evictEntry.data.texture.dispose();
           const { dtype } = evictEntry.data;
-          // TODO verify: is this still the same typed array? or do we have to recreate it?
-          //   See also `getChunkBuffer`
           evictEntry.data = { state: ChunkState.MEMORY, memory, dtype };
         } else if (evictEntry.data.state === ChunkState.MEMORY) {
           // this chunk was promoted in the previous step; put it back
@@ -557,9 +556,7 @@ export default class DataManager {
     if (entry.data.state === ChunkState.MEMORY) {
       return entry.data.memory;
     } else if (entry.data.state === ChunkState.DEVICE) {
-      // TODO this is wrong -- may just return a `UInt8Array` regardless of underlying data type?
-      // return entry.data.texture.image.data;
-      return undefined;
+      return (entry.data.texture.image.data as TypedArray<NumberType> | null) ?? undefined;
     }
 
     return undefined;
