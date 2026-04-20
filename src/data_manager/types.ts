@@ -106,7 +106,8 @@ export const enum ChunkState {
 }
 
 export type ChunkData =
-  | { state: ChunkState.QUEUED | ChunkState.WORKER | ChunkState.LOADING }
+  // chunks contain no data in the QUEUED, LOADING, or WORKER states
+  | { state: ChunkState.QUEUED | ChunkState.LOADING | ChunkState.WORKER }
   | { state: ChunkState.MEMORY; memory: TypedArray<NumberType>; dtype: NumberType }
   | { state: ChunkState.DEVICE; texture: Data3DTexture; dtype: NumberType };
 
