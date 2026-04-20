@@ -106,6 +106,7 @@ export const enum ChunkState {
 }
 
 type ChunkEntryData =
+  // chunks contain no data in the QUEUED, LOADING, or WORKER states
   | { state: ChunkState.QUEUED | ChunkState.WORKER }
   | { state: ChunkState.LOADING; requestId: number }
   | { state: ChunkState.MEMORY; memory: TypedArray<NumberType>; dtype: NumberType }
