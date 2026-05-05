@@ -4,7 +4,7 @@ import { Vector3 } from "three";
 import type { TypedArray } from "zarrita";
 
 import RequestQueue, { type Request } from "../utils/RequestQueue.js";
-import { LoadSpec, loadSpecToString } from "../loaders/IVolumeLoader.js";
+import { LoadSpec, loadSpecToString, regionToBox3 } from "../loaders/IVolumeLoader.js";
 
 // Fixes a type error where process is undefined
 declare const process: {
@@ -409,7 +409,7 @@ describe("test RequestQueue", () => {
     });
 
     async function mockLoader(loadSpec: Required<LoadSpec>, maxDelayMs = 10.0): Promise<TypedArray<"uint8">> {
-      const { x, y, z } = loadSpec.subregion.getSize(new Vector3());
+      const { x, y, z } = regionToBox3(loadSpec.subregion).getSize(new Vector3());
       const data = new Uint8Array(x * y * z);
       const delayMs = Math.random() * maxDelayMs;
 
@@ -431,8 +431,8 @@ describe("test RequestQueue", () => {
       const requests: Request<T>[] = [];
       for (let i = startingFrame; i < startingFrame + frames; i++) {
         const loadSpec = new LoadSpec();
-        loadSpec.subregion.min.set(0, 0, i);
-        loadSpec.subregion.max.set(xDim, yDim, i + 1);
+        loadSpec.subregion.min = [0, 0, i];
+        loadSpec.subregion.max = [xDim, yDim, i + 1];
 
         requests.push({
           key: loadSpecToString(loadSpec),
