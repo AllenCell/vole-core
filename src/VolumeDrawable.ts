@@ -3,7 +3,6 @@ import {
   Object3D,
   Euler,
   Vector2,
-  Box3,
   DepthTexture,
   OrthographicCamera,
   PerspectiveCamera,
