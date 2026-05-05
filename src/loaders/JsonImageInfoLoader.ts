@@ -1,5 +1,3 @@
-import { Box3, Vector3 } from "three";
-
 import {
   ThreadableVolumeLoader,
   type LoadSpec,
@@ -206,10 +204,10 @@ class JsonImageInfoLoader extends ThreadableVolumeLoader {
     images = images.map((element) => ({ ...element, name: urlPrefix + element.name }));
 
     // Update `image`'s `loadSpec` before loading
-    const adjustedLoadSpec = {
+    const adjustedLoadSpec: LoadSpec = {
       ...loadSpec,
       // `subregion` and `multiscaleLevel` are unused by this loader
-      subregion: new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1)),
+      subregion: { min: [0, 0, 0], max: [1, 1, 1] },
       multiscaleLevel: 0,
       // include all channels in any loaded images
       channels: images.flatMap(({ channels }) => channels),

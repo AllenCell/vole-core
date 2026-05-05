@@ -1,5 +1,3 @@
-import { Box3, Vector3 } from "three";
-
 import {
   ThreadableVolumeLoader,
   type LoadSpec,
@@ -140,10 +138,10 @@ class RawArrayLoader extends ThreadableVolumeLoader {
   ): Promise<void> {
     const requestedChannels = loadSpec.channels;
 
-    const adjustedLoadSpec = {
+    const adjustedLoadSpec: LoadSpec = {
       ...loadSpec,
       // `subregion` and `multiscaleLevel` are unused by this loader
-      subregion: new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1)),
+      subregion: { min: [0, 0, 0], max: [1, 1, 1] },
       multiscaleLevel: 0,
     };
     onUpdateMetadata(undefined, adjustedLoadSpec);
