@@ -1,10 +1,12 @@
+import { Vector3, Box3 } from "three";
+
 import Volume from "../Volume.js";
 import type { VolumeDims } from "../VolumeDims.js";
 import { CImageInfo, type ImageInfo } from "../ImageInfo.js";
-import { TypedArray, NumberType } from "../types.js";
+import type { TypedArray, NumberType } from "../types.js";
 import { createDefaultMetadata } from "./VolumeLoaderUtils.js";
 import { PrefetchDirection } from "./zarr_utils/types.js";
-import { ZarrLoaderFetchOptions } from "./OmeZarrLoader.js";
+import type { ZarrLoaderFetchOptions } from "./OmeZarrLoader.js";
 
 export class LoadSpec {
   time = 0;
@@ -32,6 +34,18 @@ export function loadSpecToString(spec: LoadSpec): string {
   const [xmin, ymin, zmin] = min;
   const [xmax, ymax, zmax] = max;
   return `${spec.multiscaleLevel}:${spec.time}:x(${xmin},${xmax}):y(${ymin},${ymax}):z(${zmin},${zmax})`;
+}
+
+export function cloneLoadSpec<S extends LoadSpec>(spec: S): S {
+  return {
+    ...spec,
+    channels: spec.channels?.slice() ?? [],
+    subregion: { min: [...spec.subregion.min], max: [...spec.subregion.max] },
+  };
+}
+
+export function loadSpecSubregionAsBox3({ subregion }: LoadSpec): Box3 {
+  return new Box3(new Vector3(...subregion.min), new Vector3(...subregion.max));
 }
 
 export type LoadedVolumeInfo = {

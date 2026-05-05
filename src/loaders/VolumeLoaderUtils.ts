@@ -1,7 +1,7 @@
 import { Box3, Vector2, Vector3 } from "three";
 
 import { CImageInfo, type ImageInfo } from "../ImageInfo.js";
-import { LoadSpec } from "./IVolumeLoader.js";
+import { LoadSpec, loadSpecSubregionAsBox3 } from "./IVolumeLoader.js";
 
 export const MAX_ATLAS_EDGE = 4096;
 
@@ -192,7 +192,8 @@ export function pickLevelToLoadUnscaled(loadSpec: LoadSpec, spatialDimsZYX: ZYX[
  * `LoadSpec`'s `subregion` property.
  */
 export function pickLevelToLoad(loadSpec: LoadSpec, spatialDimsZYX: ZYX[]): number {
-  const scaledDims = scaleMultipleDimsToSubregion(loadSpec.subregion, spatialDimsZYX);
+  const region = loadSpecSubregionAsBox3(loadSpec);
+  const scaledDims = scaleMultipleDimsToSubregion(region, spatialDimsZYX);
   return pickLevelToLoadUnscaled(loadSpec, scaledDims);
 }
 
