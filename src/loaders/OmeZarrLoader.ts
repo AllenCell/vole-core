@@ -1,4 +1,4 @@
-import { Box3, Vector3 } from "three";
+import { Vector3 } from "three";
 
 import * as zarr from "zarrita";
 const { slice } = zarr;
@@ -8,11 +8,14 @@ import type { VolumeDims } from "../VolumeDims.js";
 import VolumeCache from "../VolumeCache.js";
 import { getDataRange } from "../utils/num_utils.js";
 import SubscribableRequestQueue from "../utils/SubscribableRequestQueue.js";
+// TODO cleanup import
 import {
   ThreadableVolumeLoader,
   LoadSpec,
   type RawChannelDataCallback,
   type LoadedVolumeInfo,
+  type Region,
+  box3ToRegion,
 } from "./IVolumeLoader.js";
 import {
   composeSubregion,
@@ -104,7 +107,7 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
 
   // TODO: this property should definitely be owned by `Volume` if this loader is ever used by multiple volumes.
   //   This may cause errors or incorrect results otherwise!
-  private maxExtent?: Box3;
+  private maxExtent?: Region;
 
   private syncChannels = false;
 
@@ -313,7 +316,7 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
   loadDims(loadSpec: LoadSpec): Promise<VolumeDims[]> {
     const [spaceUnit, timeUnit] = this.getUnitSymbols();
     // Compute subregion size so we can factor that in
-    const maxExtent = this.maxExtent ?? new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1));
+    const maxExtent = this.maxExtent ?? { min: [0, 0, 0], max: [1, 1, 1] };
     const subregion = composeSubregion(loadSpec.subregion, maxExtent);
     const regionSize = subregion.getSize(new Vector3());
     const regionArr = [1, 1, regionSize.z, regionSize.y, regionSize.x];
@@ -370,7 +373,7 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
     }
 
     if (!this.maxExtent) {
-      this.maxExtent = loadSpec.subregion.clone();
+      this.maxExtent = { min: [...loadSpec.subregion.min], max: [...loadSpec.subregion.max] };
     }
 
     // from source 0:
@@ -443,7 +446,7 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
     // which the volume contains. The volume contains the full extent of the subset recognized by this loader.
     const fullExtentLoadSpec: LoadSpec = {
       ...loadSpec,
-      subregion: new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1)),
+      subregion: { min: [0, 0, 0], max: [1, 1, 1] },
     };
 
     return Promise.resolve({ imageInfo: imgdata, loadSpec: fullExtentLoadSpec });
@@ -537,8 +540,8 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
 
   private updateImageInfoForLoad(imageInfo: ImageInfo, loadSpec: LoadSpec): ImageInfo {
     // Apply `this.maxExtent` to subregion, if it exists
-    const maxExtent = this.maxExtent ?? new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1));
-    const subregion = composeSubregion(loadSpec.subregion, maxExtent);
+    const maxExtent = this.maxExtent ?? { min: [0, 0, 0], max: [1, 1, 1] };
+    const subregion = box3ToRegion(composeSubregion(loadSpec.subregion, maxExtent));
 
     // Pick the level to load based on the subregion size
     const multiscaleLevel = pickLevelToLoad({ ...loadSpec, subregion }, this.getLevelShapesZYX());

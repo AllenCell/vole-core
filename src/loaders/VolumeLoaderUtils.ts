@@ -1,7 +1,7 @@
 import { Box3, Vector2, Vector3 } from "three";
 
 import { CImageInfo, type ImageInfo } from "../ImageInfo.js";
-import { LoadSpec, regionToBox3 } from "./IVolumeLoader.js";
+import { LoadSpec, type Region, regionToBox3 } from "./IVolumeLoader.js";
 
 export const MAX_ATLAS_EDGE = 4096;
 
@@ -198,9 +198,9 @@ export function pickLevelToLoad(loadSpec: LoadSpec, spatialDimsZYX: ZYX[]): numb
 }
 
 /** Given the size of a volume in pixels, convert a `Box3` in the 0-1 range to pixels */
-export function convertSubregionToPixels(region: Box3, size: Vector3): Box3 {
-  const min = region.min.clone().multiply(size).floor();
-  const max = region.max.clone().multiply(size).ceil();
+export function convertSubregionToPixels(region: Region, size: Vector3): Box3 {
+  const min = new Vector3(...region.min).multiply(size).floor();
+  const max = new Vector3(...region.max).multiply(size).ceil();
 
   // ensure it's always valid to specify the same number at both ends and get a single slice
   if (min.x === max.x && min.x < size.x) {
@@ -220,10 +220,12 @@ export function convertSubregionToPixels(region: Box3, size: Vector3): Box3 {
  * Return the subset of `container` specified by `region`, assuming that `region` contains fractional values (between 0
  * and 1). i.e. if `container`'s range on the X axis is 0-4 and `region`'s is 0.25-0.5, the result will have range 1-2.
  */
-export function composeSubregion(region: Box3, container: Box3): Box3 {
-  const size = container.getSize(new Vector3());
-  const min = region.min.clone().multiply(size).add(container.min);
-  const max = region.max.clone().multiply(size).add(container.min);
+export function composeSubregion(region: Region, container: Region): Box3 {
+  const regionBox = regionToBox3(region);
+  const containerBox = regionToBox3(container);
+  const size = containerBox.getSize(new Vector3());
+  const min = regionBox.min.clone().multiply(size).add(containerBox.min);
+  const max = regionBox.max.clone().multiply(size).add(containerBox.min);
   return new Box3(min, max);
 }
 
