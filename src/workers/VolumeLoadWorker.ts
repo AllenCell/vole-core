@@ -14,7 +14,6 @@ import type {
   WorkerResponsePayload,
 } from "./types.js";
 import { WorkerEventType, WorkerMsgType, WorkerResponseResult } from "./types.js";
-import { rebuildLoadSpec } from "./util.js";
 
 type LoaderEntry = { loader: ThreadableVolumeLoader; copyOnLoad: boolean };
 
@@ -79,12 +78,12 @@ const messageHandlers: { [T in WorkerMsgType]: MessageHandler<T> } = {
   [WorkerMsgType.CREATE_VOLUME]: async (loadSpec, loaderId) => {
     const { loader } = getLoader(loaderId);
 
-    return await loader.createImageInfo(rebuildLoadSpec(loadSpec));
+    return await loader.createImageInfo(loadSpec);
   },
 
   [WorkerMsgType.LOAD_DIMS]: async (loadSpec, loaderId) => {
     const { loader } = getLoader(loaderId);
-    return await loader.loadDims(rebuildLoadSpec(loadSpec));
+    return await loader.loadDims(loadSpec);
   },
 
   [WorkerMsgType.LOAD_VOLUME_DATA]: ({ imageInfo, loadSpec, loadId }, loaderId) => {
@@ -92,7 +91,7 @@ const messageHandlers: { [T in WorkerMsgType]: MessageHandler<T> } = {
 
     return loader.loadRawChannelData(
       imageInfo,
-      rebuildLoadSpec(loadSpec),
+      loadSpec,
       (imageInfo, loadSpec) => {
         const message: WorkerResponse<WorkerMsgType> = {
           responseResult: WorkerResponseResult.EVENT,
