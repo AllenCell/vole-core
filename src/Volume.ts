@@ -4,14 +4,8 @@ import Channel from "./Channel.js";
 import Histogram from "./Histogram.js";
 import { Lut } from "./Lut.js";
 import { getColorByChannelIndex } from "./constants/colors.js";
-import {
-  cloneLoadSpec,
-  defaultLoadSpec,
-  type IVolumeLoader,
-  LoadSpec,
-  loadSpecSubregionAsBox3,
-  type PerChannelCallback,
-} from "./loaders/IVolumeLoader.js";
+import type { IVolumeLoader, PerChannelCallback } from "./loaders/IVolumeLoader.js";
+import { cloneLoadSpec, defaultLoadSpec, LoadSpec, loadSpecSubregionAsBox3 } from "./loaders/IVolumeLoader.js";
 import { pickLevelToLoadUnscaled } from "./loaders/VolumeLoaderUtils.js";
 import type { NumberType, TypedArray } from "./types.js";
 import { type ImageInfo, CImageInfo, defaultImageInfo } from "./ImageInfo.js";
