@@ -8,15 +8,8 @@ import type { VolumeDims } from "../VolumeDims.js";
 import VolumeCache from "../VolumeCache.js";
 import { getDataRange } from "../utils/num_utils.js";
 import SubscribableRequestQueue from "../utils/SubscribableRequestQueue.js";
-// TODO cleanup import
-import {
-  ThreadableVolumeLoader,
-  LoadSpec,
-  type RawChannelDataCallback,
-  type LoadedVolumeInfo,
-  type Region,
-  box3ToRegion,
-} from "./IVolumeLoader.js";
+import type { RawChannelDataCallback, LoadedVolumeInfo, Region } from "./IVolumeLoader.js";
+import { ThreadableVolumeLoader, LoadSpec, box3ToRegion } from "./IVolumeLoader.js";
 import {
   composeSubregion,
   computePackedAtlasDims,
