@@ -1,5 +1,3 @@
-import { Box3, Vector3 } from "three";
-
 import Volume from "../Volume.js";
 import type { VolumeDims } from "../VolumeDims.js";
 import { CImageInfo, type ImageInfo } from "../ImageInfo.js";
@@ -20,7 +18,7 @@ export class LoadSpec {
    */
   multiscaleLevel?: number;
   /** Subregion of volume to load. If not specified, the entire volume is loaded. Specify as floats between 0-1. */
-  subregion = new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1));
+  subregion: { min: [number, number, number]; max: [number, number, number] } = { min: [0, 0, 0], max: [1, 1, 1] };
   channels?: number[];
   /** Treat multiscaleLevel literally and don't use other constraints to change it.
    * By default we will try to load the best level based on the maxAtlasEdge and scaleLevelBias,
@@ -31,7 +29,9 @@ export class LoadSpec {
 
 export function loadSpecToString(spec: LoadSpec): string {
   const { min, max } = spec.subregion;
-  return `${spec.multiscaleLevel}:${spec.time}:x(${min.x},${max.x}):y(${min.y},${max.y}):z(${min.z},${max.z})`;
+  const [xmin, ymin, zmin] = min;
+  const [xmax, ymax, zmax] = max;
+  return `${spec.multiscaleLevel}:${spec.time}:x(${xmin},${xmax}):y(${ymin},${ymax}):z(${zmin},${zmax})`;
 }
 
 export type LoadedVolumeInfo = {
