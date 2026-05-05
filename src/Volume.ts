@@ -5,7 +5,7 @@ import Histogram from "./Histogram.js";
 import { Lut } from "./Lut.js";
 import { getColorByChannelIndex } from "./constants/colors.js";
 import type { IVolumeLoader, PerChannelCallback } from "./loaders/IVolumeLoader.js";
-import { cloneLoadSpec, defaultLoadSpec, LoadSpec, loadSpecSubregionAsBox3 } from "./loaders/IVolumeLoader.js";
+import { cloneLoadSpec, defaultLoadSpec, LoadSpec, regionToBox3 } from "./loaders/IVolumeLoader.js";
 import { pickLevelToLoadUnscaled } from "./loaders/VolumeLoaderUtils.js";
 import type { NumberType, TypedArray } from "./types.js";
 import { type ImageInfo, CImageInfo, defaultImageInfo } from "./ImageInfo.js";
@@ -167,8 +167,8 @@ export default class Volume extends EventDispatcher<VolumeEvent> {
   /** Returns `true` iff differences between `loadSpec` and `loadSpecRequired` indicate new data *must* be loaded. */
   private mustLoadNewData(): boolean {
     const { loadSpec, loadSpecRequired } = this;
-    const currentRegion = loadSpecSubregionAsBox3(loadSpec);
-    const requiredRegion = loadSpecSubregionAsBox3(loadSpecRequired);
+    const currentRegion = regionToBox3(loadSpec.subregion);
+    const requiredRegion = regionToBox3(loadSpecRequired.subregion);
     return (
       loadSpec.useExplicitLevel !== loadSpecRequired.useExplicitLevel || // explicit vs automatic level changed
       loadSpec.time !== loadSpecRequired.time || // time point changed
@@ -187,13 +187,14 @@ export default class Volume extends EventDispatcher<VolumeEvent> {
    * imposed by `multiscaleLevel`.
    */
   private mayLoadNewScaleLevel(): boolean {
-    const currentRegion = loadSpecSubregionAsBox3(this.loadSpec);
-    const requiredRegion = loadSpecSubregionAsBox3(this.loadSpecRequired);
+    const { loadSpec, loadSpecRequired } = this;
+    const currentRegion = regionToBox3(loadSpec.subregion);
+    const requiredRegion = regionToBox3(loadSpecRequired.subregion);
     return (
       !currentRegion.equals(requiredRegion) ||
-      this.loadSpecRequired.maxAtlasEdge !== this.loadSpec.maxAtlasEdge ||
-      this.loadSpecRequired.multiscaleLevel !== this.loadSpec.multiscaleLevel ||
-      this.loadSpecRequired.scaleLevelBias !== this.loadSpec.scaleLevelBias
+      loadSpecRequired.maxAtlasEdge !== loadSpec.maxAtlasEdge ||
+      loadSpecRequired.multiscaleLevel !== loadSpec.multiscaleLevel ||
+      loadSpecRequired.scaleLevelBias !== loadSpec.scaleLevelBias
     );
   }
 

@@ -8,6 +8,20 @@ import { createDefaultMetadata, MAX_ATLAS_EDGE } from "./VolumeLoaderUtils.js";
 import { PrefetchDirection } from "./zarr_utils/types.js";
 import type { ZarrLoaderFetchOptions } from "./OmeZarrLoader.js";
 
+/** A vanilla JS variant of `three`'s `Box3` type, to avoid using `three` types in our public interface */
+export type Region = {
+  min: [number, number, number];
+  max: [number, number, number];
+};
+
+export function regionToBox3(region: Region): Box3 {
+  return new Box3(new Vector3(...region.min), new Vector3(...region.max));
+}
+
+export function box3ToRegion(box: Box3): Region {
+  return { min: box.min.toArray(), max: box.max.toArray() };
+}
+
 export class LoadSpec {
   time = 0;
   /** The max size of a volume atlas that may be produced by a load. Used to pick the appropriate multiscale level. */
@@ -20,7 +34,7 @@ export class LoadSpec {
    */
   multiscaleLevel?: number;
   /** Subregion of volume to load. If not specified, the entire volume is loaded. Specify as floats between 0-1. */
-  subregion: { min: [number, number, number]; max: [number, number, number] } = { min: [0, 0, 0], max: [1, 1, 1] };
+  subregion: Region = { min: [0, 0, 0], max: [1, 1, 1] };
   channels?: number[];
   /** Treat multiscaleLevel literally and don't use other constraints to change it.
    * By default we will try to load the best level based on the maxAtlasEdge and scaleLevelBias,
@@ -52,10 +66,6 @@ export function cloneLoadSpec<S extends LoadSpec>(spec: S): S {
     channels: spec.channels?.slice() ?? [],
     subregion: { min: [...spec.subregion.min], max: [...spec.subregion.max] },
   };
-}
-
-export function loadSpecSubregionAsBox3({ subregion }: LoadSpec): Box3 {
-  return new Box3(new Vector3(...subregion.min), new Vector3(...subregion.max));
 }
 
 export type LoadedVolumeInfo = {
