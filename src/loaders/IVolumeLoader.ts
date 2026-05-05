@@ -4,7 +4,7 @@ import Volume from "../Volume.js";
 import type { VolumeDims } from "../VolumeDims.js";
 import { CImageInfo, type ImageInfo } from "../ImageInfo.js";
 import type { TypedArray, NumberType } from "../types.js";
-import { createDefaultMetadata } from "./VolumeLoaderUtils.js";
+import { createDefaultMetadata, MAX_ATLAS_EDGE } from "./VolumeLoaderUtils.js";
 import { PrefetchDirection } from "./zarr_utils/types.js";
 import type { ZarrLoaderFetchOptions } from "./OmeZarrLoader.js";
 
@@ -34,6 +34,16 @@ export function loadSpecToString(spec: LoadSpec): string {
   const [xmin, ymin, zmin] = min;
   const [xmax, ymax, zmax] = max;
   return `${spec.multiscaleLevel}:${spec.time}:x(${xmin},${xmax}):y(${ymin},${ymax}):z(${zmin},${zmax})`;
+}
+
+export function defaultLoadSpec(): Required<LoadSpec> {
+  return {
+    ...new LoadSpec(),
+    maxAtlasEdge: MAX_ATLAS_EDGE,
+    scaleLevelBias: 0,
+    multiscaleLevel: 0,
+    channels: [0],
+  };
 }
 
 export function cloneLoadSpec<S extends LoadSpec>(spec: S): S {

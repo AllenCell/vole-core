@@ -6,12 +6,13 @@ import { Lut } from "./Lut.js";
 import { getColorByChannelIndex } from "./constants/colors.js";
 import {
   cloneLoadSpec,
+  defaultLoadSpec,
   type IVolumeLoader,
   LoadSpec,
   loadSpecSubregionAsBox3,
   type PerChannelCallback,
 } from "./loaders/IVolumeLoader.js";
-import { MAX_ATLAS_EDGE, pickLevelToLoadUnscaled } from "./loaders/VolumeLoaderUtils.js";
+import { pickLevelToLoadUnscaled } from "./loaders/VolumeLoaderUtils.js";
 import type { NumberType, TypedArray } from "./types.js";
 import { type ImageInfo, CImageInfo, defaultImageInfo } from "./ImageInfo.js";
 import type { VolumeDims } from "./VolumeDims.js";
@@ -90,10 +91,7 @@ export default class Volume extends EventDispatcher<VolumeEvent> {
     // TODO: use getter?
     this.name = imageInfo.name;
     this.loadSpec = {
-      // Fill in defaults for optional properties
-      multiscaleLevel: 0,
-      scaleLevelBias: 0,
-      maxAtlasEdge: MAX_ATLAS_EDGE,
+      ...defaultLoadSpec(),
       channels: Array.from({ length: this.imageInfo.numChannels }, (_val, idx) => idx),
       ...cloneLoadSpec(loadSpec),
     };
