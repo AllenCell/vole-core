@@ -1,4 +1,4 @@
-import { Vector3, Box3 } from "three";
+import { Box3, Vector3 } from "three";
 
 import Volume from "../Volume.js";
 import type { VolumeDims } from "../VolumeDims.js";
