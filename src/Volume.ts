@@ -198,6 +198,12 @@ export default class Volume extends EventDispatcher<VolumeEvent> {
     );
   }
 
+  async getDimsZYX(): Promise<[number, number, number][] | undefined> {
+    // Loaders should cache loaded dimensions so that this call blocks no more than once per valid `LoadSpec`.
+    const dims = await this.loadScaleLevelDims();
+    return dims?.map(({ shape }): [number, number, number] => [shape[2], shape[3], shape[4]]);
+  }
+
   /** Call on any state update that may require new data to be loaded (subregion, enabled channels, time, etc.) */
   async updateRequiredData(required: Partial<LoadSpec>, onChannelLoaded?: PerChannelCallback): Promise<void> {
     this.loadSpecRequired = { ...this.loadSpecRequired, ...required };
@@ -205,10 +211,8 @@ export default class Volume extends EventDispatcher<VolumeEvent> {
 
     // If we're not reloading due to required data changes, check if we should load a new scale level
     if (!shouldReload && this.mayLoadNewScaleLevel()) {
-      // Loaders should cache loaded dimensions so that this call blocks no more than once per valid `LoadSpec`.
-      const dims = await this.loadScaleLevelDims();
-      if (dims) {
-        const dimsZYX = dims.map(({ shape }): [number, number, number] => [shape[2], shape[3], shape[4]]);
+      const dimsZYX = await this.getDimsZYX();
+      if (dimsZYX) {
         // Determine which scale level *would* be loaded, and see if it's different than what we have
         const levelToLoad = pickLevelToLoadUnscaled(this.loadSpecRequired, dimsZYX);
         shouldReload = this.imageInfo.multiscaleLevel !== levelToLoad;
@@ -218,6 +222,18 @@ export default class Volume extends EventDispatcher<VolumeEvent> {
     if (shouldReload) {
       await this.loadNewData(onChannelLoaded);
     }
+  }
+
+  /**
+   * Returns whether two scale-level biases would select different resolution levels.
+   * Returns false if dimensions cannot be loaded.
+   */
+  async biasesSelectDifferentLevels(): Promise<boolean> {
+    const dimsZYX = await this.getDimsZYX();
+    if (!dimsZYX) return false;
+    const unbiased = pickLevelToLoadUnscaled({ ...this.loadSpecRequired, scaleLevelBias: 0}, dimsZYX);
+    const withBias = pickLevelToLoadUnscaled(this.loadSpecRequired, dimsZYX);
+    return unbiased !== withBias;
   }
 
   private async loadScaleLevelDims(): Promise<VolumeDims[] | undefined> {
