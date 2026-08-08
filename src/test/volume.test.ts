@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import Volume from "../Volume.js";
 import VolumeMaker from "../VolumeMaker.js";
@@ -126,6 +126,22 @@ describe("test volume", () => {
       expect(v.normPhysicalSize.x).to.be.closeTo(sx, EPSILON);
       expect(v.normPhysicalSize.y).to.be.closeTo(sy, EPSILON);
       expect(v.normPhysicalSize.z).to.be.closeTo(sz, EPSILON);
+    });
+  });
+
+  describe("loading events", () => {
+    it("does not dispatch loadStart when no reload is required", async () => {
+      // ARRANGE
+      const v = new Volume(testimgdata);
+      const loadStart = vi.fn();
+      v.addEventListener("loadStart", loadStart);
+
+      // ACT: Simulate beginning scrubbing
+      await v.updateRequiredData({ scaleLevelBias: 1 });
+
+      // ASSERT: `testimgdata` has only one multiscale level, so
+      // changing scaleLevelBias should trigger any load.
+      expect(loadStart).not.toHaveBeenCalled();
     });
   });
 });
