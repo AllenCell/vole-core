@@ -140,7 +140,7 @@ describe("test volume", () => {
       await v.updateRequiredData({ scaleLevelBias: 1 });
 
       // ASSERT: `testimgdata` has only one multiscale level, so
-      // changing scaleLevelBias should trigger any load.
+      // changing scaleLevelBias should not trigger any load.
       expect(loadStart).not.toHaveBeenCalled();
     });
   });

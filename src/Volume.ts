@@ -25,8 +25,6 @@ interface VolumeDataObserver {
  */
 export default class Volume extends EventDispatcher<{
   loadStart: undefined;
-  loadComplete: undefined;
-  loadError: { error: unknown };
 }> {
   public imageInfo: CImageInfo;
   public loadSpec: Required<LoadSpec>;
@@ -244,11 +242,9 @@ export default class Volume extends EventDispatcher<{
     try {
       await this.loader?.loadVolumeData(this, undefined, onChannelLoaded);
     } catch (e) {
-      this.dispatchEvent({ type: "loadError", error: e });
       this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, e));
       throw e;
     }
-    this.dispatchEvent({ type: "loadComplete" });
   }
 
   // we calculate the physical size of the volume (voxels*pixel_size)
