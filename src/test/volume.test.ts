@@ -185,4 +185,26 @@ describe("test volume", () => {
       expect(loadStart).not.toHaveBeenCalled();
     });
   });
+
+  describe("biasesSelectDifferentLevels", () => {
+    it("reports when the scale-level bias selects a different resolution", async () => {
+      // ARRANGE
+      const loader = createTestLoader(multiscaleTestimgdata.multiscaleLevelDims);
+      const loadSpec = new LoadSpec();
+      loadSpec.scaleLevelBias = 1;
+      const v = new Volume(multiscaleTestimgdata, loadSpec, loader);
+
+      // ACT+ASSERT
+      expect(await v.biasesSelectDifferentLevels()).toBe(true);
+    });
+
+    it("reports when the scale-level bias selects the same resolution", async () => {
+      // ARRANGE
+      const loader = createTestLoader(multiscaleTestimgdata.multiscaleLevelDims);
+      const v = new Volume(multiscaleTestimgdata, new LoadSpec(), loader);
+
+      // ACT+ASSERT
+      expect(await v.biasesSelectDifferentLevels()).toBe(false);
+    });
+  });
 });
