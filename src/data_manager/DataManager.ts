@@ -30,6 +30,8 @@ import PriorityQueue from "./PriorityQueue.js";
 import { VolumeDims } from "../VolumeDims.js";
 import { ARRAY_CONSTRUCTORS, type NumberType, type TypedArray } from "../types.js";
 
+const SUBSCRIBER_ID = Symbol("DataManager.subscriberId");
+
 // TODO not modifying original `VolumeDims` for compatibility, but at some point this will either need to be
 //   incorporated into `VolumeDims` or replaced with an entirely new type
 export type ExtVolumeDims = VolumeDims & { chunkShape: [number, number, number, number, number] };
@@ -40,8 +42,7 @@ export interface IChunkSource {
 }
 
 export interface IDataSubscriber {
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  _subscriberId?: number;
+  [SUBSCRIBER_ID]?: number;
   onChunkLoaded?: (id: ChunkId, chunk: Chunk<NumberType>) => void;
   onChunkOnGpu?: (id: ChunkId, texture: Data3DTexture) => void;
   // TODO events for when chunks are evicted?
@@ -131,11 +132,11 @@ export default class DataManager {
 
   /** Gets the id of data subscriber `subscriber`, assigning it one if it doesn't have one. */
   private getIdForSubscriber(subscriber: IDataSubscriber): number {
-    if (subscriber._subscriberId === undefined) {
-      subscriber._subscriberId = this.subscriberCount;
+    if (subscriber[SUBSCRIBER_ID] === undefined) {
+      subscriber[SUBSCRIBER_ID] = this.subscriberCount;
       this.subscriberCount += 1;
     }
-    return subscriber._subscriberId;
+    return subscriber[SUBSCRIBER_ID];
   }
 
   /**
