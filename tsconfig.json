@@ -4,7 +4,7 @@
     "allowSyntheticDefaultImports": true,
     "declaration": true,
     "declarationDir": "es/types",
-    "lib": ["DOM", "ES2022", "ES6", "DOM.Iterable", "ScriptHost", "ES2016.Array.Include"],
+    "lib": ["DOM", "ES2022", "ES6", "DOM.Iterable", "ScriptHost", "ES2016.Array.Include", "ES2024.ArrayBuffer"],
     "module": "Node16",
     "moduleResolution": "node16",
     "noImplicitAny": false,
