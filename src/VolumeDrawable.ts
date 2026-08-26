@@ -940,7 +940,7 @@ export default class VolumeDrawable {
       .on("change", ({ value }) => this.volume.updateRequiredData({ scaleLevelBias: value }));
     // which level to load - only included if multiscaleLevel is a number
     // (tweakpane can't handle undefined)
-    if (this.volume.loadSpecRequired.multiscaleLevel !== undefined) {
+    if (typeof this.volume.loadSpecRequired.multiscaleLevel === "number") {
       scaleFolder
         .addInput(this.volume.loadSpecRequired, "multiscaleLevel")
         .on("change", ({ value }) => this.volume.updateRequiredData({ multiscaleLevel: value }));
