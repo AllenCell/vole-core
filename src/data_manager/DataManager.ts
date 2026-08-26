@@ -21,6 +21,7 @@ import {
   getMinChunkPriority,
   validateDataManagerLimits,
   DEFAULT_DATA_MANAGER_LIMITS,
+  stringToChunkId,
   requestLimitForPriority,
   ChunkPriorityLevel,
   deviceSizeLimitForPriority,
@@ -87,7 +88,7 @@ const dataTypeToByteLength: { [T in NumberType]: number } = {
   float64: 8,
 };
 
-type ChunkQueue = PriorityQueue<ChunkPriority, ChunkId>;
+type ChunkQueue = PriorityQueue<ChunkPriority, string>;
 
 class ChunkQueues {
   /** Chunks waiting to be loaded */
@@ -102,7 +103,7 @@ class ChunkQueues {
 
 export default class DataManager {
   /** Data and current state for every chunk of data tracked and managed by this class. */
-  private chunks = new Map<ChunkId, ChunkEntry>();
+  private chunks = new Map<string, ChunkEntry>();
   private queues = new ChunkQueues();
   private sources: SourceEntry[] = [];
   /**
@@ -110,7 +111,7 @@ export default class DataManager {
    *
    * This could be stored in `chunks`, but requests don't necessarily correspond one-to-one with chunks.
    */
-  private requests = new Map<ChunkId, AbortController>();
+  private requests = new Map<string, AbortController>();
   /** The amount of chunk data currently cached in memory, in bytes */
   private memorySize = 0;
   /** The amount of GPU texture memory managed by this class, in bytes */
@@ -143,7 +144,7 @@ export default class DataManager {
    *
    * Assumes that the chunk is not in any queues that don't match its state.
    */
-  private updateChunkInQueue(key: ChunkId, entry: ChunkEntry) {
+  private updateChunkInQueue(key: string, entry: ChunkEntry) {
     switch (entry.data.state) {
       case ChunkState.QUEUED:
         this.queues.load.insert(key, entry.priority);
@@ -165,7 +166,7 @@ export default class DataManager {
   }
 
   /** Resolves a chunk's overall priority based on all requests for it, then updates its queue position. */
-  private updateChunkPriority(key: ChunkId, entry: ChunkEntry) {
+  private updateChunkPriority(key: string, entry: ChunkEntry) {
     const nextPriority = entry.subscriberPriorities.reduce((prevPriority, [_, priority]) => {
       return comparePriority(priority, prevPriority) < 0 ? priority : prevPriority;
     }, getMinChunkPriority());
@@ -216,7 +217,7 @@ export default class DataManager {
    */
   private updateDeviceData() {
     // STEP 1: pull eligible chunks out of the `deviceLoad` queue
-    const loads: [ChunkId, ChunkEntry][] = [];
+    const loads: [string, ChunkEntry][] = [];
     // This one's easier if we just loop unconditionally and `break` when done.
     while (true) {
       const nextLoad = this.queues.deviceLoad.peek();
@@ -301,16 +302,16 @@ export default class DataManager {
     }
 
     // STEP 3: create textures for newly-promoted chunks
-    for (const [loadId, loadEntry] of loads) {
+    for (const [loadKey, loadEntry] of loads) {
+      const loadId = stringToChunkId(loadKey);
       const dims = this.getChunkSpatialDims(loadId);
 
       if (dims === undefined) {
-        const loadIdString = chunkIdToString(loadId);
         console.error(
-          `chunk ${loadIdString} queued for device upload with invalid source id or multiscale index (id ${loadId.source}, multiscale index ${loadId.multiscale})`
+          `chunk ${loadKey} queued for device upload with invalid source id or multiscale index (id ${loadId.source}, multiscale index ${loadId.multiscale})`
         );
-        this.queues.deviceEvict.remove(loadId);
-        this.chunks.delete(loadId);
+        this.queues.deviceEvict.remove(loadKey);
+        this.chunks.delete(loadKey);
         continue;
       }
 
@@ -390,7 +391,8 @@ export default class DataManager {
     if (nextRequest === undefined) {
       return;
     }
-    let [requestPriority, requestId] = nextRequest;
+    let [requestPriority, requestKey] = nextRequest;
+    let requestId = stringToChunkId(requestKey);
     const nextEvictPriority = this.queues.evict.peek()?.[0] ?? getMinChunkPriority();
 
     while (
@@ -404,11 +406,11 @@ export default class DataManager {
 
       if (requestPriority.level === ChunkPriorityLevel.RECENT) {
         // Ignore requests at the `RECENT` level. That's supposed to be for chunks that are already loaded!
-        this.chunks.delete(requestId);
+        this.chunks.delete(requestKey);
         continue;
       }
 
-      const chunkEntry = this.chunks.get(requestId);
+      const chunkEntry = this.chunks.get(requestKey);
       if (chunkEntry === undefined) {
         continue;
       }
@@ -416,26 +418,27 @@ export default class DataManager {
 
       const sourceEntry = this.sources[requestId.source];
       if (sourceEntry === undefined) {
-        console.error(`chunk ${requestId} queued for load with invalid source id ${requestId.source}`);
-        this.chunks.delete(requestId);
+        console.error(`chunk ${requestKey} queued for load with invalid source id ${requestId.source}`);
+        this.chunks.delete(requestKey);
         continue;
       }
       const abortController = new AbortController();
-      this.requests.set(requestId, abortController);
+      this.requests.set(requestKey, abortController);
 
       sourceEntry.source
         .getChunk(requestId, abortController.signal)
         .then((data) => this.onChunkLoad(requestId, data))
         .catch(() => {
-          this.chunks.delete(requestId);
-          this.requests.delete(requestId);
+          this.chunks.delete(requestKey);
+          this.requests.delete(requestKey);
         });
 
       const nextRequest = this.queues.load.peek();
       if (nextRequest === undefined) {
         return;
       }
-      [requestPriority, requestId] = nextRequest;
+      [requestPriority, requestKey] = nextRequest;
+      requestId = stringToChunkId(requestKey);
     }
   }
 
@@ -453,35 +456,36 @@ export default class DataManager {
   }
 
   private onChunkLoad(id: ChunkId, chunk: Chunk<NumberType>) {
+    const key = chunkIdToString(id);
     const { data: memory, dtype } = chunk;
-    this.requests.delete(id);
+    this.requests.delete(key);
     if (memory.byteLength > this.limits.size) {
-      console.error(`received chunk ${chunkIdToString(id)} which is larger than the cache limit`);
+      console.error(`received chunk ${key} which is larger than the cache limit`);
       return;
     }
     const sourceEntry = this.sources[id.source];
     if (sourceEntry === undefined) {
-      console.error(`received chunk ${chunkIdToString(id)} with invalid source id ${id.source}`);
+      console.error(`received chunk ${key} with invalid source id ${id.source}`);
       return;
     }
     const data = { state: ChunkState.MEMORY as const, memory, dtype };
 
-    let chunkEntry = this.chunks.get(id);
+    let chunkEntry = this.chunks.get(key);
     if (chunkEntry === undefined) {
-      console.error(`received chunk ${chunkIdToString(id)} without data manager entry`);
+      console.error(`received chunk ${key} without data manager entry`);
       chunkEntry = {
         data,
         subscriberPriorities: [],
         priority: { level: ChunkPriorityLevel.RECENT, score: this.recentCounter },
       };
-      this.chunks.set(id, chunkEntry);
+      this.chunks.set(key, chunkEntry);
       this.recentCounter += 1;
     } else {
       chunkEntry.data = data;
     }
 
-    this.queues.deviceLoad.insert(id, chunkEntry.priority);
-    this.queues.evict.insert(id, chunkEntry.priority);
+    this.queues.deviceLoad.insert(key, chunkEntry.priority);
+    this.queues.evict.insert(key, chunkEntry.priority);
 
     this.memorySize += memory.byteLength;
     sourceEntry.subscribers.forEach((s) => s.onChunkLoaded?.(id, chunk));
@@ -497,7 +501,8 @@ export default class DataManager {
    */
   queueChunkRequest(subscriber: IDataSubscriber, chunkId: ChunkId, priority: ChunkPriority) {
     const subscriberId = this.getIdForSubscriber(subscriber);
-    const chunkEntry = this.chunks.get(chunkId);
+    const chunkIdString = chunkIdToString(chunkId);
+    const chunkEntry = this.chunks.get(chunkIdString);
 
     if (chunkEntry === undefined) {
       const newChunkEntry: ChunkEntry = {
@@ -505,8 +510,8 @@ export default class DataManager {
         subscriberPriorities: [[subscriberId, { ...priority }]],
         priority: { ...priority },
       };
-      this.chunks.set(chunkId, newChunkEntry);
-      this.queues.load.insert(chunkId, priority);
+      this.chunks.set(chunkIdString, newChunkEntry);
+      this.queues.load.insert(chunkIdString, priority);
     } else {
       const subscriberPriorityIndex = chunkEntry.subscriberPriorities.findIndex(([id]) => id === subscriberId);
       if (subscriberPriorityIndex === -1) {
@@ -515,7 +520,7 @@ export default class DataManager {
         chunkEntry.subscriberPriorities[subscriberPriorityIndex][1] = priority;
       }
 
-      this.updateChunkPriority(chunkId, chunkEntry);
+      this.updateChunkPriority(chunkIdString, chunkEntry);
     }
   }
 
@@ -526,7 +531,8 @@ export default class DataManager {
    */
   removeChunkRequest(subscriber: IDataSubscriber, chunkId: ChunkId) {
     const subscriberId = this.getIdForSubscriber(subscriber);
-    const chunkEntry = this.chunks.get(chunkId);
+    const chunkKey = chunkIdToString(chunkId);
+    const chunkEntry = this.chunks.get(chunkKey);
     if (chunkEntry === undefined) {
       return;
     }
@@ -537,12 +543,13 @@ export default class DataManager {
     }
 
     swapRemove(chunkEntry.subscriberPriorities, index);
-    this.updateChunkPriority(chunkId, chunkEntry);
+    this.updateChunkPriority(chunkKey, chunkEntry);
   }
 
   /** Get a chunk's data buffer, if it is in memory. */
   getChunkBuffer(chunkId: ChunkId): TypedArray<NumberType> | undefined {
-    const entry = this.chunks.get(chunkId);
+    const key = chunkIdToString(chunkId);
+    const entry = this.chunks.get(key);
     if (entry === undefined) {
       return undefined;
     }
@@ -558,7 +565,8 @@ export default class DataManager {
 
   /** Get a chunk's texture, if it is on the GPU. */
   getChunkTexture(chunkId: ChunkId): Data3DTexture | undefined {
-    const entry = this.chunks.get(chunkId);
+    const key = chunkIdToString(chunkId);
+    const entry = this.chunks.get(key);
     if (entry?.data.state === ChunkState.DEVICE) {
       return entry.data.texture;
     }
