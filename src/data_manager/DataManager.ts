@@ -425,9 +425,11 @@ export default class DataManager {
       const abortController = new AbortController();
       this.requests.set(requestKey, abortController);
 
+      // Make a stable by-reference copy of `requestId` for the closures below
+      const requestedId = requestId;
       sourceEntry.source
-        .getChunk(requestId, abortController.signal)
-        .then((data) => this.onChunkLoad(requestId, data))
+        .getChunk(requestedId, abortController.signal)
+        .then((data) => this.onChunkLoad(requestedId, data))
         .catch(() => {
           this.chunks.delete(requestKey);
           this.requests.delete(requestKey);
