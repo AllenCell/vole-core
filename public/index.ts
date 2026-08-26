@@ -945,7 +945,7 @@ async function testDataManager() {
         };
         const priority: ChunkPriority = {
           level: ChunkPriorityLevel.VISIBLE,
-          score: z * y * x,
+          score: (z + 1) * (y + 1) * (x + 1),
         };
         console.log("request", id, priority);
         dataManager.queueChunkRequest(mockSubscriber, id, priority);
