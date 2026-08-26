@@ -602,7 +602,10 @@ export default class DataManager<Dev, Tex> {
     }
 
     const subscriberIndex = sourceEntry.subscribers.findIndex((s) => s === subscriber);
-    swapRemove(sourceEntry.subscribers, subscriberIndex);
-    return true;
+    if (subscriberIndex > -1) {
+      sourceEntry.subscribers.splice(subscriberIndex, 1);
+      return true;
+    }
+    return false;
   }
 }
