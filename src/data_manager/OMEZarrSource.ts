@@ -1,6 +1,5 @@
 import * as zarr from "zarrita";
 
-import { RelaxedFetchStore } from "../loaders/zarr_utils/wrappers.js";
 import type { ExtVolumeDims, IChunkSource } from "./DataManager.js";
 import {
   assertMetadataHasMultiscales,
@@ -25,7 +24,7 @@ export default class OMEZarrSource implements IChunkSource {
   ) {}
 
   static async new(url: string): Promise<OMEZarrSource> {
-    const store = new RelaxedFetchStore(url);
+    const store = new zarr.FetchStore(url);
     const root = zarr.root(store);
 
     const group = await zarr.open(root, { kind: "group" });
