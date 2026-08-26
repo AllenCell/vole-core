@@ -912,6 +912,17 @@ function showChannelUI(volume: Volume) {
   }
 }
 
+function shuffle<T>(arr: T[]): T[] {
+  const indexes = Array.from({ length: arr.length }, (_, i) => i);
+  const result: T[] = [];
+  while (indexes.length > 0) {
+    const rand = Math.floor(Math.random() * indexes.length);
+    const [index] = indexes.splice(rand, 1);
+    result.push(arr[index]);
+  }
+  return result;
+}
+
 async function testDataManager() {
   const dataManager = new DataManager();
   const zarrSource = await OMEZarrSource.new(
@@ -935,6 +946,7 @@ async function testDataManager() {
   const chunksZ = Math.ceil(dz / cz);
   console.log("dims", chunksX, chunksY, chunksZ);
 
+  const requests: [ChunkId, ChunkPriority][] = [];
   for (let z = 0; z < chunksZ; z++) {
     for (let y = 0; y < chunksY; y++) {
       for (let x = 0; x < chunksX; x++) {
@@ -947,10 +959,14 @@ async function testDataManager() {
           level: ChunkPriorityLevel.VISIBLE,
           score: (z + 1) * (y + 1) * (x + 1),
         };
-        console.log("request", id, priority);
-        dataManager.queueChunkRequest(mockSubscriber, id, priority);
+        requests.push([id, priority]);
       }
     }
+  }
+
+  for (const [id, priority] of shuffle(requests)) {
+    console.log("request", id, priority);
+    dataManager.queueChunkRequest(mockSubscriber, id, priority);
   }
 
   dataManager.update();
