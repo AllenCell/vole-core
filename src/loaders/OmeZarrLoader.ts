@@ -453,7 +453,7 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
     scaleLevel: NumericZarrArray,
     coords: TCZYX<number>,
     subscriber: SubscriberId,
-    forLowResCache: boolean = false
+    forLowResCache = false
   ): void {
     const source = this.sources[sourceIndex];
     const instrumented = withVoleInstrumentation(scaleLevel, {

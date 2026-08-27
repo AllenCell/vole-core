@@ -1,4 +1,4 @@
-import type { AbsolutePath, AsyncReadable, AsyncWritable } from "zarrita";
+import type { AsyncReadable, AsyncWritable } from "zarrita";
 import * as zarr from "zarrita";
 import { vi } from "vitest";
 
