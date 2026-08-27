@@ -192,7 +192,7 @@ describe("SubscribableRequestQueue", () => {
       expect(queue.cancelRequest("test", id)).to.be.false;
     });
 
-    it("aborts a request even it is running", async () => {
+    it("aborts a request even if it is running", async () => {
       // Arrange
       const queue = new SubscribableRequestQueue();
       const id1 = queue.addSubscriber();
