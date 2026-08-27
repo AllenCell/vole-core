@@ -18,6 +18,7 @@ import { rebuildLoadSpec } from "./util.js";
 
 type LoaderEntry = { loader: ThreadableVolumeLoader; copyOnLoad: boolean };
 
+// 250MB: same size as the regular cache, and large enough for many AICS ZARRs
 const LOW_RES_CACHE_DEFAULT_SIZE = 250_000_000;
 
 let cache: VolumeCache | undefined = undefined;
