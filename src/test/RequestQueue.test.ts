@@ -408,6 +408,46 @@ describe("test RequestQueue", () => {
       expect(count).to.equal(0);
     });
 
+    it("keeps a reissued request tracked when another request is canceled", async () => {
+      // Arrange
+      const rq = new RequestQueue();
+      const controller = new AbortController();
+
+      rq
+        .addRequest(
+          "same-key",
+          () =>
+            new Promise<void>((_, reject) => {
+              controller.signal.addEventListener("abort", reject);
+            }),
+          undefined,
+          undefined,
+          () => controller.abort()
+        )
+        .catch(() => undefined);
+
+      // Act
+      rq.cancelRequest("same-key"); // Triggers abort()
+
+      let resolveSecond: () => void = () => undefined;
+      const second = rq.addRequest(
+        "same-key",
+        () => new Promise<void>((resolve) => resolveSecond = resolve),
+      );
+
+      await sleep(0); // Wait for the abort signal to trigger reject()
+
+      try {
+        // Assert
+        expect(rq.hasRequest("same-key")).to.be.true;
+        expect(rq.requestRunning("same-key")).to.be.true;
+      } finally {
+        // Cleanup
+        resolveSecond();
+        await second;
+      }
+    });
+
     async function mockLoader(loadSpec: Required<LoadSpec>, maxDelayMs = 10.0): Promise<TypedArray<"uint8">> {
       const { x, y, z } = loadSpec.subregion.getSize(new Vector3());
       const data = new Uint8Array(x * y * z);
