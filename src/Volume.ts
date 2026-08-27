@@ -18,14 +18,16 @@ interface VolumeDataObserver {
   onVolumeLoadError: (vol: Volume, error: unknown) => void;
 }
 
+export type VolumeEvent = {
+  loadStart: void;
+};
+
 /**
  * A renderable multichannel volume image with 8-bits per channel intensity values.
  * @class
  * @param {ImageInfo} imageInfo
  */
-export default class Volume extends EventDispatcher<{
-  loadStart: undefined;
-}> {
+export default class Volume extends EventDispatcher<VolumeEvent> {
   public imageInfo: CImageInfo;
   public loadSpec: Required<LoadSpec>;
   public loader?: IVolumeLoader;
