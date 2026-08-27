@@ -31,6 +31,7 @@ import { PerChannelCallback } from "./loaders/IVolumeLoader.js";
 import { WorkerLoader } from "./workers/VolumeLoaderContext.js";
 import Line3d from "./drawables/lines/Line3d.js";
 import EventDispatcher from "./EventDispatcher.js";
+import { wrapTweakpaneCall } from "./utils/TweakpaneWrapper.js";
 
 // Constants are kept for compatibility reasons.
 export const RENDERMODE_RAYMARCH = RenderMode.RAYMARCH;
@@ -294,7 +295,8 @@ export class View3d extends EventDispatcher<View3dEvents> {
     this.image?.updateScale();
     this.image?.onChannelLoaded(channels);
     if (volume.isLoaded() && this.tweakpane) {
-      this.tweakpane.refresh();
+      const tp = this.tweakpane;
+      wrapTweakpaneCall(() => tp.refresh());
     }
   }
 
@@ -982,7 +984,8 @@ export class View3d extends EventDispatcher<View3dEvents> {
     // control-option-1 (mac) or ctrl-alt-1 (windows)
     if (event.code === "Digit1" && event.altKey && event.ctrlKey) {
       if (this.tweakpane) {
-        this.tweakpane.dispose();
+        const tp = this.tweakpane;
+        wrapTweakpaneCall(() => tp.dispose());
         this.tweakpane = null;
       } else {
         this.tweakpane = this.setupGui(this.canvas3d.containerdiv);
@@ -1109,55 +1112,57 @@ export class View3d extends EventDispatcher<View3dEvents> {
   }
 
   private setupGui(container: HTMLElement): Pane {
-    const pane = new Pane({ title: "Advanced Settings", container });
-    const paneStyle: Partial<CSSStyleDeclaration> = {
-      position: "absolute",
-      top: "0",
-      right: "0",
-    };
-    Object.assign(pane.element.style, paneStyle);
+    return wrapTweakpaneCall(() => {
+      const pane = new Pane({ title: "Advanced Settings", container });
+      const paneStyle: Partial<CSSStyleDeclaration> = {
+        position: "absolute",
+        top: "0",
+        right: "0",
+      };
+      Object.assign(pane.element.style, paneStyle);
 
-    // LIGHTS
-    const lights = pane.addFolder({ title: "Lights (isosurface)" });
+      // LIGHTS
+      const lights = pane.addFolder({ title: "Lights (isosurface)" });
 
-    const addFolderForLight = (light: ThreeLight, title: string): void => {
-      const folder = lights.addFolder({ title, expanded: false });
-      folder.addInput(light, "color", { color: { type: "float" } }).on("change", (_event) => this.redraw());
-      folder.addInput(light, "intensity", { min: 0 }).on("change", (_event) => this.redraw());
-      if (!(light as AmbientLight).isAmbientLight) {
-        folder.addInput(light, "position").on("change", (_event) => this.redraw());
-      }
-    };
+      const addFolderForLight = (light: ThreeLight, title: string): void => {
+        const folder = lights.addFolder({ title, expanded: false });
+        folder.addInput(light, "color", { color: { type: "float" } }).on("change", (_event) => this.redraw());
+        folder.addInput(light, "intensity", { min: 0 }).on("change", (_event) => this.redraw());
+        if (!(light as AmbientLight).isAmbientLight) {
+          folder.addInput(light, "position").on("change", (_event) => this.redraw());
+        }
+      };
 
-    addFolderForLight(this.spotLight, "spot light");
-    addFolderForLight(this.ambientLight, "ambient light");
-    addFolderForLight(this.reflectedLight, "reflected light");
-    addFolderForLight(this.fillLight, "fill light");
+      addFolderForLight(this.spotLight, "spot light");
+      addFolderForLight(this.ambientLight, "ambient light");
+      addFolderForLight(this.reflectedLight, "reflected light");
+      addFolderForLight(this.fillLight, "fill light");
 
-    this.image?.setupGui(pane);
+      this.image?.setupGui(pane);
 
-    const prefetch = pane.addFolder({ title: "Prefetch" });
-    // Not all `IVolumeLoader`s implement `updateFetchOptions`. This cast makes it sound to try to call it, but we
-    //   still have to be careful to null-check it!
-    // TODO depending on how the relationship between loaders and images pans out, it's not impossible that the loader
-    //   for an image will be changeable and this variable will capture a stale reference to old loaders. Careful!
-    const loader = this.image?.volume.loader as WorkerLoader | undefined;
-    // one number will be used for all axis directions
-    prefetch.addInput(allGlobalLoadingOptions, "numChunksToPrefetchAhead").on("change", (event) => {
-      loader?.updateFetchOptions?.({
-        maxPrefetchDistance: [event.value, event.value, event.value, event.value],
+      const prefetch = pane.addFolder({ title: "Prefetch" });
+      // Not all `IVolumeLoader`s implement `updateFetchOptions`. This cast makes it sound to try to call it, but we
+      //   still have to be careful to null-check it!
+      // TODO depending on how the relationship between loaders and images pans out, it's not impossible that the loader
+      //   for an image will be changeable and this variable will capture a stale reference to old loaders. Careful!
+      const loader = this.image?.volume.loader as WorkerLoader | undefined;
+      // one number will be used for all axis directions
+      prefetch.addInput(allGlobalLoadingOptions, "numChunksToPrefetchAhead").on("change", (event) => {
+        loader?.updateFetchOptions?.({
+          maxPrefetchDistance: [event.value, event.value, event.value, event.value],
+        });
+        this.image?.volume.updateRequiredData({});
       });
-      this.image?.volume.updateRequiredData({});
-    });
-    // should we try to prefetch along Z even if we are only playing along T?
-    prefetch.addInput(allGlobalLoadingOptions, "prefetchAlongNonPlayingAxis").on("change", (event) => {
-      loader?.updateFetchOptions?.({ onlyPriorityDirections: !event.value });
-    });
-    // when multiple prefetch frames arrive at once, should we slow down how quickly we load them?
-    prefetch.addInput(allGlobalLoadingOptions, "throttleArrivingChannelData").on("change", (event) => {
-      loader?.getContext?.().setThrottleChannelData(event.value);
-    });
+      // should we try to prefetch along Z even if we are only playing along T?
+      prefetch.addInput(allGlobalLoadingOptions, "prefetchAlongNonPlayingAxis").on("change", (event) => {
+        loader?.updateFetchOptions?.({ onlyPriorityDirections: !event.value });
+      });
+      // when multiple prefetch frames arrive at once, should we slow down how quickly we load them?
+      prefetch.addInput(allGlobalLoadingOptions, "throttleArrivingChannelData").on("change", (event) => {
+        loader?.getContext?.().setThrottleChannelData(event.value);
+      });
 
-    return pane;
+      return pane;
+    });
   }
 }
