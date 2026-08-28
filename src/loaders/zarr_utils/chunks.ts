@@ -1,16 +1,24 @@
 import { ARRAY_CONSTRUCTORS } from "../../types.js";
-import { NumericZarrArray } from "./types.js";
+import { NumericZarrArray, ZarrSource } from "./types.js";
 
-export function getChunkByteSize(level: NumericZarrArray): number {
-  const voxelsPerChunk = level.chunks.reduce((accumulator, chunkSize) => accumulator * chunkSize, 1);
-  return voxelsPerChunk * ARRAY_CONSTRUCTORS[level.dtype].BYTES_PER_ELEMENT;
+function getByteSize(level, shape): number {
+  const voxels = shape.reduce((accumulator, dim) => accumulator * dim, 1);
+  return voxels * ARRAY_CONSTRUCTORS[level.dtype].BYTES_PER_ELEMENT;
+}
+
+function getTotalByteSize(level: NumericZarrArray): number {
+  return getByteSize(level, level.shape);
+}
+
+function getChunkByteSize(level: NumericZarrArray): number {
+  return getByteSize(level, level.chunks);
 }
 
 /**
  * @param level One resolution level of a ZARR
  * @yields One coords array per chunk in the level
  */
-export function* iterateChunkCoords(level: NumericZarrArray): Generator<number[]> {
+function* iterateChunkCoords(level: NumericZarrArray): Generator<number[]> {
   // level.chunks[dimension] is the width of a chunk in the given dimenion
   const chunksPerDimension = level.shape.map((size, dimension) => Math.ceil(size / level.chunks[dimension]));
 
@@ -32,4 +40,33 @@ export function* iterateChunkCoords(level: NumericZarrArray): Generator<number[]
   }
 
   yield* iterateCoordsWithPrefix([]);
+}
+
+export type PlannedChunk = {
+  sourceIndex: number,
+  level: NumericZarrArray,
+  coords: number[]
+};
+
+export default function planLowResPrefetch(sources: ZarrSource[], availableBytes: number, minimumCachedExtent: number): { plan: PlannedChunk[], availableBytes: number } {
+    const plan: PlannedChunk[] = [];
+    for (const [sourceIndex, source] of sources.entries()) {
+      // Known brittleness: this line and vole-app's useVolume.ts pick the same level for low-res
+      // pre-fetching and low-res display by selecting the coarsest level, which relies on both
+      // implementations having similar logic. (See also public/index.ts.)
+      const level = source.scaleLevels[source.scaleLevels.length - 1];
+      if (getTotalByteSize(level) * minimumCachedExtent > availableBytes) {
+        console.log(getTotalByteSize(level) * minimumCachedExtent, '>', availableBytes)
+        continue; // Skip this source: maybe another one is smaller
+      }
+      const chunkBytes = getChunkByteSize(level);
+      for (const coords of iterateChunkCoords(level)) {
+        if (chunkBytes > availableBytes) {
+          break;
+        }
+        plan.push({ sourceIndex, level, coords });
+        availableBytes -= chunkBytes;
+      }
+    }
+    return { plan, availableBytes };
 }

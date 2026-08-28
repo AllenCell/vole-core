@@ -36,9 +36,10 @@ import { relaxedFetch, withVoleInstrumentation } from "./zarr_utils/wrappers.js"
 import { assertMetadataHasMultiscales, toOMEZarrMetaV4, validateOMEZarrMetadata } from "./zarr_utils/validation.js";
 import { remapUri } from "../utils/url_utils.js";
 import { type TypedArray } from "../types.js";
-import { getChunkByteSize, iterateChunkCoords } from "./zarr_utils/chunks.js";
+import planLowResPrefetch from "./zarr_utils/chunks.js";
 
 const CHUNK_REQUEST_CANCEL_REASON = "chunk request cancelled";
+const MINIMUM_LOW_RES_CACHED_EXTENT = 0.7;
 
 // returns the converted data and the original min and max values
 function convertChannel(
@@ -570,28 +571,14 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
     }
 
     this.lowResWarmSubscriber = this.requestQueue.addSubscriber();
-    let availableBytes = this.lowResCache.maxSize;
-    // Known brittleness: this line and vole-app's useVolume.ts pick the same level for low-res
-    // pre-fetching and low-res display by selecting the coarsest level, which relies on both
-    // implementations having similar logic. (See also public/index.ts.)
-    const lowResLevel = this.sources[0].scaleLevels.length - 1;
-
-    let prefetchChunks = 0;
-    for (const [sourceIndex, source] of this.sources.entries()) {
-      const level = source.scaleLevels[lowResLevel];
-      for (const coords of iterateChunkCoords(level)) {
-        const chunkBytes = getChunkByteSize(level);
-        if (chunkBytes > availableBytes) {
-          console.info(`Prefetching ${prefetchChunks} low-res chunks. ${(this.lowResCache.maxSize - availableBytes)/1_000_000}MB will be used.`);
-          return;
-        }
-        const coordsTCZYX = this.orderByTCZYX(coords, 0, sourceIndex);
-        this.prefetchChunk(sourceIndex, level, coordsTCZYX, this.lowResWarmSubscriber, true);
-        availableBytes -= chunkBytes;
-        prefetchChunks += 1;
-      }
+    const { plan, availableBytes } = planLowResPrefetch(this.sources, this.lowResCache.maxSize, MINIMUM_LOW_RES_CACHED_EXTENT);
+    for (const { sourceIndex, level, coords } of plan) {
+      const coordsTCZYX = this.orderByTCZYX(coords, 0, sourceIndex);
+      this.prefetchChunk(sourceIndex, level, coordsTCZYX, this.lowResWarmSubscriber, true);
     }
-    console.info(`Prefetching all ${prefetchChunks} low-res chunks. ${(this.lowResCache.maxSize - availableBytes)/1_000_000}MB will be used.`);
+    if (plan.length > 0) {
+      console.info(`Prefetching ${plan.length} low-res chunks. ${(this.lowResCache.maxSize - availableBytes)/1_000_000}MB will be used.`);
+    }
   }
 
   async loadRawChannelData(
