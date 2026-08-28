@@ -56,7 +56,6 @@ export default function planLowResPrefetch(sources: ZarrSource[], availableBytes
       // implementations having similar logic. (See also public/index.ts.)
       const level = source.scaleLevels[source.scaleLevels.length - 1];
       if (getTotalByteSize(level) * minimumCachedExtent > availableBytes) {
-        console.log(getTotalByteSize(level) * minimumCachedExtent, '>', availableBytes)
         continue; // Skip this source: maybe another one is smaller
       }
       const chunkBytes = getChunkByteSize(level);

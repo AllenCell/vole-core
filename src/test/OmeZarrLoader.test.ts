@@ -2,7 +2,7 @@ import type { AsyncReadable, AsyncWritable, NumberDataType } from "zarrita";
 import * as zarr from "zarrita";
 import { vi } from "vitest";
 
-import planLowResPrefetch from "../loaders/zarr_utils/chunks.js";
+import planLowResPrefetch from "../loaders/zarr_utils/planLowResPrefetch.js";
 import type { ZarrSource } from "../loaders/zarr_utils/types.js";
 
 class MockStore implements AsyncReadable, AsyncWritable {

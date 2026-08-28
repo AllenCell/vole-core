@@ -36,7 +36,7 @@ import { relaxedFetch, withVoleInstrumentation } from "./zarr_utils/wrappers.js"
 import { assertMetadataHasMultiscales, toOMEZarrMetaV4, validateOMEZarrMetadata } from "./zarr_utils/validation.js";
 import { remapUri } from "../utils/url_utils.js";
 import { type TypedArray } from "../types.js";
-import planLowResPrefetch from "./zarr_utils/chunks.js";
+import planLowResPrefetch from "./zarr_utils/planLowResPrefetch.js";
 
 const CHUNK_REQUEST_CANCEL_REASON = "chunk request cancelled";
 const MINIMUM_LOW_RES_CACHED_EXTENT = 0.7;
