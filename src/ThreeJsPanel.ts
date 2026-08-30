@@ -600,13 +600,12 @@ export class ThreeJsPanel {
   }
 
   switchViewMode(mode: string): void {
-    const wasTriple = this.viewMode === Axis.TRIPLE;
-    mode = mode.toUpperCase();
-
-    if (wasTriple) {
+    // if we were in triple mode before switching?
+    if (this.viewMode === Axis.TRIPLE) {
       this.tripleSliceControls.detach();
     }
 
+    mode = mode.toUpperCase();
     switch (mode) {
       case "YZ":
       case "X":
