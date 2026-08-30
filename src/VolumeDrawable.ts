@@ -337,15 +337,11 @@ export default class VolumeDrawable {
 
   // Set clipping range (between -0.5 and 0.5) for a given axis.
   // Calling this allows the rendering to compensate for changes in thickness in orthographic views that affect how bright the volume is.
-  // @param {number} axis 0, 1, or 2 for x, y, or z axis
+  // @param {AxisName} axis "x", "y", or "z" for the respective axis
   // @param {number} minval -0.5..0.5, should be less than maxval
   // @param {number} maxval -0.5..0.5, should be greater than minval
   // @param {boolean} isOrthoAxis is this an orthographic projection or just a clipping of the range for perspective view
-  setAxisClip(axis: Axis, minval: number, maxval: number, isOrthoAxis?: boolean): void {
-    // Only x/y/z are valid for clip bounds indexing
-    if (axis !== Axis.X && axis !== Axis.Y && axis !== Axis.Z) {
-      return;
-    }
+  setAxisClip(axis: AxisName, minval: number, maxval: number, isOrthoAxis?: boolean): void {
     // Skip settings update if nothing has changed
     if (
       this.settings.bounds.bmax[axis] === maxval &&
