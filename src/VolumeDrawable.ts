@@ -981,10 +981,13 @@ export default class VolumeDrawable {
     scaleFolder
       .addInput(this.volume.loadSpecRequired, "scaleLevelBias")
       .on("change", ({ value }) => this.volume.updateRequiredData({ scaleLevelBias: value }));
-    // which level to load
-    scaleFolder
-      .addInput(this.volume.loadSpecRequired, "multiscaleLevel")
-      .on("change", ({ value }) => this.volume.updateRequiredData({ multiscaleLevel: value }));
+    // which level to load - only included if multiscaleLevel is a number
+    // (tweakpane can't handle undefined)
+    if (typeof this.volume.loadSpecRequired.multiscaleLevel === "number") {
+      scaleFolder
+        .addInput(this.volume.loadSpecRequired, "multiscaleLevel")
+        .on("change", ({ value }) => this.volume.updateRequiredData({ multiscaleLevel: value }));
+    }
 
     const pathtrace = pane.addFolder({ title: "Pathtrace", expanded: false });
     pathtrace

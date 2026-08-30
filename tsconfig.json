@@ -16,7 +16,6 @@
     "sourceMap": true,
     "strict": true,
     "target": "ES6",
-    "typeRoots": ["src/types", "node_modules"],
     "types": ["vitest/globals"]
   },
   "files": ["src/index.ts", "public/index.ts"],

@@ -82,20 +82,26 @@ export function remapAxesToTCZYX(axes: OMEAxis[]): TCZYX<number> {
   return axesTCZYX;
 }
 
-/** Reorder an array of values [T, C, Z, Y, X] to the given dimension order */
-export function orderByDimension<T>(valsTCZYX: TCZYX<T>, orderTCZYX: TCZYX<number>): T[] {
+/**
+ * Reorder an array of `values` in TCZYX order to the dimension order specified by `orderTCZYX`.
+ *
+ * Each element of `orderTCZYX` is the index of each dimension in its volume's native dimension
+ * order, or `-1` if the volume does not contain that dimension. For example, the array
+ * `[-1, 1, 0, 2, 3]` represents ZCYX order: T not present; C at index `1`; Z at index `0`; Y at
+ * index `2`; X at index `3`.
+ */
+export function orderByDimension<T>(values: TCZYX<T>, orderTCZYX: TCZYX<number>): T[] {
   const specLen = getDimensionCount(orderTCZYX);
   const result: T[] = Array(specLen);
 
-  let curIdx = 0;
-  orderTCZYX.forEach((val, idx) => {
-    if (val >= 0) {
-      if (val >= specLen) {
-        throw new VolumeLoadError(`Unexpected axis index in zarr: ${val}`, {
+  orderTCZYX.forEach((dimIndex, tczyxIndex) => {
+    if (dimIndex >= 0) {
+      if (dimIndex >= specLen) {
+        throw new VolumeLoadError(`Unexpected axis index in zarr: ${dimIndex}`, {
           type: VolumeLoadErrorType.INVALID_METADATA,
         });
       }
-      result[curIdx++] = valsTCZYX[idx];
+      result[dimIndex] = values[tczyxIndex];
     }
   });
 
@@ -272,7 +278,7 @@ export function matchSourceScaleLevels(sources: ZarrSource[]): void {
     }
   }
 
-  if (sources[0].scaleLevels.length === 0) {
+  if (matchedLevels[0].length === 0) {
     throw new VolumeLoadError("Incompatible zarr arrays: no sets of scale levels found that matched in all sources", {
       type: VolumeLoadErrorType.INVALID_MULTI_SOURCE_ZARR,
     });

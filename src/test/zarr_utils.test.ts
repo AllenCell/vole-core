@@ -224,17 +224,17 @@ describe("zarr_utils", () => {
   });
   // TODO: `pickLevelToLoad`
 
-  const VALS_TCZYX: TCZYX<number> = [1, 2, 3, 4, 5];
+  const VALS_TCZYX: TCZYX<string> = ["t", "c", "z", "y", "x"];
   describe("orderByDimension", () => {
     it("orders an array in dimension order based on the given indices", () => {
       const order: TCZYX<number> = [3, 1, 4, 0, 2];
-      expect(orderByDimension(VALS_TCZYX, order)).to.deep.equal([1, 2, 3, 4, 5]);
+      expect(orderByDimension(VALS_TCZYX, order)).to.deep.equal(["y", "c", "x", "t", "z"]);
     });
 
     it("excludes the T, C, or Z dimension if its index is negative", () => {
-      expect(orderByDimension(VALS_TCZYX, [-1, 0, 1, 3, 2])).to.deep.equal([2, 3, 4, 5]);
-      expect(orderByDimension(VALS_TCZYX, [0, -1, 1, 3, 2])).to.deep.equal([1, 3, 4, 5]);
-      expect(orderByDimension(VALS_TCZYX, [0, 1, -1, 3, 2])).to.deep.equal([1, 2, 4, 5]);
+      expect(orderByDimension(VALS_TCZYX, [-1, 0, 1, 3, 2])).to.deep.equal(["c", "z", "x", "y"]);
+      expect(orderByDimension(VALS_TCZYX, [0, -1, 1, 3, 2])).to.deep.equal(["t", "z", "x", "y"]);
+      expect(orderByDimension(VALS_TCZYX, [0, 1, -1, 3, 2])).to.deep.equal(["t", "c", "x", "y"]);
     });
 
     it("throws an error if an axis index is out of bounds", () => {
@@ -381,6 +381,27 @@ describe("zarr_utils", () => {
       const sources = await createMockSources([{ shapes: [[1, 1, 2, 1, 1]] }, { shapes: [[1, 1, 1, 2, 1]] }]);
       expect(() => matchSourceScaleLevels(sources)).to.throw(
         "Incompatible zarr arrays: pixel dimensions are mismatched"
+      );
+    });
+
+    it("throws an error if sources have no matching scale levels", async () => {
+      const sources = await createMockSources([
+        {
+          shapes: [
+            [1, 1, 10, 10, 10],
+            [1, 1, 5, 5, 5],
+          ],
+        },
+        {
+          shapes: [
+            [1, 1, 8, 8, 8],
+            [1, 1, 4, 4, 4],
+          ],
+        },
+      ]);
+
+      expect(() => matchSourceScaleLevels(sources)).to.throw(
+        "Incompatible zarr arrays: no sets of scale levels found that matched in all sources"
       );
     });
 

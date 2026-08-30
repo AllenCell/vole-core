@@ -42,10 +42,14 @@ export const withVoleInstrumentation = defineArrayExtension((array, opts: VoleIn
         return cached;
       }
 
-      const fetchChunk = () => array.getChunk(coords, options, inner);
+      const controller = new AbortController();
+      // Abort the chunk if either abort signal is triggered
+      const signal = AbortSignal.any([options?.signal, controller.signal].filter(s => s !== undefined));
+      const fetchChunk = () => array.getChunk(coords, { ...options, signal }, inner);
+      const abort = controller.abort.bind(controller);
       const result =
         opts.queue && opts.subscriber !== undefined
-          ? await opts.queue.addRequest(fullKey, opts.subscriber, fetchChunk, opts.isPrefetch)
+          ? await opts.queue.addRequest(fullKey, opts.subscriber, fetchChunk, opts.isPrefetch, undefined, abort)
           : await fetchChunk();
 
       opts.cache?.insert(fullKey, result);
