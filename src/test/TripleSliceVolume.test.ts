@@ -99,29 +99,40 @@ function projectionPlane(projection: Object3D): Object3D {
 
 describe("TripleSliceVolume", () => {
   it("initializes each projection plane with its axis-specific dimensions", () => {
+    // Arrange
     const volume = new Volume(imageInfo);
+
+    // Act
     const renderer = new TripleSliceVolume(volume, new VolumeRenderSettings(volume));
     const [xy, yz, xz] = renderer.get3dObject().children;
 
+    // Assert
     expect(projectionPlane(xy).scale.toArray()).toEqual([1, 0.5, 0.25]);
     expect(projectionPlane(yz).scale.toArray()).toEqual([0.25, 0.5, 1]);
     expect(projectionPlane(xz).scale.toArray()).toEqual([1, 0.25, 1]);
 
+    // Cleanup
     renderer.cleanup();
   });
 
   it("ignores the complete alignment transform in the fixed projection layout", () => {
+    // Arrange
     const volume = new Volume(imageInfo);
     const settings = new VolumeRenderSettings(volume);
     settings.translation = new Vector3(0.25, -0.5, 0.75);
     settings.rotation = new Euler(0.1, 0.2, 0.3);
     settings.scale = new Vector3(2, 3, 4);
     settings.resolution.set(1200, 900);
+
+    // Act: build the renderer and apply a view/sampling update
     const renderer = new TripleSliceVolume(volume, settings);
     renderer.updateSettings(settings, SettingsFlags.VIEW | SettingsFlags.SAMPLING);
     const panePositions = renderer.get3dObject().children.map((projection) => projection.position.toArray());
+
+    // Sanity Check: the three panes occupy distinct positions before we assert they stay fixed
     expect(new Set(panePositions.map((position) => position.join(","))).size).toBe(3);
 
+    // Assert: pane positions/rotations and per-axis scale reflect only the fixed layout
     for (const [index, projection] of renderer.get3dObject().children.entries()) {
       expect(projection.position.toArray()).toEqual(panePositions[index]);
       expect([projection.rotation.x, projection.rotation.y, projection.rotation.z]).toEqual([0, 0, 0]);
@@ -131,12 +142,14 @@ describe("TripleSliceVolume", () => {
     expect(projectionPlane(yz).scale.toArray()).toEqual([0.25, 0.5, 1]);
     expect(projectionPlane(xz).scale.toArray()).toEqual([1, 0.25, 1]);
 
+    // Act: apply a full alignment transform update (translation/rotation/scale)
     settings.translation.set(-0.1, 0.2, -0.3);
     settings.rotation.set(0.4, 0.5, 0.6);
     settings.scale.set(5, 6, 7);
     renderer.updateSettings(settings, SettingsFlags.TRANSFORM);
     renderer.updateVolumeDimensions();
 
+    // Assert: layout is still unaffected by the transform, even though the settings themselves changed
     for (const [index, projection] of renderer.get3dObject().children.entries()) {
       expect(projection.position.toArray()).toEqual(panePositions[index]);
       expect([projection.rotation.x, projection.rotation.y, projection.rotation.z]).toEqual([0, 0, 0]);
@@ -148,6 +161,7 @@ describe("TripleSliceVolume", () => {
     expect([settings.rotation.x, settings.rotation.y, settings.rotation.z]).toEqual([0.4, 0.5, 0.6]);
     expect(settings.scale.toArray()).toEqual([5, 6, 7]);
 
+    // Cleanup
     renderer.cleanup();
   });
 });
