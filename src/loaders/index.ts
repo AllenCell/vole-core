@@ -49,9 +49,9 @@ export async function createVolumeLoader(
         path,
         options?.scene,
         options?.cache,
-        options?.lowResCache,
         options?.queue,
-        options?.fetchOptions
+        options?.fetchOptions,
+        options?.lowResCache
       );
     case VolumeFileFormat.JSON:
       return new JsonImageInfoLoader(path, options?.cache);

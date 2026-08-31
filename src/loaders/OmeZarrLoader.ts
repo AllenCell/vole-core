@@ -139,17 +139,17 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
    *  may either be an array of values corresponding to each URL, or a single value to apply to all URLs.
    *  This value is used to index into the ZARR's `multiscales` array. Default 0.
    * @param cache A cache to use for storing fetched data.
-   * @param lowResCache A dedicated cache for the coarsest resolution level.
    * @param queue A queue to use for managing requests. If not provided, a new queue will be created.
    * @param fetchOptions Options to configure (pre)fetching behavior.
+   * @param lowResCache A dedicated cache for the coarsest resolution level.
    */
   static async createLoader(
     urls: string | string[],
     scenes: number | number[] = 0,
     cache?: VolumeCache,
-    lowResCache?: VolumeCache,
     queue?: SubscribableRequestQueue,
-    fetchOptions?: ZarrLoaderFetchOptions
+    fetchOptions?: ZarrLoaderFetchOptions,
+    lowResCache?: VolumeCache
   ): Promise<OMEZarrLoader> {
     // Setup queue and store, get basic metadata
     if (!queue) {
