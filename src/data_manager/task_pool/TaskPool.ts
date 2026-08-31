@@ -22,7 +22,7 @@ export class TaskPool {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private queue: WaitingTask<any[], any>[] = [];
 
-  constructor(public maxWorkers = 4) {}
+  constructor(public maxWorkers = navigator.hardwareConcurrency ?? 4) {}
 
   private handleWorkerMessage(message: WorkerResponse<Task<string, unknown[], unknown>>) {
     const promise = this.promises.remove(message.id);
