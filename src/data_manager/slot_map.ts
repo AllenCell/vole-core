@@ -6,6 +6,7 @@ const isFreeSlot = <T>(slot: Slot<T>): slot is { [NEXT_FREE]: number } => {
   return slot !== undefined && slot !== null && Object.hasOwn(slot, NEXT_FREE);
 };
 
+/** A "map" that assigns values a stable numeric key on insertion that can be used to get or remove the value later. */
 export default class SlotMap<T> {
   private slots: Slot<T>[] = [];
   private head = 0;
