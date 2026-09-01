@@ -13,13 +13,13 @@ uniform sampler2D colorRamp;
 uniform usampler2D inRangeIds;
 uniform usampler2D outlierData;
 
-// TODO: Rename to `localId` for consistency
+// TODO: Rename to 'localId' for consistency
 /**
  * LUT mapping from the segmentation ID (raw pixel value) to the
- * global ID (index in data buffers like `featureData` and `outlierData`).
+ * global ID (index in data buffers like 'featureData' and 'outlierData').
  * 
- * For a given segmentation ID `segId`, the global ID is given by:
- * `segIdToGlobalId[segId - segIdOffset] - 1`.
+ * For a given segmentation ID 'segId', the global ID is given by:
+ * 'segIdToGlobalId[segId - segIdOffset] - 1'.
 */
 uniform usampler2D segIdToGlobalId;
 uniform uint segIdOffset;
@@ -60,8 +60,8 @@ uint getId(ivec2 uv) {
     return BACKGROUND_ID;
   }
   uvec4 c = getUintFromTex(segIdToGlobalId, int(rawId - segIdOffset));
-  // Note: IDs are offset by `1` to reserve `0` for segmentations that don't
-  // have associated data. `1` MUST be subtracted from the ID when accessing
+  // Note: IDs are offset by '1' to reserve '0' for segmentations that don't
+  // have associated data. '1' MUST be subtracted from the ID when accessing
   // data buffers.
   uint globalId = c.r;
   if (globalId == 0u) {
@@ -80,7 +80,7 @@ vec4 getColorRamp(float val) {
 vec4 getCategoricalColor(float featureValue) {
   float width = float(textureSize(colorRamp, 0).x);
   float modValue = mod(featureValue, width);
-  // The categorical texture uses no interpolation, so when sampling, `modValue`
+  // The categorical texture uses no interpolation, so when sampling, 'modValue'
   // is rounded to the nearest integer.
   return getColorRamp(modValue / (width - 1.0));
 }
@@ -119,8 +119,8 @@ vec4 getObjectColor(ivec2 sUv, float opacity) {
     return vec4(0, 0, 0, 0);
   }
 
-  // color the highlighted object. Note, `highlightedId` is a 0-based index
-  // (global ID w/o offset), while `id` is a 1-based index.
+  // color the highlighted object. Note, 'highlightedId' is a 0-based index
+  // (global ID w/o offset), while 'id' is a 1-based index.
   // if (id - 1u == highlightedId) {
   //   return vec4(outlineColor, 1.0);
   // }
@@ -135,7 +135,7 @@ vec4 getObjectColor(ivec2 sUv, float opacity) {
   bool isOutlier = getIsOutlier(featureVal, outlierVal);
   bool isMissingData = (id == MISSING_DATA_ID);
 
-  // Features outside the filtered/thresholded range will all be treated the same (use `outOfRangeDrawColor`).
+  // Features outside the filtered/thresholded range will all be treated the same (use 'outOfRangeDrawColor').
   // Features inside the range can either be outliers or standard values, and are colored accordingly.
   vec4 color;
   if (isMissingData) { 

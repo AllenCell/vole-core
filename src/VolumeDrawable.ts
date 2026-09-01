@@ -21,14 +21,22 @@ import PathTracedVolume from "./PathTracedVolume.js";
 import PickVolume from "./PickVolume.js";
 import { LUT_ARRAY_LENGTH } from "./Lut.js";
 import Volume from "./Volume.js";
-import type { VolumeDisplayOptions, VolumeChannelDisplayOptions, FuseChannel, ColorizeFeature } from "./types.js";
+import type {
+  AxisName,
+  VolumeDisplayOptions,
+  VolumeChannelDisplayOptions,
+  FuseChannel,
+  ColorizeFeature,
+} from "./types.js";
 import type { IDrawableObject } from "./drawables/IDrawableObject.js";
-import { RenderMode } from "./types.js";
+import { Axis, RenderMode } from "./types.js";
 import { Light } from "./Light.js";
 import Channel from "./Channel.js";
-import type { VolumeRenderImpl } from "./VolumeRenderImpl.js";
+import type { VolumeRenderImpl, TripleSliceSource } from "./VolumeRenderImpl.js";
 import Atlas2DSlice from "./Atlas2DSlice.js";
-import { VolumeRenderSettings, SettingsFlags, Axis } from "./VolumeRenderSettings.js";
+import TripleSliceVolume from "./TripleSliceVolume.js";
+import { VolumeRenderSettings, SettingsFlags } from "./VolumeRenderSettings.js";
+import { clampSliceIndex } from "./utils/num_utils.js";
 import ContourPass from "./ContourPass.js";
 
 type ColorArray = [number, number, number];
@@ -73,6 +81,19 @@ export default class VolumeDrawable {
 
   private renderUpdateListener?: (iteration: number) => void;
 
+  /** Returns a copy of the current triple slice indices, to prevent external mutation of internal state. */
+  get tripleSliceIndices(): Vector3 {
+    return this.settings.tripleSliceIndices.clone();
+  }
+
+  /** Returns the TripleSliceSource if currently in triple-slice render mode, otherwise undefined. */
+  getTripleSliceSource(): TripleSliceSource | undefined {
+    if (this.renderMode === RenderMode.TRIPLE_SLICE && this.volumeRendering instanceof TripleSliceVolume) {
+      return this.volumeRendering;
+    }
+    return undefined;
+  }
+
   constructor(volume: Volume, options: VolumeDisplayOptions) {
     // THE VOLUME DATA
     this.volume = volume;
@@ -110,15 +131,21 @@ export default class VolumeDrawable {
     options.renderMode = options.renderMode || RenderMode.RAYMARCH;
     switch (options.renderMode) {
       case RenderMode.PATHTRACE:
-        this.renderMode = RenderMode.PATHTRACE;
         this.volumeRendering = new PathTracedVolume(this.volume, this.settings);
         break;
-      case RenderMode.SLICE: // default to raymarch even when slice is selected
+      case RenderMode.TRIPLE_SLICE:
+        this.volumeRendering = new TripleSliceVolume(this.volume, this.settings);
+        break;
+      case RenderMode.SLICE:
+        this.volumeRendering = new Atlas2DSlice(this.volume, this.settings);
+        break;
       case RenderMode.RAYMARCH:
       default:
-        this.renderMode = RenderMode.RAYMARCH;
         this.volumeRendering = new RayMarchedAtlasVolume(this.volume, this.settings);
+        break;
     }
+    this.renderMode = options.renderMode;
+
     if (this.pickRendering) {
       this.pickRendering = new PickVolume(this.volume, this.settings);
     }
@@ -143,7 +170,6 @@ export default class VolumeDrawable {
     this.settings.rotation = new Euler().fromArray(this.volume.getRotation());
 
     this.setOptions(options);
-    // this.volumeRendering.setZSlice(this.zSlice);
   }
 
   public getPickBuffer(): WebGLRenderTarget | undefined {
@@ -282,6 +308,7 @@ export default class VolumeDrawable {
 
     // TODO only `RayMarchedAtlasVolume` handles scale properly. Get the others on board too!
     this.volumeRendering.updateVolumeDimensions();
+
     this.volumeRendering.updateSettings(this.settings, SettingsFlags.TRANSFORM);
     this.pickRendering?.updateVolumeDimensions();
     this.pickRendering?.updateSettings(this.settings, SettingsFlags.TRANSFORM);
@@ -310,11 +337,11 @@ export default class VolumeDrawable {
 
   // Set clipping range (between -0.5 and 0.5) for a given axis.
   // Calling this allows the rendering to compensate for changes in thickness in orthographic views that affect how bright the volume is.
-  // @param {number} axis 0, 1, or 2 for x, y, or z axis
+  // @param {AxisName} axis "x", "y", or "z" for the respective axis
   // @param {number} minval -0.5..0.5, should be less than maxval
   // @param {number} maxval -0.5..0.5, should be greater than minval
   // @param {boolean} isOrthoAxis is this an orthographic projection or just a clipping of the range for perspective view
-  setAxisClip(axis: Axis, minval: number, maxval: number, isOrthoAxis?: boolean): void {
+  setAxisClip(axis: AxisName, minval: number, maxval: number, isOrthoAxis?: boolean): void {
     // Skip settings update if nothing has changed
     if (
       this.settings.bounds.bmax[axis] === maxval &&
@@ -330,7 +357,7 @@ export default class VolumeDrawable {
     this.settings.isOrtho = isOrthoAxis || false;
 
     // Configure mesh volume when in an orthographic axis alignment
-    if (axis !== Axis.NONE && this.renderMode !== RenderMode.PATHTRACE) {
+    if (this.renderMode !== RenderMode.PATHTRACE) {
       for (const object of this.childObjects) {
         object.setAxisClip(axis, minval, maxval, !!isOrthoAxis);
       }
@@ -347,25 +374,34 @@ export default class VolumeDrawable {
       XZ: Axis.Y,
       Z: Axis.Z,
       XY: Axis.Z,
+      TRIPLE: Axis.TRIPLE,
     };
     return modeToAxis[mode] || Axis.NONE;
   }
   /**
    * Sets the camera mode of the VolumeDrawable.
-   * @param mode Mode can be "3D", or "XY" or "Z", or "YZ" or "X", or "XZ" or "Y".
+   * @param mode Mode can be "3D", or "XY" or "Z", or "YZ" or "X", or "XZ" or "Y", or "TRIPLE".
    */
   setViewMode(mode: string, volumeRenderModeHint: RenderMode.PATHTRACE | RenderMode.RAYMARCH): void {
     const axis = this.modeStringToAxis(mode);
     this.viewMode = axis;
     // Force a volume render reset if we have switched to or from Z mode while raymarching is enabled.
-    if (axis === Axis.Z) {
-      // If currently in 3D raymarch mode, hotswap the 2D slice
-      if (this.renderMode === RenderMode.RAYMARCH || this.renderMode === RenderMode.PATHTRACE) {
+    if (axis === Axis.TRIPLE) {
+      if (this.renderMode !== RenderMode.TRIPLE_SLICE) {
+        this.setVolumeRendering(RenderMode.TRIPLE_SLICE);
+      }
+    } else if (axis === Axis.Z) {
+      // If currently in 3D raymarch/pathtrace/triple mode, hotswap the 2D slice
+      if (
+        this.renderMode === RenderMode.RAYMARCH ||
+        this.renderMode === RenderMode.PATHTRACE ||
+        this.renderMode === RenderMode.TRIPLE_SLICE
+      ) {
         this.setVolumeRendering(RenderMode.SLICE);
       }
     } else {
-      // If in 2D slice mode, switch back to 3D raymarch mode
-      if (this.renderMode === RenderMode.SLICE) {
+      // If in 2D slice mode or triple mode, switch back to 3D raymarch mode
+      if (this.renderMode === RenderMode.SLICE || this.renderMode === RenderMode.TRIPLE_SLICE) {
         this.setVolumeRendering(volumeRenderModeHint);
       }
     }
@@ -845,6 +881,9 @@ export default class VolumeDrawable {
         this.volume.updateRequiredData({ subregion: new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1)) });
         this.volumeRendering.setRenderUpdateListener(this.renderUpdateListener);
         break;
+      case RenderMode.TRIPLE_SLICE:
+        this.volumeRendering = new TripleSliceVolume(this.volume, this.settings);
+        break;
       case RenderMode.SLICE:
         this.volumeRendering = new Atlas2DSlice(this.volume, this.settings);
         // `updateRequiredData` called on construction, via `updateSettings`
@@ -957,13 +996,30 @@ export default class VolumeDrawable {
 
   setZSlice(slice: number): boolean {
     const sizez = this.volume.imageInfo.volumeSize.z;
-    if (this.settings.zSlice !== slice && slice < sizez && slice >= 0) {
-      this.settings.zSlice = slice;
+    if (this.settings.sliceIndex !== slice && slice < sizez && slice >= 0) {
+      this.settings.sliceIndex = slice;
       this.volumeRendering.updateSettings(this.settings, SettingsFlags.ROI);
       this.pickRendering?.updateSettings(this.settings, SettingsFlags.ROI);
       return true;
     }
     return false;
+  }
+
+  /**
+   * Sets the slice index for a given axis in triple slice mode.
+   * @param axis "x", "y", or "z"
+   * @param index Integer voxel index along that axis
+   */
+  setTripleSliceIndex(axis: AxisName, index: number): void {
+    const source = this.getTripleSliceSource();
+    if (source) {
+      source.setSliceIndex(axis, index);
+    } else {
+      // Fallback: update settings directly even if not in triple mode
+      const volSize = this.volume.imageInfo.volumeSize;
+      this.settings.tripleSliceIndices[axis] = clampSliceIndex(index, volSize[axis]);
+    }
+    this.pickRendering?.updateSettings(this.settings, SettingsFlags.ROI);
   }
 
   get showBoundingBox(): boolean {

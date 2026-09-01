@@ -1,4 +1,5 @@
-import { Axis, VolumeRenderSettings } from "../VolumeRenderSettings.js";
+import { Axis } from "../types.js";
+import { VolumeRenderSettings } from "../VolumeRenderSettings.js";
 import { Vector3 } from "three";
 
 describe("VolumeRenderSettingUtils", () => {

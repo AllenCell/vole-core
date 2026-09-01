@@ -1,7 +1,7 @@
 import { Euler, Vector2, Vector3 } from "three";
 
 import Volume from "./Volume.js";
-import type { Bounds } from "./types.js";
+import { Axis, type Bounds } from "./types.js";
 
 /**
  * Marks groups of related settings that may have changed.
@@ -13,7 +13,7 @@ export enum SettingsFlags {
   CAMERA = 0b000000010,
   /** parameters: showBoundingBox, boundingBoxColor */
   BOUNDING_BOX = 0b000000100,
-  /** parameters: bounds, zSlice */
+  /** parameters: bounds, sliceIndex, tripleSliceIndices */
   ROI = 0b000001000,
   /** parameters: maskAlpha */
   MASK_ALPHA = 0b000010000,
@@ -26,17 +26,6 @@ export enum SettingsFlags {
   /** parameters: maskChannelIndex */
   MASK_DATA = 0b100000000,
   ALL = 0b1111111111,
-}
-
-export enum Axis {
-  X = "x",
-  Y = "y",
-  Z = "z",
-  /** Alias for NONE, indicates 3D mode */
-  XYZ = "",
-  /** No current axis, indicates 3D mode */
-  // eslint-disable-next-line @typescript-eslint/no-duplicate-enum-values
-  NONE = "",
 }
 
 /**
@@ -75,7 +64,9 @@ export class VolumeRenderSettings {
 
   // ROI
   public bounds: Bounds;
-  public zSlice: number;
+  public sliceIndex: number;
+  /** Per-axis voxel indices (x, y, z) of the three slices shown in triple-slice mode. */
+  public tripleSliceIndices: Vector3;
 
   // BOUNDING_BOX
   public showBoundingBox: boolean;
@@ -118,15 +109,22 @@ export class VolumeRenderSettings {
     this.useInterpolation = true;
     this.visible = true;
     this.maxProjectMode = false;
+    this.tripleSliceIndices = new Vector3(0, 0, 0);
     // volume-dependent properties
     if (volume) {
-      this.zSlice = Math.floor(volume.imageInfo.subregionSize.z / 2);
+      this.sliceIndex = Math.floor(volume.imageInfo.subregionSize.z / 2);
+      const volSize = volume.imageInfo.volumeSize;
+      this.tripleSliceIndices = new Vector3(
+        Math.floor(volSize.x / 2),
+        Math.floor(volSize.y / 2),
+        Math.floor(volSize.z / 2)
+      );
       this.diffuse = new Array(volume.imageInfo.numChannels).fill([255, 255, 255]);
       this.specular = new Array(volume.imageInfo.numChannels).fill([0, 0, 0]);
       this.emissive = new Array(volume.imageInfo.numChannels).fill([0, 0, 0]);
       this.glossiness = new Array(volume.imageInfo.numChannels).fill(0);
     } else {
-      this.zSlice = 0;
+      this.sliceIndex = 0;
       this.diffuse = [[255, 255, 255]];
       this.specular = [[0, 0, 0]];
       this.emissive = [[0, 0, 0]];
@@ -137,7 +135,7 @@ export class VolumeRenderSettings {
   }
 
   public resizeWithVolume(volume: Volume): void {
-    this.zSlice = Math.floor(volume.imageInfo.subregionSize.z / 2);
+    this.sliceIndex = Math.floor(volume.imageInfo.subregionSize.z / 2);
     this.diffuse = new Array(volume.imageInfo.numChannels).fill([255, 255, 255]);
     this.specular = new Array(volume.imageInfo.numChannels).fill([0, 0, 0]);
     this.emissive = new Array(volume.imageInfo.numChannels).fill([0, 0, 0]);

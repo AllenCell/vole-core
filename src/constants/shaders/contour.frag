@@ -5,10 +5,10 @@ precision highp sampler3D;
 
 /**
  * LUT mapping from the segmentation ID (raw pixel value) to the
- * global ID (index in data buffers like `featureData` and `outlierData`).
+ * global ID (index in data buffers like 'featureData' and 'outlierData').
  * 
- * For a given local pixel ID `localId`, the global ID is given by:
- * `localIdToGlobalId[localId - localIdOffset] - 1`.
+ * For a given local pixel ID 'localId', the global ID is given by:
+ * 'localIdToGlobalId[localId - localIdOffset] - 1'.
 */
 uniform usampler2D localIdToGlobalId;
 uniform uint localIdOffset;
@@ -18,22 +18,22 @@ uniform sampler2D pickBuffer;
 
 /** 
  * A mapping of IDs that are selected in the current track(s). For some object
- * with ID given by `i`, `selectedIds[i] >= 1` if the object is selected.
+ * with ID given by 'i', 'selectedIds[i] >= 1' if the object is selected.
  *
- * For selected objects, `selectedIds[i] - 1` is the index into the
- * `outlinePalette` for the outline color that should be used when
- * `useOutlinePalette` is true.
+ * For selected objects, 'selectedIds[i] - 1' is the index into the
+ * 'outlinePalette' for the outline color that should be used when
+ * 'useOutlinePalette' is true.
  */
 uniform usampler2D selectedIds;
 /** 
- * Legacy method of highlighting a single ID. Uses the `outlineColor` for the outline 
- * or `outlinePalette[0]` when `useOutlinePalette` is true.
+ * Legacy method of highlighting a single ID. Uses the 'outlineColor' for the outline 
+ * or 'outlinePalette[0]' when 'useOutlinePalette' is true.
 */
 uniform int selectedId;
 /**
- * If true, uses the `outlinePalette` to outline selected tracks based on the
+ * If true, uses the 'outlinePalette' to outline selected tracks based on the
  * selected ID, and shows an additional inner outline. When false, uses
- * `outlineColor` for outlines.
+ * 'outlineColor' for outlines.
  */
 uniform bool useOutlinePalette;
 uniform int outlineThickness;
@@ -73,10 +73,10 @@ uint getLabelId(ivec2 uv) {
 
 /**
  * Looks up the global ID value from its label ID. The global ID can be used to
- * get data about this object from data buffers like `featureData` and
- * `outlierData`.
+ * get data about this object from data buffers like 'featureData' and
+ * 'outlierData'.
  * @returns One of the following:
- * - `-1` (=MISSING_DATA_ID) if the pixel is missing data or is part of the
+ * - '-1' (=MISSING_DATA_ID) if the pixel is missing data or is part of the
      background.
  * - The global ID at the given coordinates.
  */
@@ -89,8 +89,8 @@ int getGlobalId(uint labelId) {
     return localId - ID_OFFSET;
   }
   uvec4 c = getUintFromTex(localIdToGlobalId, localId);
-  // Note: IDs are offset by `ID_OFFSET` (`=1`) to reserve `0` for local IDs
-  // that don't have associated data in the global lookup. `ID_OFFSET` MUST be
+  // Note: IDs are offset by 'ID_OFFSET' ('=1') to reserve '0' for local IDs
+  // that don't have associated data in the global lookup. 'ID_OFFSET' MUST be
   // subtracted from the ID when accessing data buffers.
   uint globalId = c.r;
   if (globalId == 0u) {
@@ -101,7 +101,7 @@ int getGlobalId(uint labelId) {
 
 bool isEdge(ivec2 uv, uint labelId, int thickness) {
   // TODO: This has some visual artifacts at really high/low zoom levels,
-  // possibly due to coords being cast to an `ivec2` for texture sampling.
+  // possibly due to coords being cast to an 'ivec2' for texture sampling.
 
   // Keep thickness constant in screen space
   float wStep = 1.0 / devicePixelRatio;
@@ -130,7 +130,7 @@ void main(void) {
   uint selectionIdx = getUintFromTex(selectedIds, globalId).r;
   if (selectionIdx > 0u || globalId == selectedId) {
     if (isEdge(vUv, labelId, outlineThickness)) {
-      // If matched on `selectedId` only, selectionIdx will be 0. Use color index 0.
+      // If matched on 'selectedId' only, selectionIdx will be 0. Use color index 0.
       int colorIdx = max(0, int(selectionIdx) - 1);
       vec4 color = getOutlineColor(colorIdx);
       gl_FragColor = vec4(color.rgb, outlineAlpha);

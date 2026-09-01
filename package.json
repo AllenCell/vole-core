@@ -17,7 +17,7 @@
     "build": "npm run transpileES && npm run build-types",
     "build-types": "tsc -p tsconfig.types.json",
     "build-demo": "vite build public/ --config vite.config.ts --outDir ./demo",
-    "checks": "npm run lint & npm run typeCheck & npx vitest run",
+    "checks": "npm run lint & npm run typeCheck & npx vitest run & npm run build-demo",
     "clean": "rimraf es/",
     "format": "prettier --write src/**/*.ts",
     "gh-build": "vite build public/ --config vite.config.ts --outDir ./vole-core",

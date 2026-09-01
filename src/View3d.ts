@@ -18,6 +18,7 @@ import VolumeDrawable from "./VolumeDrawable.js";
 import { Light, AREA_LIGHT, SKY_LIGHT } from "./Light.js";
 import Volume from "./Volume.js";
 import {
+  type AxisName,
   type ColorizeFeature,
   type VolumeChannelDisplayOptions,
   type VolumeDisplayOptions,
@@ -26,7 +27,7 @@ import {
   RenderMode,
 } from "./types.js";
 import { IDrawableObject } from "./drawables/IDrawableObject.js";
-import { Axis } from "./VolumeRenderSettings.js";
+import { Axis } from "./types.js";
 import { PerChannelCallback } from "./loaders/IVolumeLoader.js";
 import { WorkerLoader } from "./workers/VolumeLoaderContext.js";
 import Line3d from "./drawables/lines/Line3d.js";
@@ -78,6 +79,9 @@ export class View3d extends EventDispatcher<View3dEvents> {
   private fillLight: DirectionalLight;
 
   private tweakpane: Pane | null;
+
+  // Triple slice state
+  private tripleSliceCallback?: (indices: Vector3) => void;
 
   /**
    * @param {Object} options Optional options.
@@ -232,6 +236,13 @@ export class View3d extends EventDispatcher<View3dEvents> {
     volume.addVolumeDataObserver(this);
     options = options || {};
     options.renderMode = this.volumeRenderMode;
+    if (this.canvas3d.getViewMode() === Axis.XYZ || this.canvas3d.getViewMode() === Axis.NONE) {
+      options.renderMode = this.volumeRenderMode;
+    } else if (this.canvas3d.getViewMode() === Axis.TRIPLE) {
+      options.renderMode = RenderMode.TRIPLE_SLICE;
+    } else {
+      options.renderMode = RenderMode.SLICE;
+    }
     this.setImage(new VolumeDrawable(volume, options));
   }
 
@@ -458,6 +469,15 @@ export class View3d extends EventDispatcher<View3dEvents> {
     this.updatePerspectiveScaleBar(img.volume);
     this.updateTimestepIndicator(img.volume);
 
+    // If we're in triple-slice mode, re-run setCameraMode with the current mode to
+    // re-establish the crosshair source coupling with the new image. The previous
+    // image's TripleSliceVolume was just removed from the scene, so the canvas3d's
+    // controls would otherwise keep hit-testing and updating a stale source,
+    // breaking drag and double-click interaction.
+    if (this.canvas3d.getViewMode() === Axis.TRIPLE) {
+      this.setCameraMode(this.canvas3d.getViewMode().toUpperCase());
+    }
+
     // redraw if not already in draw loop
     this.redraw();
 
@@ -548,12 +568,57 @@ export class View3d extends EventDispatcher<View3dEvents> {
   // TODO: Change mode to an enum
   /**
    * Change the camera projection to look along an axis, or to view in a 3d perspective camera.
-   * @param {string} mode Mode can be "3D", or "XY" or "Z", or "YZ" or "X", or "XZ" or "Y".  3D is a perspective view, and all the others are orthographic projections
+   * @param {string} mode Mode can be "3D", "XY" or "Z", "YZ" or "X", "XZ" or "Y", or "TRIPLE".
+   *   3D is a perspective view, all single-axis modes are orthographic projections,
+   *   and TRIPLE shows three linked orthographic slices (XY, YZ, XZ).
    */
   setCameraMode(mode: string): void {
-    this.canvas3d.switchViewMode(mode);
+    // setViewMode must be called before switchViewMode so that the TripleSliceVolume
+    // is created (by VolumeDrawable) before ThreeJsPanel needs the source reference.
     this.image?.setViewMode(mode, this.volumeRenderMode);
-    this.image?.setIsOrtho(mode !== "3D");
+    this.image?.setIsOrtho(mode.toUpperCase() !== "3D");
+
+    // we need to set up a coupling between the canvas3d and the volumedrawable
+    // for triple slice mode, so that the canvas3d can update the slice indices
+    // in the volumedrawable when the user drags the crosshairs.
+    if (mode.toUpperCase() === "TRIPLE" && this.image) {
+      const source = this.image.getTripleSliceSource();
+      this.canvas3d.setTripleSliceSource(source);
+      this.canvas3d.setTripleSliceChangeCallback((indices) => this.tripleSliceCallback?.(indices));
+    } else {
+      this.canvas3d.setTripleSliceSource(undefined);
+      this.canvas3d.setTripleSliceChangeCallback(undefined);
+    }
+
+    this.canvas3d.switchViewMode(mode);
+
+    this.canvas3d.redraw();
+  }
+
+  // --- Public triple-slice API ---
+
+  /**
+   * Set a callback that fires when triple-slice crosshair indices change.
+   */
+  setTripleSliceCallback(cb: ((indices: Vector3) => void) | null): void {
+    this.tripleSliceCallback = cb ?? undefined;
+  }
+
+  /**
+   * Get a copy of the current triple-slice indices.
+   */
+  getTripleSliceIndices(): Vector3 | undefined {
+    return this.image?.tripleSliceIndices;
+  }
+
+  /**
+   * Set a triple-slice index for a given axis.
+   */
+  setTripleSliceIndex(axis: AxisName, index: number): void {
+    if (!this.image) {
+      return;
+    }
+    this.image.setTripleSliceIndex(axis, index);
     this.canvas3d.redraw();
   }
 
@@ -820,8 +885,8 @@ export class View3d extends EventDispatcher<View3dEvents> {
    * @param {number} maxval 0..1, should be greater than minval
    * @param {boolean} isOrthoAxis is this an orthographic projection or just a clipping of the range for perspective view
    */
-  setAxisClip(volume: Volume, axis: "x" | "y" | "z", minval: number, maxval: number, isOrthoAxis: boolean): void {
-    this.image?.setAxisClip(axis as Axis, minval, maxval, isOrthoAxis);
+  setAxisClip(volume: Volume, axis: AxisName, minval: number, maxval: number, isOrthoAxis: boolean): void {
+    this.image?.setAxisClip(axis, minval, maxval, isOrthoAxis);
     this.redraw();
   }
 
@@ -901,6 +966,8 @@ export class View3d extends EventDispatcher<View3dEvents> {
 
   /**
    * Switch between single pass ray-marched volume rendering and progressive path traced rendering.
+   * This setting is relevant for 3d modes and in particular is used to distinguish path trace
+   * from any other rendering algorithm.
    * @param {RenderMode} mode RAYMARCH for single pass ray march, PATHTRACE for progressive path trace
    */
   setVolumeRenderMode(mode: RenderMode.PATHTRACE | RenderMode.RAYMARCH): void {
@@ -917,7 +984,7 @@ export class View3d extends EventDispatcher<View3dEvents> {
       });
 
       const viewMode = this.image.getViewMode();
-      if (viewMode === Axis.Z) {
+      if (viewMode === Axis.Z || viewMode === Axis.TRIPLE) {
         // if the camera view is in single-slice view, then we don't want to change
         // anything but still remember the mode for when we switch back to a volumetric view
         return;

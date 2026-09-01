@@ -15,10 +15,16 @@ uniform vec3 AABB_CLIP_MIN;
 uniform vec3 AABB_CLIP_MAX;
 uniform sampler2D textureAtlas;
 uniform sampler2D textureAtlasMask;
-uniform int Z_SLICE;
+uniform int SLICE_INDEX;
 uniform float SLICES;
 uniform bool interpolationEnabled;
 uniform vec3 flipVolume;
+#define VIEW_AXIS_Z 0
+#define VIEW_AXIS_X 1
+#define VIEW_AXIS_Y 2
+uniform int viewAxis;
+// in voxels
+uniform vec3 volumeSize;
 
 varying vec2 vUv;
 
@@ -31,9 +37,8 @@ vec2 offsetFrontBack(float t) {
 }
 
 vec4 sampleAtlas(sampler2D tex, vec4 pos) {
-  float bounds = float(pos[0] >= 0.0 && pos[0] <= 1.0 &&
-    pos[1] >= 0.0 && pos[1] <= 1.0 &&
-    pos[2] >= 0.0 && pos[2] <= 1.0);
+  float bounds = float(pos[0] >= 0.0 && pos[0] <= 1.0 && pos[1] >= 0.0 &&
+                       pos[1] <= 1.0 && pos[2] >= 0.0 && pos[2] <= 1.0);
 
   float nSlices = float(SLICES);
 
@@ -41,7 +46,8 @@ vec4 sampleAtlas(sampler2D tex, vec4 pos) {
 
   if (interpolationEnabled) {
     // loc ranges from 0 to 1/ATLAS_DIMS
-    // shrink loc0 to within one half edge texel - so as not to sample across edges of tiles.
+    // shrink loc0 to within one half edge texel - so as not to sample across
+    // edges of tiles.
     loc0 = loc0 * (vec2(1.0) - ATLAS_DIMS / textureRes);
   } else {
     // No interpolation - sample just one slice at a pixel center.
@@ -74,14 +80,51 @@ void main() {
   // Normalize UV for [-0.5, 0.5] range
   vec2 normUv = vUv - vec2(0.5);
 
+  // Determine which pair of clip axes to check based on viewAxis
+  vec2 clipMin2, clipMax2;
+  if (viewAxis == VIEW_AXIS_X) {
+    // YZ view: UV.x -> Z, UV.y -> Y (Y vertical to align with XY pane)
+    clipMin2 = vec2(boxMin.z, boxMin.y);
+    clipMax2 = vec2(boxMax.z, boxMax.y);
+  } else if (viewAxis == VIEW_AXIS_Y) {
+    // XZ view: UV.x -> X, UV.y -> Z
+    clipMin2 = vec2(boxMin.x, boxMin.z);
+    clipMax2 = vec2(boxMax.x, boxMax.z);
+  } else {
+    // XY view (default): UV.x -> X, UV.y -> Y
+    clipMin2 = vec2(boxMin.x, boxMin.y);
+    clipMax2 = vec2(boxMax.x, boxMax.y);
+  }
+
   // Return background color if outside of clipping box
-  if (normUv.x < boxMin.x || normUv.x > boxMax.x || normUv.y < boxMin.y || normUv.y > boxMax.y) {
+  if (normUv.x < clipMin2.x || normUv.x > clipMax2.x || normUv.y < clipMin2.y ||
+      normUv.y > clipMax2.y) {
     gl_FragColor = vec4(0.0);
     return;
   }
 
-  // Normalize z-slice by total slices
-  vec4 pos = vec4(vUv, (SLICES == 1.0 && Z_SLICE == 0) ? 0.0 : float(Z_SLICE) / (SLICES - 1.0), 0.0);
+  // Compute the normalized slice coordinate
+  float sliceNorm =
+      (SLICES == 1.0 && SLICE_INDEX == 0) ? 0.0 : float(SLICE_INDEX) / (SLICES - 1.0);
+
+  // Build the 3D sample position based on viewAxis
+  vec4 pos;
+  if (viewAxis == VIEW_AXIS_X) {
+    // YZ view: UV.x -> Z, UV.y -> Y, slice along X (Y vertical to align with XY
+    // pane) SLICE_INDEX is an X voxel index; normalize by volumeSize.x
+    float xNorm =
+        (volumeSize.x <= 1.0) ? 0.0 : float(SLICE_INDEX) / (volumeSize.x - 1.0);
+    pos = vec4(xNorm, vUv.y, vUv.x, 0.0);
+  } else if (viewAxis == VIEW_AXIS_Y) {
+    // XZ view: UV.x -> X, UV.y -> Z, slice along Y
+    // SLICE_INDEX is a Y voxel index; normalize by volumeSize.y
+    float yNorm =
+        (volumeSize.y <= 1.0) ? 0.0 : float(SLICE_INDEX) / (volumeSize.y - 1.0);
+    pos = vec4(vUv.x, yNorm, vUv.y, 0.0);
+  } else {
+    // XY view (default): UV -> XY, slice along Z
+    pos = vec4(vUv, sliceNorm, 0.0);
+  }
 
   vec4 C;
   C = sampleAtlas(textureAtlas, pos);

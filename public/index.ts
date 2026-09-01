@@ -1145,7 +1145,7 @@ async function loadVolume(name: string, loadSpec: LoadSpec, loader: IVolumeLoade
   onVolumeCreated(name, volume);
   loader.loadVolumeData(volume);
 
-  // Set default zSlice
+  // Set default slice index
   goToZSlice(Math.floor(volume.imageInfo.subregionSize.z / 2));
 }
 
@@ -1298,6 +1298,10 @@ function main() {
   const d3Btn = document.getElementById("3D");
   d3Btn?.addEventListener("click", () => {
     view3D.setCameraMode("3D");
+  });
+  const tripleBtn = document.getElementById("tripleBtn");
+  tripleBtn?.addEventListener("click", () => {
+    view3D.setCameraMode("TRIPLE");
   });
   const rotBtn = document.getElementById("rotBtn");
   rotBtn?.addEventListener("click", () => {
