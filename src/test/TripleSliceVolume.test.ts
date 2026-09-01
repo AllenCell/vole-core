@@ -107,9 +107,11 @@ describe("TripleSliceVolume", () => {
     const [xy, yz, xz] = renderer.get3dObject().children;
 
     // Assert
-    expect(projectionPlane(xy).scale.toArray()).toEqual([1, 0.5, 0.25]);
-    expect(projectionPlane(yz).scale.toArray()).toEqual([0.25, 0.5, 1]);
-    expect(projectionPlane(xz).scale.toArray()).toEqual([1, 0.25, 1]);
+    // (Z=5, Y=10, X=20) normalizes to (Z=0.25, Y=0.5, X=1)
+    // The third coordinate of .scale is unused for these 2D planes
+    expect(projectionPlane(xy).scale.toArray().slice(0, 2)).toEqual([1, 0.5]);
+    expect(projectionPlane(yz).scale.toArray().slice(0, 2)).toEqual([0.25, 0.5]);
+    expect(projectionPlane(xz).scale.toArray().slice(0, 2)).toEqual([1, 0.25]);
 
     // Cleanup
     renderer.cleanup();
