@@ -343,6 +343,15 @@ export class View3d extends EventDispatcher<View3dEvents> {
     volume.updateRequiredData({ scaleLevelBias });
   }
 
+  async enableScrubIndicator(volume: Volume): Promise<void> {
+    const selectsDifferentLevel = await volume.biasesSelectDifferentLevels();
+    this.canvas3d.setShowLowResIndicator(selectsDifferentLevel);
+  }
+
+  disableScrubIndicator(): void {
+    this.canvas3d.setShowLowResIndicator(false);
+  }
+
   /**
    * Assign a channel index as a mask channel (will multiply its color against the entire visible volume)
    * @param {Object} volume
@@ -700,6 +709,15 @@ export class View3d extends EventDispatcher<View3dEvents> {
    */
   setTimestepIndicatorPosition(marginX: number, marginY: number, corner = ViewportCorner.BOTTOM_RIGHT): void {
     this.canvas3d.setIndicatorPosition(true, marginX, marginY, corner);
+  }
+
+  /**
+   * Set the vertical position of the horizontally centered low-resolution indicator.
+   * @param {number} marginY
+   * @param {boolean} [fromTop] Whether the margin is measured from the top. Default: `false`.
+   */
+  setLowResIndicatorPosition(marginY: number, fromTop = false): void {
+    this.canvas3d.setLowResIndicatorPosition(marginY, fromTop);
   }
 
   /**

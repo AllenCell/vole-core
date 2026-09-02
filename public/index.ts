@@ -1007,11 +1007,11 @@ function setSyncMultichannelLoading(sync: boolean) {
 }
 
 function setLowResPreview(enabled: boolean) {
-  // Known brittleness: this line and OmeZarrLoader.beginLowResPrefetch pick the same level for low-res
-  // pre-fetching and low-res display by selecting the coarsest level, which relies on both
-  // implementations having similar logic.
-  const scaleLevelBias = enabled ? myState.volume.imageInfo.numMultiscaleLevels : 0;
-  void myState.volume.updateRequiredData({ scaleLevelBias }, onChannelDataArrived);
+  if (enabled) {
+    void view3D.enableScrubIndicator(myState.volume);
+  } else {
+    view3D.disableScrubIndicator();
+  }
 }
 
 function playTimeSeries(onNewFrameCallback: () => void) {

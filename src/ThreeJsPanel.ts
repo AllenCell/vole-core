@@ -70,6 +70,10 @@ type AnimateFunction = (
   scene: Scene
 ) => void;
 
+function setVisibility(element: HTMLElement, visible: boolean): void {
+  element.style.display = visible ? "" : "none";
+}
+
 export class ThreeJsPanel {
   public containerdiv: HTMLDivElement;
   private canvas: HTMLCanvasElement;
@@ -117,6 +121,7 @@ export class ThreeJsPanel {
   public showPerspectiveScaleBar: boolean;
   private timestepIndicatorElement: HTMLDivElement;
   public showTimestepIndicator: boolean;
+  private lowResIndicatorElement: HTMLDivElement;
 
   private dataurlcallback?: (url: string) => void;
   private onRenderCallback?: () => void;
@@ -157,6 +162,7 @@ export class ThreeJsPanel {
     this.showPerspectiveScaleBar = false;
     this.timestepIndicatorElement = document.createElement("div");
     this.showTimestepIndicator = false;
+    this.lowResIndicatorElement = document.createElement("div");
 
     this.animateFuncs = [];
     this.postMeshRenderFuncs = [];
@@ -491,6 +497,22 @@ export class ThreeJsPanel {
     };
     Object.assign(this.timestepIndicatorElement.style, timestepIndicatorStyle);
     this.containerdiv.appendChild(this.timestepIndicatorElement);
+
+    // Low-resolution preview indicator
+    const lowResIndicatorStyle: Partial<CSSStyleDeclaration> = {
+      fontFamily: "-apple-system, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif",
+      position: "absolute",
+      left: "50%",
+      bottom: "20px",
+      transform: "translateX(-50%)",
+      color: "white",
+      mixBlendMode: "difference",
+      textAlign: "center",
+      display: "none",
+    };
+    Object.assign(this.lowResIndicatorElement.style, lowResIndicatorStyle);
+    this.lowResIndicatorElement.textContent = "Low-resolution preview";
+    this.containerdiv.appendChild(this.lowResIndicatorElement);
   }
 
   updateOrthoScaleBar(scale: number, unit?: string): void {
@@ -526,8 +548,8 @@ export class ThreeJsPanel {
     const isOrtho = isOrthographicCamera(this.camera);
     const orthoVisible = isOrtho && this.showOrthoScaleBar;
     const perspectiveVisible = !isOrtho && this.showPerspectiveScaleBar;
-    this.orthoScaleBarElement.style.display = orthoVisible ? "" : "none";
-    this.perspectiveScaleBarElement.style.display = perspectiveVisible ? "" : "none";
+    setVisibility(this.orthoScaleBarElement, orthoVisible);
+    setVisibility(this.perspectiveScaleBarElement, perspectiveVisible);
   }
 
   setShowOrthoScaleBar(visible: boolean): void {
@@ -542,7 +564,11 @@ export class ThreeJsPanel {
 
   setShowTimestepIndicator(visible: boolean): void {
     this.showTimestepIndicator = visible;
-    this.timestepIndicatorElement.style.display = visible ? "" : "none";
+    setVisibility(this.timestepIndicatorElement, visible);
+  }
+
+  setShowLowResIndicator(visible: boolean): void {
+    this.lowResIndicatorElement.style.display = visible ? "" : "none";
   }
 
   setIndicatorPosition(timestep: boolean, marginX: number, marginY: number, corner: ViewportCorner) {
@@ -560,6 +586,13 @@ export class ThreeJsPanel {
       [xProp]: marginX + "px",
       [yProp]: marginY + "px",
     });
+  }
+
+  setLowResIndicatorPosition(marginY: number, fromTop: boolean): void {
+    const { style: centerStyle } = this.lowResIndicatorElement;
+    centerStyle.removeProperty("top");
+    centerStyle.removeProperty("bottom");
+    centerStyle[fromTop ? "top" : "bottom"] = marginY + "px";
   }
 
   setAutoRotate(rotate: boolean): void {
