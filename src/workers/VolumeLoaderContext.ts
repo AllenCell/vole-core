@@ -152,12 +152,18 @@ class VolumeLoaderContext {
   private openPromise: Promise<void>;
   private throttleChannelData = false;
 
-  constructor(maxCacheSize?: number, maxActiveRequests?: number, maxLowPriorityRequests?: number) {
+  constructor(
+    maxCacheSize?: number,
+    maxActiveRequests?: number,
+    maxLowPriorityRequests?: number,
+    maxLowResCacheSize?: number
+  ) {
     this.workerHandle = new SharedLoadWorkerHandle();
     this.workerHandle.onEvent = this.handleEvent.bind(this);
     this.loaders = new Map();
     this.openPromise = this.workerHandle.sendMessage(WorkerMsgType.INIT, {
       maxCacheSize,
+      maxLowResCacheSize,
       maxActiveRequests,
       maxLowPriorityRequests,
     });
@@ -198,7 +204,7 @@ class VolumeLoaderContext {
    */
   async createLoader(
     path: string | string[],
-    options?: Omit<CreateLoaderOptions, "cache" | "queue">
+    options?: Omit<CreateLoaderOptions, "cache" | "lowResCache" | "queue">
   ): Promise<WorkerLoader | TiffLoader | RawArrayLoader> {
     // Special case: TIFF loader doesn't work on a worker, has its own workers anyways, and doesn't use cache or queue.
     const pathString = Array.isArray(path) ? path[0] : path;

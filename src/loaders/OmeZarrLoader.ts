@@ -35,9 +35,11 @@ import { VolumeLoadError, VolumeLoadErrorType, wrapVolumeLoadError } from "./Vol
 import { relaxedFetch, withVoleInstrumentation } from "./zarr_utils/wrappers.js";
 import { assertMetadataHasMultiscales, toOMEZarrMetaV4, validateOMEZarrMetadata } from "./zarr_utils/validation.js";
 import { remapUri } from "../utils/url_utils.js";
-import type { TypedArray } from "../types.js";
+import { type TypedArray } from "../types.js";
+import planLowResPrefetch from "./zarr_utils/planLowResPrefetch.js";
 
 const CHUNK_REQUEST_CANCEL_REASON = "chunk request cancelled";
+const MINIMUM_LOW_RES_CACHED_EXTENT = 0.7;
 
 // returns the converted data and the original min and max values
 function convertChannel(
@@ -97,6 +99,8 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
   private loadSubscriber: SubscriberId | undefined;
   /** The ID of the subscriber responsible for prefetches, so that requests can be cancelled and reissued */
   private prefetchSubscriber: SubscriberId | undefined;
+  /** The ID of the subscriber responsible for filling the dedicated low-resolution cache. */
+  private lowResWarmSubscriber: SubscriberId | undefined;
 
   // TODO: this property should definitely be owned by `Volume` if this loader is ever used by multiple volumes.
   //   This may cause errors or incorrect results otherwise!
@@ -114,6 +118,8 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
     private requestQueue: SubscribableRequestQueue,
     /** Optional shared cache for decoded chunks. Keyed by `<baseUrl><arrayPath>/<chunk coords>`. */
     private cache: VolumeCache | undefined,
+    /** Optional shared cache for decoded chunks at the coarsest resolution level. */
+    private lowResCache: VolumeCache | undefined,
     /** Options to configure (pre)fetching behavior. */
     private fetchOptions: ZarrLoaderFetchOptions = DEFAULT_FETCH_OPTIONS,
     /** Direction(s) to prioritize when prefetching. Stored separate from `fetchOptions` since it may be mutated. */
@@ -129,18 +135,21 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
    *  levels with exactly the same size in every source. If matching level(s) are available, the loader will produce a
    *  volume containing all channels from every provided zarr in the order they appear in `urls`. If no matching sets
    *  of scale levels are available, creation fails.
-   * @param scenes The scene(s) to load from each URL. If `urls` is an array, `scenes` may either be an array of values
-   *  corresponding to each URL, or a single value to apply to all URLs. Default 0.
-   * @param cache A cache to use for storing fetched data. If not provided, a new cache will be created.
+   * @param scenes The index (or indices) of the image pyramid to load from each URL. If `urls` is an array, `scenes`
+   *  may either be an array of values corresponding to each URL, or a single value to apply to all URLs.
+   *  This value is used to index into the ZARR's `multiscales` array. Default 0.
+   * @param cache A cache to use for storing fetched data.
    * @param queue A queue to use for managing requests. If not provided, a new queue will be created.
    * @param fetchOptions Options to configure (pre)fetching behavior.
+   * @param lowResCache A dedicated cache for the coarsest resolution level.
    */
   static async createLoader(
     urls: string | string[],
     scenes: number | number[] = 0,
     cache?: VolumeCache,
     queue?: SubscribableRequestQueue,
-    fetchOptions?: ZarrLoaderFetchOptions
+    fetchOptions?: ZarrLoaderFetchOptions,
+    lowResCache?: VolumeCache
   ): Promise<OMEZarrLoader> {
     // Setup queue and store, get basic metadata
     if (!queue) {
@@ -217,7 +226,11 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
     // same in every field we care about, so we only ever use the first source's `multiscaleMetadata` after this point.
     // Should we only store one `OMEMultiscale` record total, rather than one per source?
     const priorityDirs = fetchOptions?.priorityDirections ? fetchOptions.priorityDirections.slice() : undefined;
-    return new OMEZarrLoader(sources, queue, cache, fetchOptions, priorityDirs);
+
+    // Only use a low-res cache if there are multiple resolution levels available
+    // Use sources[0] because matchSourceScaleLevels made all sources[i].scaleLevels identical
+    const resolvedLowResCache = sources[0].scaleLevels.length > 1 ? lowResCache : undefined;
+    return new OMEZarrLoader(sources, queue, cache, resolvedLowResCache, fetchOptions, priorityDirs);
   }
 
   private getUnitSymbols(): [string, string] {
@@ -244,6 +257,11 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
     return getScale(this.sources[0].multiscaleMetadata.datasets[level], this.sources[0].axesTCZYX);
   }
 
+  /**
+   * Reorder an input array [T, C, Z, Y, X] based on the dimension order of the specified source.
+   * In general, the sourceIdx should be provided, since `matchSourceScaleLevels` does not guarantee
+   * that sources have the same axes.
+   */
   private orderByDimension<T>(valsTCZYX: TCZYX<T>, sourceIdx = 0): T[] {
     return orderByDimension(valsTCZYX, this.sources[sourceIdx].axesTCZYX);
   }
@@ -432,21 +450,25 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
   }
 
   private prefetchChunk(
-    source: ZarrSource,
+    sourceIndex: number,
     scaleLevel: NumericZarrArray,
     coords: TCZYX<number>,
-    subscriber: SubscriberId
+    subscriber: SubscriberId,
+    forLowResCache = false
   ): void {
+    const source = this.sources[sourceIndex];
     const instrumented = withVoleInstrumentation(scaleLevel, {
       baseUrl: source.baseUrl,
       cache: this.cache,
+      lowResCache: this.lowResCache,
       queue: this.requestQueue,
       subscriber,
       isPrefetch: true,
+      forLowResCache,
     });
     // Calling `get` and doing nothing with the result still triggers a cache check, fetch, and insertion
     instrumented
-      .getChunk(this.orderByDimension(coords))
+      .getChunk(this.orderByDimension(coords, sourceIndex))
       .catch(
         wrapVolumeLoadError(
           `Unable to prefetch chunk with coords ${coords.join(", ")}`,
@@ -458,6 +480,8 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
 
   /** Reads a list of chunk keys requested by a `loadVolumeData` call and sets up appropriate prefetch requests. */
   private beginPrefetch(keys: ZarrChunkFetchInfo[], scaleLevel: number): void {
+    this.beginLowResPrefetch();
+
     // Convert keys to arrays of coords
     if (keys.length === 0) {
       return;
@@ -498,11 +522,13 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
       const source = this.sources[sourceIndex];
       const sourceScaleLevel = source.scaleLevels[scaleLevel];
       chunk[1] = channelIndexInSource;
-      this.prefetchChunk(source, sourceScaleLevel, chunk, subscriber);
+
+      this.prefetchChunk(sourceIndex, sourceScaleLevel, chunk, subscriber);
       prefetchCount++;
     }
 
-    // Clear out old prefetch requests (requests which also cover this new prefetch will be preserved)
+    // Clear out old prefetch requests (requests that the new `subscriber` listens to will be
+    // preserved because they still have a subscriber.)
     if (this.prefetchSubscriber !== undefined) {
       this.requestQueue.removeSubscriber(this.prefetchSubscriber, CHUNK_REQUEST_CANCEL_REASON);
     }
@@ -536,6 +562,23 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
       subregionOffset: [regionPx.min.x, regionPx.min.y, regionPx.min.z],
       multiscaleLevel,
     };
+  }
+
+  private beginLowResPrefetch(): void {
+    if (!this.lowResCache || this.lowResWarmSubscriber !== undefined) {
+      // Low-res warming is only started once
+      return;
+    }
+
+    this.lowResWarmSubscriber = this.requestQueue.addSubscriber();
+    const { plan, availableBytes } = planLowResPrefetch(this.sources, this.lowResCache.maxSize, MINIMUM_LOW_RES_CACHED_EXTENT);
+    for (const { sourceIndex, level, coords } of plan) {
+      const coordsTCZYX = this.orderByTCZYX(coords, 0, sourceIndex);
+      this.prefetchChunk(sourceIndex, level, coordsTCZYX, this.lowResWarmSubscriber, true);
+    }
+    if (plan.length > 0) {
+      console.info(`Prefetching ${plan.length} low-res chunks. ${(this.lowResCache.maxSize - availableBytes)/1_000_000}MB will be used.`);
+    }
   }
 
   async loadRawChannelData(
@@ -583,6 +626,7 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
       const instrumented = withVoleInstrumentation(level, {
         baseUrl: source.baseUrl,
         cache: this.cache,
+        lowResCache: this.lowResCache,
         queue: this.requestQueue,
         subscriber,
         reportChunk,
@@ -631,6 +675,7 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
     if (syncChannels) {
       onData(resultChannelIndices, resultChannelDtype, resultChannelData, resultChannelRanges);
     }
+
     this.requestQueue.removeSubscriber(subscriber, CHUNK_REQUEST_CANCEL_REASON);
   }
 }

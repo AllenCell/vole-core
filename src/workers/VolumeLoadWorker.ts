@@ -18,7 +18,11 @@ import { rebuildLoadSpec } from "./util.js";
 
 type LoaderEntry = { loader: ThreadableVolumeLoader; copyOnLoad: boolean };
 
+// 250MB: same size as the regular cache, and large enough for many AICS ZARRs
+const LOW_RES_CACHE_DEFAULT_SIZE = 250_000_000;
+
 let cache: VolumeCache | undefined = undefined;
+let lowResCache: VolumeCache | undefined = undefined;
 let queue: RequestQueue | undefined = undefined;
 let subscribableQueue: SubscribableRequestQueue | undefined = undefined;
 
@@ -40,9 +44,10 @@ type MessageHandler<T extends WorkerMsgType> = (
 ) => Promise<WorkerResponsePayload<T>>;
 
 const messageHandlers: { [T in WorkerMsgType]: MessageHandler<T> } = {
-  [WorkerMsgType.INIT]: ({ maxCacheSize, maxActiveRequests, maxLowPriorityRequests }) => {
+  [WorkerMsgType.INIT]: ({ maxCacheSize, maxLowResCacheSize, maxActiveRequests, maxLowPriorityRequests }) => {
     if (!initialized) {
       cache = new VolumeCache(maxCacheSize);
+      lowResCache = new VolumeCache(maxLowResCacheSize ?? LOW_RES_CACHE_DEFAULT_SIZE);
       queue = new RequestQueue(maxActiveRequests, maxLowPriorityRequests);
       subscribableQueue = new SubscribableRequestQueue(queue);
       initialized = true;
@@ -51,7 +56,7 @@ const messageHandlers: { [T in WorkerMsgType]: MessageHandler<T> } = {
   },
 
   [WorkerMsgType.CREATE_LOADER]: async ({ path, options }) => {
-    const loader = await createVolumeLoader(path, { ...options, cache, queue: subscribableQueue });
+    const loader = await createVolumeLoader(path, { ...options, cache, lowResCache, queue: subscribableQueue });
     if (loader === undefined) {
       return undefined;
     }

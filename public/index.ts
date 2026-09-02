@@ -1006,6 +1006,14 @@ function setSyncMultichannelLoading(sync: boolean) {
   myState.loader.forEach((loader) => loader.syncMultichannelLoading(sync));
 }
 
+function setLowResPreview(enabled: boolean) {
+  // Known brittleness: this line and OmeZarrLoader.beginLowResPrefetch pick the same level for low-res
+  // pre-fetching and low-res display by selecting the coarsest level, which relies on both
+  // implementations having similar logic.
+  const scaleLevelBias = enabled ? myState.volume.imageInfo.numMultiscaleLevels : 0;
+  void myState.volume.updateRequiredData({ scaleLevelBias }, onChannelDataArrived);
+}
+
 function playTimeSeries(onNewFrameCallback: () => void) {
   window.clearTimeout(myState.timerId);
   setSyncMultichannelLoading(true);
@@ -1403,14 +1411,23 @@ function main() {
       }
     }
   });
-  // only update when DONE sliding: change event
+  // Continuously load coarse previews while actively dragging the slider.
+  timeSlider?.addEventListener("input", () => {
+    setLowResPreview(true);
+    if (goToFrame(timeSlider.valueAsNumber)) {
+      if (timeInput) {
+        timeInput.value = timeSlider.value;
+      }
+    }
+  });
+  // Restore normal automatic level selection for the final frame.
   timeSlider?.addEventListener("change", () => {
-    // trigger loading new time
     if (goToFrame(timeSlider?.valueAsNumber)) {
       if (timeInput) {
         timeInput.value = timeSlider.value;
       }
     }
+    setLowResPreview(false);
   });
   timeInput?.addEventListener("change", () => {
     // trigger loading new time
