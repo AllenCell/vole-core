@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import Volume from "../Volume.js";
 import VolumeMaker from "../VolumeMaker.js";
 import { LUT_ARRAY_LENGTH } from "../Lut.js";
 import Channel from "../Channel.js";
 import { CImageInfo, ImageInfo } from "../ImageInfo.js";
+import { IVolumeLoader, LoadSpec } from "../loaders/IVolumeLoader.js";
 import { getDataRange } from "../utils/num_utils.js";
 
 // PREPARE SOME TEST DATA TO TRY TO DISPLAY A VOLUME.
@@ -44,6 +45,30 @@ const testimgdata: ImageInfo = {
     scale: [1, 1, 1],
   },
 };
+
+const multiscaleTestimgdata: ImageInfo = {
+  ...testimgdata,
+  multiscaleLevelDims: [
+    ...testimgdata.multiscaleLevelDims,
+    {
+      shape: [1, 9, 33, 146, 102],
+      spacing: [1, 1, 0.58, (0.065 * 494) / 146, (0.065 * 306) / 102],
+      spaceUnit: "",
+      timeUnit: "",
+      dataType: "uint8",
+    },
+  ],
+};
+
+function createTestLoader(multiscaleLevelDims: ImageInfo["multiscaleLevelDims"]): IVolumeLoader {
+  return {
+    loadDims: vi.fn().mockResolvedValue(multiscaleLevelDims),
+    createVolume: vi.fn(),
+    loadVolumeData: vi.fn(),
+    setPrefetchPriority: vi.fn(),
+    syncMultichannelLoading: vi.fn(),
+  };
+}
 
 function checkVolumeConstruction(v: Volume, imgdata: ImageInfo) {
   expect(v).to.be.a("Object");
@@ -126,6 +151,38 @@ describe("test volume", () => {
       expect(v.normPhysicalSize.x).to.be.closeTo(sx, EPSILON);
       expect(v.normPhysicalSize.y).to.be.closeTo(sy, EPSILON);
       expect(v.normPhysicalSize.z).to.be.closeTo(sz, EPSILON);
+    });
+  });
+
+  describe("loading events", () => {
+    it("dispatches loadStart when changing scale levels", async () => {
+      // ARRANGE
+      const loader = createTestLoader(multiscaleTestimgdata.multiscaleLevelDims);
+      const v = new Volume(multiscaleTestimgdata, new LoadSpec(), loader);
+      const loadStart = vi.fn();
+      v.addEventListener("loadStart", loadStart);
+
+      // ACT: Simulate beginning scrubbing
+      await v.updateRequiredData({ scaleLevelBias: 1 });
+
+      // ASSERT
+      expect(loadStart).toHaveBeenCalled();
+    });
+
+    it("does not dispatch loadStart when no reload is required", async () => {
+      // ARRANGE
+      // loader is needed for loadStart to potentially be triggered
+      const loader = createTestLoader(testimgdata.multiscaleLevelDims);
+      const v = new Volume(testimgdata, new LoadSpec(), loader);
+      const loadStart = vi.fn();
+      v.addEventListener("loadStart", loadStart);
+
+      // ACT: Simulate beginning scrubbing
+      await v.updateRequiredData({ scaleLevelBias: 1 });
+
+      // ASSERT: `testimgdata` has only one multiscale level, so
+      // changing scaleLevelBias should not trigger any load.
+      expect(loadStart).not.toHaveBeenCalled();
     });
   });
 });
