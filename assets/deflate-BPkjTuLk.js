@@ -1,1 +1,0 @@
-import{t as e}from"./VolumeLoadWorker-DYaxqK7P.js";import{t}from"./pako.esm-D1KVoFOa.js";var n=class extends e{decodeBlock(e){return t(new Uint8Array(e)).buffer}};export{n as default};
