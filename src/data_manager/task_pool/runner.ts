@@ -2,7 +2,7 @@ import { serializeError } from "serialize-error";
 
 import type { TypedArray, NumberType } from "../../types.js";
 import { getBorrowed } from "./borrow_guard.js";
-import type { Task, WorkerRequest, WorkerResponse } from "./types.js";
+import type { Task, TaskResult, WorkerRequest, WorkerResponse } from "./types.js";
 
 /**
  * Combines a `string` task `id` and a `handler` into a `Task` that can be registered and called with a `TaskPool`.
@@ -35,7 +35,7 @@ import type { Task, WorkerRequest, WorkerResponse } from "./types.js";
  */
 export const task = <Id extends string, In extends unknown[], Out>(
   id: Id,
-  handler: (...args: In) => { result: Out; transfer: Transferable[] }
+  handler: (...args: In) => TaskResult<Out>
 ): Task<Id, In, Out> => {
   const task = handler as Task<Id, In, Out>;
   task.taskId = id;
@@ -45,7 +45,7 @@ export const task = <Id extends string, In extends unknown[], Out>(
 export const initWorker = (tasks: Task[]) => {
   const handlers = new Map(tasks.map((task) => [task.taskId, task]));
 
-  const runTask = ({ id, task, args }: WorkerRequest): [WorkerResponse, Transferable[]] => {
+  const runTask = async ({ id, task, args }: WorkerRequest): Promise<[WorkerResponse, Transferable[]]> => {
     const handler = handlers.get(task);
 
     // Extract borrowed `TypedArray`s, which must be returned to the main thread on completion
@@ -67,7 +67,7 @@ export const initWorker = (tasks: Task[]) => {
     }
 
     try {
-      const { result, transfer } = handler(...processedArgs);
+      const { result, transfer } = await handler(...processedArgs);
       return [{ id, task, borrows, result, error: false }, [...borrowedBuffers, ...transfer]];
     } catch (e) {
       const result = serializeError(e);
@@ -75,8 +75,8 @@ export const initWorker = (tasks: Task[]) => {
     }
   };
 
-  self.onmessage = ({ data }: MessageEvent<WorkerRequest>) => {
-    const [result, transfer] = runTask(data);
+  self.onmessage = async ({ data }: MessageEvent<WorkerRequest>) => {
+    const [result, transfer] = await runTask(data);
     self.postMessage(result, { transfer });
   };
 
