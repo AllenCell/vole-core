@@ -35,7 +35,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/allen-cell-animated/vole-core.git"
+    "url": "git+https://github.com/AllenCell/vole-core.git"
   },
   "peerDependencies": {
     "three": "^0.184.0"
