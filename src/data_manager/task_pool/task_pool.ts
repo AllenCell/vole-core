@@ -6,7 +6,7 @@ import { BorrowGuard, markBorrowed } from "./borrow_guard.js";
 export const taskHandle = <T extends Task>(
   id: T["taskId"],
   transfer?: (...args: Parameters<T>) => Transferable[]
-): TaskHandle<Parameters<T>, ReturnType<T>["result"]> => {
+): TaskHandle<Parameters<T>, Awaited<ReturnType<T>>["result"]> => {
   return { id, transfer };
 };
 
