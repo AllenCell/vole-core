@@ -71,10 +71,14 @@ export const getBorrowed = (value: unknown): BorrowedArray<NumberType> | undefin
   return undefined;
 };
 
+export type TaskResult<Out> =
+  | { result: Out; transfer: Transferable[] }
+  | Promise<{ result: Out; transfer: Transferable[] }>;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Task<Id extends string = string, In extends any[] = any[], Out = any> = {
   taskId: Id;
-  (...args: In): { result: Out; transfer: Transferable[] };
+  (...args: In): TaskResult<Out>;
 };
 
 export type TaskHandle<In extends unknown[], Out> = {
@@ -93,7 +97,7 @@ export type TaskArgs<T> = T extends [infer E, ...infer R]
 export const taskHandle = <T extends Task>(
   id: T["taskId"] & {},
   transfer?: (...args: Parameters<T>) => Transferable[]
-): TaskHandle<Parameters<T>, ReturnType<T>["result"]> => {
+): TaskHandle<Parameters<T>, Awaited<ReturnType<T>>["result"]> => {
   return { id, transfer };
 };
 
@@ -110,7 +114,7 @@ export type WorkerResponse<T extends Task = Task> = {
 } & (
   | {
       error: false;
-      result: ReturnType<T>["result"];
+      result: Awaited<ReturnType<T>>["result"];
     }
   | {
       error: true;
