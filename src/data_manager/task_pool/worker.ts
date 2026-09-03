@@ -4,9 +4,9 @@ import { TASK_HANDLERS } from "./registry.js";
 import { getBorrowed, type WorkerRequest, type WorkerResponse } from "./task.js";
 import type { TypedArray, NumberType } from "../../types.js";
 
-import "./test_task.js";
+import "../zarr_decode_worker.js";
 
-const runTask = ({ id, task, args }: WorkerRequest): [WorkerResponse, Transferable[]] => {
+const runTask = async ({ id, task, args }: WorkerRequest): Promise<[WorkerResponse, Transferable[]]> => {
   const handler = TASK_HANDLERS.get(task);
 
   // Extract borrowed `TypedArray`s, which must be returned to the main thread on completion
@@ -28,7 +28,7 @@ const runTask = ({ id, task, args }: WorkerRequest): [WorkerResponse, Transferab
   }
 
   try {
-    const { result, transfer } = handler(...processedArgs);
+    const { result, transfer } = await handler(...processedArgs);
     return [{ id, task, borrows, result, error: false }, [...borrowedBuffers, ...transfer]];
   } catch (e) {
     const result = serializeError(e);
@@ -36,8 +36,8 @@ const runTask = ({ id, task, args }: WorkerRequest): [WorkerResponse, Transferab
   }
 };
 
-self.onmessage = ({ data }: MessageEvent<WorkerRequest>) => {
-  const [result, transfer] = runTask(data);
+self.onmessage = async ({ data }: MessageEvent<WorkerRequest>) => {
+  const [result, transfer] = await runTask(data);
   self.postMessage(result, { transfer });
 };
 
