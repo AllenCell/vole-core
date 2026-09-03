@@ -11,6 +11,9 @@ import { getScale, orderByDimension, orderByTCZYX, remapAxesToTCZYX } from "../l
 import { unitNameToSymbol } from "../loaders/VolumeLoaderUtils.js";
 import type { Chunk, LocalChunkId } from "./types.js";
 import type { NumberType } from "../types.js";
+import { taskHandle } from "./task_pool/task.js";
+import { ZarrEncodeTask, type ZarrDecodeTask } from "./zarr_decode_worker.js";
+import { TaskPool } from "./task_pool/TaskPool.js";
 
 const PLACEHOLDER_NAME = "zarr source";
 const PLACEHOLDER_SCENE_INDEX = 0;
@@ -79,3 +82,31 @@ export default class OMEZarrSource implements IChunkSource {
     return { data, dtype: multiscale.dtype };
   }
 }
+
+let codecCounter = 0;
+
+const encodeTask = taskHandle<ZarrEncodeTask>("zarrEncode", (data) => [data.buffer]);
+const decodeTask = taskHandle<ZarrDecodeTask>("zarrDecode", (data) => [data.buffer]);
+
+export const augmentCodec = (name: string, pool: TaskPool) => {
+  const codec = zarr.registry.get(name);
+  if (codec === undefined) {
+    console.warn(`No such codec: ${name}`);
+    return;
+  }
+
+  zarr.registry.set(name, async () => ({
+    fromConfig: (config, meta) => {
+      const descriptor = { config, meta, name, id: codecCounter };
+      codecCounter++;
+
+      return {
+        encode: (data: Uint8Array) => pool.runTask(encodeTask, data, descriptor),
+        decode: (data: Uint8Array) => pool.runTask(decodeTask, data, descriptor),
+      };
+    },
+  }));
+};
+
+const pool = new TaskPool();
+augmentCodec("numcodecs.blosc", pool);
