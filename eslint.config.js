@@ -14,7 +14,6 @@ export default defineConfig([
     "src/NaiveSurfaceNets.js",
     "docs/",
     "es/",
-    "webpack.*.js",
     "babel.config.js",
     "eslint.config.js",
   ]),
