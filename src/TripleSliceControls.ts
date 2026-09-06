@@ -72,6 +72,7 @@ export default class TripleSliceControls {
     this.boundDblClick = undefined;
     this.dragging = false;
     this.dragAxis = undefined;
+    this.host.containerdiv.style.cursor = "";
   }
 
   // --- Hit testing ---
@@ -171,6 +172,13 @@ export default class TripleSliceControls {
     return null;
   }
 
+  // --- Cursor styling ---
+
+  /** "v" = the vertical line is grabbed (dragged horizontally); "u" = the horizontal line. */
+  private static cursorForAxis(axis: "u" | "v"): string {
+    return axis === "v" ? "ew-resize" : "ns-resize";
+  }
+
   // --- Event handlers ---
 
   private onPointerDown(e: PointerEvent): void {
@@ -183,6 +191,7 @@ export default class TripleSliceControls {
       this.dragging = true;
       this.dragPane = pane;
       this.dragAxis = selectedAxis;
+      this.host.containerdiv.style.cursor = TripleSliceControls.cursorForAxis(selectedAxis);
       this.handleDrag(e.clientX, e.clientY, pane, selectedAxis);
     }
   }
@@ -190,13 +199,19 @@ export default class TripleSliceControls {
   private onPointerMove(e: PointerEvent): void {
     if (this.dragging && this.dragPane && this.dragAxis) {
       this.handleDrag(e.clientX, e.clientY, this.dragPane, this.dragAxis);
+      return;
     }
+
+    const pane = this.hitTestPane(e.clientX, e.clientY);
+    const hoveredAxis = pane ? this.hitTestCrosshairLine(e.clientX, e.clientY, pane) : null;
+    this.host.containerdiv.style.cursor = hoveredAxis ? TripleSliceControls.cursorForAxis(hoveredAxis) : "";
   }
 
   private onPointerUp(_e: PointerEvent): void {
     this.dragging = false;
     this.dragPane = undefined;
     this.dragAxis = undefined;
+    this.host.containerdiv.style.cursor = "";
   }
 
   private onDblClick(e: MouseEvent): void {
