@@ -32,6 +32,19 @@ export class BorrowGuard<
     return this.array;
   }
 
+  getAsync(): Promise<T> {
+    if (this.borrowed) {
+      return new Promise((resolve) => {
+        const listener = () => {
+          resolve(this.array);
+          this.removeEventListener("restored", listener);
+        };
+        this.addEventListener("restored", listener);
+      });
+    }
+    return Promise.resolve(this.array);
+  }
+
   restore(array: T) {
     this.array = array;
     this.restored = true;
@@ -51,11 +64,30 @@ export class BorrowGuard<
 
 const borrowedMarker = "TaskPool.borrowedArray";
 
+/**
+ * Marker type for a `TypedArray` that has been *borrowed* from the main thread by a task handler.
+ *
+ * This type is functionally identical to the corresponding `TypedArray`. However, when it is used as an argument to a
+ * *task handler*, the task must be invoked from the main thread using a matching `BorrowGuard`:
+ *
+ * ```typescript
+ * // worker code
+ * const fooTask = task("foo", (borrow: BorrowedArray<"uint8">) => { ... });
+ * export type FooTask = typeof fooTask;
+ * registerTask(fooTask);
+ *
+ * // main thread code
+ * const fooTask = taskHandle<FooTask>("foo");
+ * const pool = new TaskPool();
+ * // Because the handler takes a `BorrowedArray`, the task must be invoked on the main thread with a `BorrowGuard`:
+ * const guard = new BorrowGuard(new Uint8Array([1, 2, 3, 4, 5]));
+ * const result = await pool.runTask("foo", guard);
+ * ```
+ *
+ * When the task runs, the array inside the `BorrowGuard` is automatically *transferred* to the assigned worker, where
+ * it can be safely modified in-place. When the task completes, the array is transferred back into the `BorrowGuard`.
+ */
 export type BorrowedArray<T extends NumberType> = TypedArray<T> & { [borrowedMarker]: true };
-
-export const isBorrowedArray = (value: unknown): value is BorrowedArray<NumberType> => {
-  return ArrayBuffer.isView(value) && value[borrowedMarker];
-};
 
 export const markBorrowed = <T extends TypedArray<NumberType>>(value: T): { [borrowedMarker]: T } => ({
   [borrowedMarker]: value,
@@ -83,7 +115,7 @@ export type TaskHandle<In extends unknown[], Out> = {
   marker?: Out;
 };
 
-/** Converts all `BorrowedArray`s in an argument list to the corresponding `BorrowGuard`s */
+/** Converts all `BorrowedArray`s in a task handler's argument list to the corresponding `BorrowGuard`s */
 export type TaskArgs<T> = T extends [infer E, ...infer R]
   ? E extends BorrowedArray<infer A>
     ? [BorrowGuard<TypedArray<A>>, ...TaskArgs<R>]
@@ -91,7 +123,7 @@ export type TaskArgs<T> = T extends [infer E, ...infer R]
   : [];
 
 export const taskHandle = <T extends Task>(
-  id: T["taskId"] & {},
+  id: T["taskId"],
   transfer?: (...args: Parameters<T>) => Transferable[]
 ): TaskHandle<Parameters<T>, ReturnType<T>["result"]> => {
   return { id, transfer };
