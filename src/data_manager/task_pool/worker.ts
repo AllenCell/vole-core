@@ -5,7 +5,7 @@ import { getBorrowed, type WorkerRequest, type WorkerResponse } from "./task.js"
 import type { TypedArray, NumberType } from "../../types.js";
 
 import "../indexing_task.js";
-import "../zarr_codec_worker.js";
+import "../sources/zarr_codec_worker.js";
 
 const runTask = async ({ id, task, args }: WorkerRequest): Promise<[WorkerResponse, Transferable[]]> => {
   const handler = TASK_HANDLERS.get(task);
