@@ -11,7 +11,7 @@ type BorrowGuardEvents = { restored: void };
  * Wraps a `TypedArray` that may be temporarily transferred to a worker for processing.
  *
  * A `TypedArray` guarded by this class must be accessed through the `get` method, which returns `undefined` when the
- * buffer is on a worker. The guard will trigger the `"restored"` event when it is returned to the main thread.
+ * buffer is on a worker. The guard will trigger the `restored` event when it is returned to the main thread.
  */
 export class BorrowGuard<
   T extends TypedArray<NumberType> = TypedArray<NumberType>,
@@ -131,9 +131,7 @@ export type TaskArgs<T> = T extends [infer E, ...infer R]
 export const taskHandle = <T extends Task>(
   id: T["taskId"],
   transfer?: (...args: Parameters<T>) => Transferable[]
-): TaskHandle<Parameters<T>, Awaited<ReturnType<T>>["result"]> => {
-  return { id, transfer };
-};
+): TaskHandle<Parameters<T>, Awaited<ReturnType<T>>["result"]> => ({ id, transfer });
 
 export type WorkerRequest<T extends Task = Task> = {
   id: number;

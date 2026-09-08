@@ -17,7 +17,7 @@ type CodecDescriptor = {
   meta: ChunkMetadata;
 };
 
-const codecs: Map<number, Codec> = new Map();
+const codecs = new Map<number, Codec>();
 
 const getCodec = async (descriptor: CodecDescriptor): Promise<Codec> => {
   const savedCodec = codecs.get(descriptor.id);
