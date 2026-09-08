@@ -1,21 +1,21 @@
 import * as zarr from "zarrita";
 
-import type { ExtVolumeDims, IChunkSource } from "./DataManager.js";
+import type { ExtVolumeDims, IChunkSource } from "../DataManager.js";
 import {
   assertMetadataHasMultiscales,
   toOMEZarrMetaV4,
   validateOMEZarrMetadata,
-} from "../loaders/zarr_utils/validation.js";
-import type { NumericZarrArray, OMEMultiscale, OmeroTransitionalMetadata } from "../loaders/zarr_utils/types.js";
-import { getScale, orderByDimension, orderByTCZYX, remapAxesToTCZYX } from "../loaders/zarr_utils/utils.js";
-import { unitNameToSymbol } from "../loaders/VolumeLoaderUtils.js";
-import type { Chunk, LocalChunkId } from "./types.js";
-import type { NumberType } from "../types.js";
+} from "../../loaders/zarr_utils/validation.js";
+import type { NumericZarrArray, OMEMultiscale, OmeroTransitionalMetadata } from "../../loaders/zarr_utils/types.js";
+import { getScale, orderByDimension, orderByTCZYX, remapAxesToTCZYX } from "../../loaders/zarr_utils/utils.js";
+import { unitNameToSymbol } from "../../loaders/VolumeLoaderUtils.js";
+import type { Chunk, LocalChunkId } from "../types.js";
+import type { NumberType } from "../../types.js";
 
 const PLACEHOLDER_NAME = "zarr source";
 const PLACEHOLDER_SCENE_INDEX = 0;
 
-export default class OMEZarrSource implements IChunkSource {
+export class OMEZarrSource implements IChunkSource {
   private constructor(
     private scaleLevels: NumericZarrArray[],
     private multiscaleMetadata: OMEMultiscale,
