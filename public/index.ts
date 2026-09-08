@@ -27,7 +27,7 @@ import VolumeLoaderContext from "../src/workers/VolumeLoaderContext.js";
 import { DATARANGE_UINT8, ColorizeFeature, type NumberType } from "../src/types.js";
 import { RawArrayLoaderOptions } from "../src/loaders/RawArrayLoader.js";
 import DataManager, { IDataSubscriber } from "../src/data_manager/DataManager.js";
-import OMEZarrSource from "../src/data_manager/OMEZarrSource.js";
+import { OMEZarrSource } from "../src/data_manager/sources/index.js";
 import { ChunkId, ChunkPriority, ChunkPriorityLevel } from "../src/data_manager/types.js";
 
 const CACHE_MAX_SIZE = 1_000_000_000;
