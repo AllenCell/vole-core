@@ -9,8 +9,15 @@ const isFreeSlot = <T>(slot: Slot<T>): slot is { [NEXT_FREE]: number } => {
 export default class SlotMap<T> {
   private slots: Slot<T>[] = [];
   private head = 0;
+  private count = 0;
+
+  public get size(): number {
+    return this.count;
+  }
 
   public insert(value: T): number {
+    this.count += 1;
+
     if (this.head < this.slots.length) {
       const freeSlot = this.slots[this.head];
       if (!isFreeSlot(freeSlot)) {
@@ -48,6 +55,7 @@ export default class SlotMap<T> {
     }
     this.slots[index] = { [NEXT_FREE]: this.head };
     this.head = index;
+    this.count -= 1;
     return value;
   }
 }
