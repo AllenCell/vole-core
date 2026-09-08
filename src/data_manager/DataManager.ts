@@ -42,6 +42,17 @@ export interface IDataSubscriber {
   // TODO events for when chunks are evicted?
 }
 
+// Subscriber IDs increment globally, like timeout IDs
+let subscriberCount = 0;
+
+const getIdForSubscriber = (subscriber: IDataSubscriber): number => {
+  if (subscriber[SUBSCRIBER_ID] === undefined) {
+    subscriber[SUBSCRIBER_ID] = subscriberCount;
+    subscriberCount += 1;
+  }
+  return subscriber[SUBSCRIBER_ID];
+};
+
 type SourceEntry = {
   source: ChunkSource;
   subscribers: IDataSubscriber[];
@@ -118,8 +129,6 @@ export default class DataManager {
   private deviceSize = 0;
   /** A counter for assigning chunks a priority at the `RECENT` level. */
   private recentCounter = 0;
-  /** A counter for assigning subscriber IDs. */
-  private subscriberCount = 0;
 
   public limits: DataManagerLimits;
 
@@ -131,15 +140,6 @@ export default class DataManager {
   }
 
   // MARK: Helpers
-
-  /** Gets the id of data subscriber `subscriber`, assigning it one if it doesn't have one. */
-  private getIdForSubscriber(subscriber: IDataSubscriber): number {
-    if (subscriber[SUBSCRIBER_ID] === undefined) {
-      subscriber[SUBSCRIBER_ID] = this.subscriberCount;
-      this.subscriberCount += 1;
-    }
-    return subscriber[SUBSCRIBER_ID];
-  }
 
   /**
    * Inserts a chunk into the appropriate queue, or updates its queue position.
@@ -536,7 +536,7 @@ export default class DataManager {
    * submitted until the next call to `update`.
    */
   queueChunkRequest(subscriber: IDataSubscriber, chunkId: ChunkId, priority: ChunkPriority) {
-    const subscriberId = this.getIdForSubscriber(subscriber);
+    const subscriberId = getIdForSubscriber(subscriber);
     const chunkIdString = chunkIdToString(chunkId);
     const chunkEntry = this.chunks.get(chunkIdString);
 
@@ -566,7 +566,7 @@ export default class DataManager {
    * The `DataManager` will not respond to this change until the next call to `update`.
    */
   removeChunkRequest(subscriber: IDataSubscriber, chunkId: ChunkId) {
-    const subscriberId = this.getIdForSubscriber(subscriber);
+    const subscriberId = getIdForSubscriber(subscriber);
     const chunkKey = chunkIdToString(chunkId);
     const chunkEntry = this.chunks.get(chunkKey);
     if (chunkEntry === undefined) {
