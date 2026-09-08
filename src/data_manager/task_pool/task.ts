@@ -1,3 +1,5 @@
+import type { ErrorObject } from "serialize-error";
+
 import type { NumberType, TypedArray } from "../../types.js";
 import EventDispatcher from "../../EventDispatcher.js";
 
@@ -150,6 +152,6 @@ export type WorkerResponse<T extends Task = Task> = {
     }
   | {
       error: true;
-      result: unknown;
+      result: ErrorObject;
     }
 );
