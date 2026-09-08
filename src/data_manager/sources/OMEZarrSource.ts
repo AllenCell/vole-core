@@ -12,7 +12,7 @@ import { unitNameToSymbol } from "../../loaders/VolumeLoaderUtils.js";
 import type { Chunk, LocalChunkId } from "../types.js";
 import type { NumberType, TypedArray } from "../../types.js";
 import { taskHandle } from "../task_pool/task.js";
-import { ZarrEncodeTask, type ZarrDecodeTask } from "../zarr_decode_worker.js";
+import type { ZarrEncodeTask, ZarrDecodeTask } from "../zarr_codec_worker.js";
 import { TaskPool } from "../task_pool/TaskPool.js";
 
 const PLACEHOLDER_NAME = "zarr source";
