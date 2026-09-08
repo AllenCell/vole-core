@@ -105,13 +105,14 @@ export const enum ChunkState {
   WORKER = "worker",
 }
 
-export type ChunkData =
-  | { state: ChunkState.QUEUED | ChunkState.WORKER | ChunkState.LOADING }
+type ChunkEntryData =
+  | { state: ChunkState.QUEUED | ChunkState.WORKER }
+  | { state: ChunkState.LOADING; requestId: number }
   | { state: ChunkState.MEMORY; memory: TypedArray<NumberType>; dtype: NumberType }
   | { state: ChunkState.DEVICE; texture: Data3DTexture; dtype: NumberType };
 
 export type ChunkEntry = {
-  data: ChunkData;
+  data: ChunkEntryData;
   subscriberPriorities: [number, ChunkPriority][];
   priority: ChunkPriority;
 };
@@ -136,6 +137,7 @@ export const stringToChunkId = (id: string): ChunkId => {
 };
 
 export type Chunk<T extends NumberType> = {
+  id: LocalChunkId;
   data: TypedArray<T>;
   dtype: T;
 };

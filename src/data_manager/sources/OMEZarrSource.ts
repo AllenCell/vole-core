@@ -1,6 +1,6 @@
 import * as zarr from "zarrita";
 
-import type { ExtVolumeDims, IChunkSource } from "../DataManager.js";
+import { type ExtVolumeDims, ChunkSource } from "./ChunkSource.js";
 import {
   assertMetadataHasMultiscales,
   toOMEZarrMetaV4,
@@ -10,18 +10,20 @@ import type { NumericZarrArray, OMEMultiscale, OmeroTransitionalMetadata } from 
 import { getScale, orderByDimension, orderByTCZYX, remapAxesToTCZYX } from "../../loaders/zarr_utils/utils.js";
 import { unitNameToSymbol } from "../../loaders/VolumeLoaderUtils.js";
 import type { Chunk, LocalChunkId } from "../types.js";
-import type { NumberType } from "../../types.js";
+import type { NumberType, TypedArray } from "../../types.js";
 
 const PLACEHOLDER_NAME = "zarr source";
 const PLACEHOLDER_SCENE_INDEX = 0;
 
-export class OMEZarrSource implements IChunkSource {
+export class OMEZarrSource extends ChunkSource {
   private constructor(
     private scaleLevels: NumericZarrArray[],
     private multiscaleMetadata: OMEMultiscale,
     private omeroMetadata: OmeroTransitionalMetadata | undefined,
     private axesTCZYX: [number, number, number, number, number]
-  ) {}
+  ) {
+    super();
+  }
 
   static async new(url: string): Promise<OMEZarrSource> {
     const store = new zarr.FetchStore(url);
@@ -57,6 +59,32 @@ export class OMEZarrSource implements IChunkSource {
     return [spaceUnitSymbol, timeUnitSymbol];
   }
 
+  chunkIdToStorageId({ multiscale, tczyx: [t, c, z, y, x] }: LocalChunkId): LocalChunkId {
+    const level = this.scaleLevels[multiscale];
+    const [shapeT, shapeC] = orderByTCZYX(level.chunks, this.axesTCZYX, 1);
+    const keyT = Math.floor(t / shapeT);
+    const keyC = Math.floor(c / shapeC);
+    return { multiscale, tczyx: [keyT, keyC, z, y, x] };
+  }
+
+  storageIdToChunkIds({ multiscale, tczyx: [t, c, z, y, x] }: LocalChunkId): LocalChunkId[] {
+    const level = this.scaleLevels[multiscale];
+    const [shapeT, shapeC] = orderByTCZYX(level.chunks, this.axesTCZYX, 1);
+
+    const minT = t * shapeT;
+    const maxT = minT + shapeT;
+    const minC = c * shapeC;
+    const maxC = minC + shapeC;
+
+    const chunksInKey: LocalChunkId[] = [];
+    for (let chunkT = minT; chunkT < maxT; chunkT++) {
+      for (let chunkC = minC; chunkC < maxC; chunkC++) {
+        chunksInKey.push({ multiscale, tczyx: [chunkT, chunkC, z, y, x] });
+      }
+    }
+    return chunksInKey;
+  }
+
   getDims(): ExtVolumeDims[] {
     const [spaceUnit, timeUnit] = this.getUnitSymbols();
     return this.scaleLevels.map((level, i) => {
@@ -72,10 +100,10 @@ export class OMEZarrSource implements IChunkSource {
     });
   }
 
-  async getChunk(chunkId: LocalChunkId): Promise<Chunk<NumberType>> {
-    const multiscale = this.scaleLevels[chunkId.multiscale];
-    const coords = orderByDimension(chunkId.tczyx, this.axesTCZYX);
-    const { data } = await multiscale.getChunk(coords);
-    return { data, dtype: multiscale.dtype };
+  async getKey(id: LocalChunkId, signal?: AbortSignal): Promise<Chunk<NumberType>[]> {
+    const multiscale = this.scaleLevels[id.multiscale];
+    const coords = orderByDimension(id.tczyx, this.axesTCZYX);
+    const { data } = (await multiscale.getChunk(coords, { signal })) as { data: TypedArray<NumberType> };
+    return [{ data, dtype: multiscale.dtype, id }];
   }
 }
