@@ -118,6 +118,23 @@ export default class DataManager<Dev, Tex> {
 
   // MARK: Helpers
 
+  private tryAbortRequest(id: number): boolean {
+    const request = this.requests.get(id);
+    if (request === undefined) {
+      return false;
+    }
+
+    const canAbort = request.chunkKeys.every((key) => {
+      const chunk = this.chunks.get(key);
+      return chunk === undefined || chunk.priority.level === ChunkPriorityLevel.RECENT;
+    });
+
+    if (canAbort) {
+      request.controller.abort();
+    }
+    return canAbort;
+  }
+
   /**
    * Inserts a chunk into the appropriate queue, or updates its queue position.
    *
