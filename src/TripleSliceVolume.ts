@@ -36,9 +36,17 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
   private volume: Volume;
   private baseSettings: VolumeRenderSettings;
 
-  // Crosshair lines: 2 per pane (vertical + horizontal)
+  // Crosshair lines: 2 per pane (vertical + horizontal), plus a darker "drop shadow"
+  // line offset by a fixed number of screen pixels below/right of each one.
   private crosshairMaterial: LineBasicMaterial;
+  private crosshairShadowMaterial: LineBasicMaterial;
   private crosshairLines: [Line, Line, Line, Line, Line, Line]; // [xyV, xyH, yzV, yzH, xzV, xzH]
+  private crosshairShadowLines: [Line, Line, Line, Line, Line, Line];
+
+  // Updated by updateLayout(); used to convert CROSSHAIR_SHADOW_OFFSET_PIXELS into the
+  // unscaled physical-size units that crosshair line endpoints are expressed in.
+  private pixelsPerWorldUnit = 0;
+  private fitScale = 1;
 
   /**
    * Triple view has a fixed, screen-aligned pane layout. Preserve axis flips,
@@ -83,20 +91,40 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
     // Request full volume data for YZ/XZ slicing
     volume.updateRequiredData({ subregion: new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1)) });
 
-    // Create crosshair overlay lines (2 per pane, on OVERLAY_LAYER)
+    // Create crosshair overlay lines (2 per pane, on OVERLAY_LAYER), plus a darker
+    // shadow line behind each one for a subtle drop-shadow effect.
     this.crosshairMaterial = new LineBasicMaterial({ color: 0xffffff, depthTest: false, depthWrite: false });
-    this.crosshairLines = [
-      this.createCrosshairLine(),
-      this.createCrosshairLine(),
-      this.createCrosshairLine(),
-      this.createCrosshairLine(),
-      this.createCrosshairLine(),
-      this.createCrosshairLine(),
+    this.crosshairShadowMaterial = new LineBasicMaterial({
+      color: TripleSliceVolume.CROSSHAIR_SHADOW_COLOR,
+      depthTest: false,
+      depthWrite: false,
+    });
+    this.crosshairShadowLines = [
+      this.createCrosshairLine(this.crosshairShadowMaterial, 0),
+      this.createCrosshairLine(this.crosshairShadowMaterial, 0),
+      this.createCrosshairLine(this.crosshairShadowMaterial, 0),
+      this.createCrosshairLine(this.crosshairShadowMaterial, 0),
+      this.createCrosshairLine(this.crosshairShadowMaterial, 0),
+      this.createCrosshairLine(this.crosshairShadowMaterial, 0),
     ];
-    // Add each pair to its renderer's Group
-    this.renderers[0].get3dObject().add(this.crosshairLines[0], this.crosshairLines[1]);
-    this.renderers[1].get3dObject().add(this.crosshairLines[2], this.crosshairLines[3]);
-    this.renderers[2].get3dObject().add(this.crosshairLines[4], this.crosshairLines[5]);
+    this.crosshairLines = [
+      this.createCrosshairLine(this.crosshairMaterial, 1),
+      this.createCrosshairLine(this.crosshairMaterial, 1),
+      this.createCrosshairLine(this.crosshairMaterial, 1),
+      this.createCrosshairLine(this.crosshairMaterial, 1),
+      this.createCrosshairLine(this.crosshairMaterial, 1),
+      this.createCrosshairLine(this.crosshairMaterial, 1),
+    ];
+    // Add each pane's shadow lines before its main lines so the main lines draw on top.
+    this.renderers[0]
+      .get3dObject()
+      .add(this.crosshairShadowLines[0], this.crosshairShadowLines[1], this.crosshairLines[0], this.crosshairLines[1]);
+    this.renderers[1]
+      .get3dObject()
+      .add(this.crosshairShadowLines[2], this.crosshairShadowLines[3], this.crosshairLines[2], this.crosshairLines[3]);
+    this.renderers[2]
+      .get3dObject()
+      .add(this.crosshairShadowLines[4], this.crosshairShadowLines[5], this.crosshairLines[4], this.crosshairLines[5]);
 
     // Apply initial slice indices to renderers
     this.applyAllSliceIndices();
@@ -166,7 +194,11 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
   cleanup(): void {
     // Dispose crosshair resources
     this.crosshairMaterial.dispose();
+    this.crosshairShadowMaterial.dispose();
     for (const line of this.crosshairLines) {
+      line.geometry.dispose();
+    }
+    for (const line of this.crosshairShadowLines) {
       line.geometry.dispose();
     }
     // Clean up non-primary renderers first (they share primary's channel data)
@@ -250,27 +282,47 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
     const halfPy = phys.y * 0.5;
     const halfPz = phys.z * 0.5;
 
+    // Shadow lines sit a fixed number of screen pixels right of the vertical line /
+    // below the horizontal line, regardless of current zoom.
+    const shadow = this.getCrosshairShadowOffset();
+
     const [xyV, xyH, yzV, yzH, xzV, xzH] = this.crosshairLines;
+    const [xyVs, xyHs, yzVs, yzHs, xzVs, xzHs] = this.crosshairShadowLines;
 
     // XY pane: vertical at x=nx spanning Y, horizontal at y=ny spanning X
     this.setCrosshairEndpoints(xyV, [nx, -halfPy, 0], [nx, halfPy, 0]);
     this.setCrosshairEndpoints(xyH, [-halfPx, ny, 0], [halfPx, ny, 0]);
+    this.setCrosshairEndpoints(xyVs, [nx + shadow, -halfPy, 0], [nx + shadow, halfPy, 0]);
+    this.setCrosshairEndpoints(xyHs, [-halfPx, ny - shadow, 0], [halfPx, ny - shadow, 0]);
 
     // YZ pane: vertical at display X=nz spanning Y, horizontal at y=ny spanning Z
     this.setCrosshairEndpoints(yzV, [nz, -halfPy, 0], [nz, halfPy, 0]);
     this.setCrosshairEndpoints(yzH, [-halfPz, ny, 0], [halfPz, ny, 0]);
+    this.setCrosshairEndpoints(yzVs, [nz + shadow, -halfPy, 0], [nz + shadow, halfPy, 0]);
+    this.setCrosshairEndpoints(yzHs, [-halfPz, ny - shadow, 0], [halfPz, ny - shadow, 0]);
 
     // XZ pane: vertical at display X=nx spanning Z, horizontal at y=nz spanning X
     this.setCrosshairEndpoints(xzV, [nx, -halfPz, 0], [nx, halfPz, 0]);
     this.setCrosshairEndpoints(xzH, [-halfPx, nz, 0], [halfPx, nz, 0]);
+    this.setCrosshairEndpoints(xzVs, [nx + shadow, -halfPz, 0], [nx + shadow, halfPz, 0]);
+    this.setCrosshairEndpoints(xzHs, [-halfPx, nz - shadow, 0], [halfPx, nz - shadow, 0]);
   }
 
-  private createCrosshairLine(): Line {
+  /** Converts a fixed screen-pixel offset into the unscaled physical-size units used above. */
+  private getCrosshairShadowOffset(): number {
+    if (this.pixelsPerWorldUnit <= 0 || this.fitScale <= 0) {
+      return 0;
+    }
+    return TripleSliceVolume.CROSSHAIR_SHADOW_OFFSET_PIXELS / (this.pixelsPerWorldUnit * this.fitScale);
+  }
+
+  private createCrosshairLine(material: LineBasicMaterial, renderOrder: number): Line {
     const geom = new BufferGeometry();
     geom.setAttribute("position", new Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
-    const line = new Line(geom, this.crosshairMaterial);
+    const line = new Line(geom, material);
     line.layers.set(OVERLAY_LAYER);
     line.frustumCulled = false;
+    line.renderOrder = renderOrder;
     return line;
   }
 
@@ -283,6 +335,12 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
 
   /** Gap between panes in CSS pixels. */
   private static readonly TRIPLE_VIEW_GAP = 2;
+
+  /** Offset of each crosshair's drop-shadow line, in screen pixels. */
+  private static readonly CROSSHAIR_SHADOW_OFFSET_PIXELS = 1;
+
+  /** Color of the crosshair drop-shadow lines (a dark, but not pure black, gray). */
+  private static readonly CROSSHAIR_SHADOW_COLOR = 0x333333;
 
   /**
    * Recomputes the layout of the three slice panes to fit within the current camera frustum.
@@ -313,6 +371,8 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
       return;
     }
     const { fitScale, px, py, pz } = layout;
+    this.pixelsPerWorldUnit = pixelsPerWorldUnit;
+    this.fitScale = fitScale;
 
     // Apply uniform scale to the parent group
     this.group.scale.set(fitScale, fitScale, 1);
@@ -336,6 +396,9 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
     const xzX = -totalW / 2 + px / 2;
     const xzY = totalH / 2 - pz / 2;
     this.renderers[2].get3dObject().position.set(xzX, xzY, 0);
+
+    // Shadow offset above depends on pixelsPerWorldUnit/fitScale, just computed.
+    this.updateCrosshairs();
   }
 
   /**
