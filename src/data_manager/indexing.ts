@@ -21,8 +21,8 @@ const shapeToStrides = (shape: number[], length: number): number[] => {
 
 const set = <T extends NumberType = NumberType>(
   src: TypedArray<T>,
-  srcStrides: number[],
   dest: TypedArray<T>,
+  srcStrides: number[],
   destStrides: number[],
   offsets: number[]
 ) => {
@@ -43,7 +43,7 @@ const set = <T extends NumberType = NumberType>(
     destEnd = destStart + destStride;
     const srcSlice = src.subarray(srcStart, srcEnd);
     const destSlice = dest.subarray(destStart, destEnd);
-    set(srcSlice, srcStridesRest, destSlice, destStridesRest, offsetsRest);
+    set(srcSlice, destSlice, srcStridesRest, destStridesRest, offsetsRest);
     srcStart = srcEnd;
     destStart = destEnd;
   }
@@ -56,5 +56,5 @@ export const setFromChunk = <T extends NumberType = NumberType>(
 ) => {
   const srcStrides = shapeToStrides(srcShape, src.length);
   const destStrides = shapeToStrides(destShape, dest.length);
-  set(src, srcStrides, dest, destStrides, offset);
+  set(src, dest, srcStrides, destStrides, offset);
 };
