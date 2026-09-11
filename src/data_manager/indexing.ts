@@ -2,7 +2,18 @@ import type { TypedArray, NumberType } from "../types.js";
 
 const headTail = <T>(list: T[]): [T, T[]] => [list[0], list.splice(1)];
 
-export const setFromChunk = <T extends NumberType = NumberType>(
+const shapeToStrides = (shape: number[], length: number): number[] => {
+  const strides = shape.reduceRight((strides, dim) => [dim * (strides[0] ?? 1), ...strides], [] as number[]);
+  const [expectedLength, result] = headTail(strides);
+  if (expectedLength !== length) {
+    throw new Error(
+      `n-dimensional array length does not match dimensions (expected ${expectedLength}, found ${length})`
+    );
+  }
+  return result;
+};
+
+const set = <T extends NumberType = NumberType>(
   src: TypedArray<T>,
   srcStrides: number[],
   dest: TypedArray<T>,
@@ -26,8 +37,20 @@ export const setFromChunk = <T extends NumberType = NumberType>(
     destEnd = destStart + destStride;
     const srcSlice = src.subarray(srcStart, srcEnd);
     const destSlice = dest.subarray(destStart, destEnd);
-    setFromChunk(srcSlice, srcStridesRest, destSlice, destStridesRest, offsetsRest);
+    set(srcSlice, srcStridesRest, destSlice, destStridesRest, offsetsRest);
     srcStart = srcEnd;
     destStart = destEnd;
   }
+};
+
+export const setFromChunk = <T extends NumberType = NumberType>(
+  src: TypedArray<T>,
+  srcShape: number[],
+  dest: TypedArray<T>,
+  destShape: number[],
+  offset: number[]
+) => {
+  const srcStrides = shapeToStrides(srcShape, src.length);
+  const destStrides = shapeToStrides(destShape, dest.length);
+  set(src, srcStrides, dest, destStrides, offset);
 };
