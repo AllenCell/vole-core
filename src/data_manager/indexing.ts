@@ -1,5 +1,11 @@
 import type { TypedArray, NumberType } from "../types.js";
 
+export type SetChunkParams = {
+  srcShape: number[];
+  destShape: number[];
+  offset: number[];
+};
+
 const headTail = <T>(list: T[]): [T, T[]] => [list[0], list.splice(1)];
 
 const shapeToStrides = (shape: number[], length: number): number[] => {
@@ -45,10 +51,8 @@ const set = <T extends NumberType = NumberType>(
 
 export const setFromChunk = <T extends NumberType = NumberType>(
   src: TypedArray<T>,
-  srcShape: number[],
   dest: TypedArray<T>,
-  destShape: number[],
-  offset: number[]
+  { srcShape, destShape, offset }: SetChunkParams
 ) => {
   const srcStrides = shapeToStrides(srcShape, src.length);
   const destStrides = shapeToStrides(destShape, dest.length);
