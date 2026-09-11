@@ -3,10 +3,12 @@ import {
   Data3DTexture,
   FloatType,
   IntType,
+  type PixelFormat,
   PixelFormatGPU,
   RedFormat,
   RedIntegerFormat,
   ShortType,
+  type TextureDataType,
   UnsignedByteType,
   UnsignedIntType,
   UnsignedShortType,
@@ -67,7 +69,9 @@ const swapRemove = <T>(arr: T[], index: number) => {
 };
 
 // TODO these maps should go in a utils module somewhere (src/types.ts?)
-const dataTypeToTextureProperties: { [T in Exclude<NumberType, "float64">]: [number, number, PixelFormatGPU] } = {
+const dataTypeToTextureProperties: {
+  [T in Exclude<NumberType, "float64">]: [TextureDataType, PixelFormat, PixelFormatGPU];
+} = {
   int8: [ByteType, RedIntegerFormat, "R8I"],
   int16: [ShortType, RedIntegerFormat, "R16I"],
   int32: [IntType, RedIntegerFormat, "R32I"],
