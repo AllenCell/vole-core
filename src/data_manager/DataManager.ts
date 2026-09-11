@@ -154,7 +154,7 @@ export default class DataManager<Dev, Tex> {
         break;
       case ChunkState.LOADING:
         if (entry.memoryPriority.level === ChunkPriorityLevel.RECENT && !noAbort) {
-          // TODO cancel request here
+          this.tryAbortRequest(entry.data.requestId);
         }
         break;
       case ChunkState.WORKER:
@@ -192,7 +192,7 @@ export default class DataManager<Dev, Tex> {
   /**
    * Adds an entry for a chunk that has no requests.
    *
-   * If we're adding an entry for a chunk that no one asked for, something at least a little unexpected has happened.
+   * This happens when fetching a requested chunk also requires getting a chunk that no one asked for.
    */
   private insertChunkUnprioritized(key: string, data: ChunkEntry<Tex>["data"]): ChunkEntry<Tex> {
     const entry = {
@@ -390,7 +390,7 @@ export default class DataManager<Dev, Tex> {
           break;
         case ChunkState.LOADING:
           console.error(`chunk ${evictKey} queued for eviction while in the "loading" state`);
-          // TODO cancel request
+          this.tryAbortRequest(evictEntry.data.requestId);
           break;
         default:
           // TODO `WORKER` state may be weird to manage here

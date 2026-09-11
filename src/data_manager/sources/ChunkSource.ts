@@ -8,7 +8,7 @@ export type ExtVolumeDims = VolumeDims & { chunkShape: [number, number, number, 
 
 export abstract class ChunkSource {
   /**
-   * Maps a chunk `id` to the *storage key* that contains it, and all chunk ids contained in that key.
+   * Maps a chunk `id` to the *storage key* that contains it.
    *
    * In most cases, a chunk id and its storage key are the same. However, `DataManager` requires that chunks extend
    * over exactly one channel and exactly one time point, and some data formats may allow multiple channels and/or time
