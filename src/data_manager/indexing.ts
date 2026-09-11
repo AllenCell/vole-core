@@ -7,6 +7,29 @@ export type SetChunkParams = {
 };
 
 const headTail = <T>(list: T[]): [T, T[]] => [list[0], list.splice(1)];
+const last = <T>(list: T[]): T => list[list.length - 1];
+const empty = <T>(list: T[]): list is [] => list.length === 0;
+
+/** Combines dimensions that can be copied in a single `set` */
+export const consolidateParams = (params: SetChunkParams): SetChunkParams => {
+  const srcShape = [...params.srcShape];
+  const destShape = [...params.destShape];
+  const offset = [...params.offset];
+  while (
+    !empty(offset) &&
+    !empty(srcShape) &&
+    !empty(destShape) &&
+    last(offset) === 0 &&
+    last(srcShape) === last(destShape)
+  ) {
+    offset.pop();
+    destShape.pop();
+    const shape = srcShape.pop()!;
+    srcShape[srcShape.length - 1] *= shape;
+    destShape[destShape.length - 1] *= shape;
+  }
+  return { srcShape, destShape, offset };
+};
 
 const shapeToStrides = (shape: number[], length: number): number[] => {
   const strides = shape.reduceRight((strides, dim) => [dim * (strides[0] ?? 1), ...strides], [] as number[]);
@@ -52,8 +75,9 @@ const set = <T extends NumberType = NumberType>(
 export const setFromChunk = <T extends NumberType = NumberType>(
   src: TypedArray<T>,
   dest: TypedArray<T>,
-  { srcShape, destShape, offset }: SetChunkParams
+  params: SetChunkParams
 ) => {
+  const { srcShape, destShape, offset } = consolidateParams(params);
   const srcStrides = shapeToStrides(srcShape, src.length);
   const destStrides = shapeToStrides(destShape, dest.length);
   set(src, dest, srcStrides, destStrides, offset);
