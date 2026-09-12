@@ -6,8 +6,8 @@ export type SetChunkParams = {
   offset: number[];
 };
 
-const splitHead = <T>(list: T[]): [T, T[]] => [list[0], list.splice(1)];
-const splitLast = <T>(list: T[]): [T[], T] => [list.splice(0, list.length - 1), list[list.length - 1]];
+const splitHead = <T>(list: T[]): [T, T[]] => [list[0], list.slice(1)];
+const splitLast = <T>(list: T[]): [T[], T] => [list.slice(0, list.length - 1), list[list.length - 1]];
 
 /** Combines dimensions that can be copied in a single `set` */
 export const consolidateContiguous = (params: SetChunkParams): SetChunkParams => {
