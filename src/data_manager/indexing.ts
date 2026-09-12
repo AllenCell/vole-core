@@ -7,27 +7,29 @@ export type SetChunkParams = {
 };
 
 const headTail = <T>(list: T[]): [T, T[]] => [list[0], list.splice(1)];
-const last = <T>(list: T[]): T => list[list.length - 1];
-const empty = <T>(list: T[]): list is [] => list.length === 0;
+const initLast = <T>(list: T[]): [T[], T] => [list.splice(0, list.length - 1), list[list.length - 1]];
 
 /** Combines dimensions that can be copied in a single `set` */
-export const consolidateParams = (params: SetChunkParams): SetChunkParams => {
-  const srcShape = [...params.srcShape];
-  const destShape = [...params.destShape];
-  const offset = [...params.offset];
-  while (
-    !empty(offset) &&
-    !empty(srcShape) &&
-    !empty(destShape) &&
-    last(offset) === 0 &&
-    last(srcShape) === last(destShape)
-  ) {
-    offset.pop();
-    destShape.pop();
-    const shape = srcShape.pop()!;
-    srcShape[srcShape.length - 1] *= shape;
-    destShape[destShape.length - 1] *= shape;
+export const consolidateContiguous = (params: SetChunkParams): SetChunkParams => {
+  let { srcShape, destShape, offset } = params;
+
+  while (true) {
+    const [srcRest, srcLast] = initLast(srcShape);
+    const [destRest, destLast] = initLast(destShape);
+    const [offsetRest, offsetLast] = initLast(offset);
+
+    if (srcRest.length < 1 || destRest.length < 1 || srcLast !== destLast || offsetLast !== 0) {
+      break;
+    }
+
+    srcShape = srcRest;
+    destShape = destRest;
+    offset = offsetRest;
+    srcShape[srcShape.length - 1] *= srcLast;
+    destShape[destShape.length - 1] *= destLast;
+    offset[offset.length - 1] *= srcLast;
   }
+
   return { srcShape, destShape, offset };
 };
 
@@ -77,7 +79,7 @@ export const setFromChunk = <T extends NumberType = NumberType>(
   dest: TypedArray<T>,
   params: SetChunkParams
 ) => {
-  const { srcShape, destShape, offset } = consolidateParams(params);
+  const { srcShape, destShape, offset } = consolidateContiguous(params);
   const srcStrides = shapeToStrides(srcShape, src.length);
   const destStrides = shapeToStrides(destShape, dest.length);
   set(src, dest, srcStrides, destStrides, offset);
