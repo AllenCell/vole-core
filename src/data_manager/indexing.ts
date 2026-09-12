@@ -6,17 +6,17 @@ export type SetChunkParams = {
   offset: number[];
 };
 
-const headTail = <T>(list: T[]): [T, T[]] => [list[0], list.splice(1)];
-const initLast = <T>(list: T[]): [T[], T] => [list.splice(0, list.length - 1), list[list.length - 1]];
+const splitHead = <T>(list: T[]): [T, T[]] => [list[0], list.splice(1)];
+const splitLast = <T>(list: T[]): [T[], T] => [list.splice(0, list.length - 1), list[list.length - 1]];
 
 /** Combines dimensions that can be copied in a single `set` */
 export const consolidateContiguous = (params: SetChunkParams): SetChunkParams => {
   let { srcShape, destShape, offset } = params;
 
   while (true) {
-    const [srcRest, srcLast] = initLast(srcShape);
-    const [destRest, destLast] = initLast(destShape);
-    const [offsetRest, offsetLast] = initLast(offset);
+    const [srcRest, srcLast] = splitLast(srcShape);
+    const [destRest, destLast] = splitLast(destShape);
+    const [offsetRest, offsetLast] = splitLast(offset);
 
     if (srcRest.length < 1 || destRest.length < 1 || srcLast !== destLast || offsetLast !== 0) {
       break;
@@ -26,7 +26,7 @@ export const consolidateContiguous = (params: SetChunkParams): SetChunkParams =>
     destShape = destRest;
     offset = offsetRest;
     srcShape[srcShape.length - 1] *= srcLast;
-    destShape[destShape.length - 1] *= destLast;
+    destShape[destShape.length - 1] *= srcLast;
     offset[offset.length - 1] *= srcLast;
   }
 
@@ -35,7 +35,7 @@ export const consolidateContiguous = (params: SetChunkParams): SetChunkParams =>
 
 const shapeToStrides = (shape: number[], length: number): number[] => {
   const strides = shape.reduceRight((strides, dim) => [dim * (strides[0] ?? 1), ...strides], [] as number[]);
-  const [expectedLength, result] = headTail(strides);
+  const [expectedLength, result] = splitHead(strides);
   if (expectedLength !== length) {
     throw new Error(
       `n-dimensional array length does not match dimensions (expected ${expectedLength}, found ${length})`
@@ -56,9 +56,9 @@ const set = <T extends NumberType = NumberType>(
     return;
   }
 
-  const [srcStride, srcStridesRest] = headTail(srcStrides);
-  const [destStride, destStridesRest] = headTail(destStrides);
-  const [offset, offsetsRest] = headTail(offsets);
+  const [srcStride, srcStridesRest] = splitHead(srcStrides);
+  const [destStride, destStridesRest] = splitHead(destStrides);
+  const [offset, offsetsRest] = splitHead(offsets);
   let srcStart = 0;
   let destStart = destStride * offset;
   let srcEnd: number, destEnd: number;
