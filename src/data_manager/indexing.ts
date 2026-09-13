@@ -9,32 +9,31 @@ export type SetChunkParams = {
 const splitHead = <T>(list: T[]): [T, T[]] => [list[0], list.slice(1)];
 const splitLast = <T>(list: T[]): [T[], T] => [list.slice(0, list.length - 1), list[list.length - 1]];
 
-/** Combines dimensions that can be copied in a single `set` */
+/** Combines dimensions that can be copied in a single `set`. */
 export const consolidateContiguous = (params: SetChunkParams): SetChunkParams => {
-  let { srcShape, destShape, offset } = params;
+  const { srcShape, destShape, offset } = params;
 
-  while (true) {
-    const [srcRest, srcLast] = splitLast(srcShape);
-    const [destRest, destLast] = splitLast(destShape);
-    const [offsetRest, offsetLast] = splitLast(offset);
-
-    if (srcRest.length < 1 || destRest.length < 1 || srcLast !== destLast || offsetLast !== 0) {
-      break;
-    }
-
-    srcShape = srcRest;
-    destShape = destRest;
-    offset = offsetRest;
-    srcShape[srcShape.length - 1] *= srcLast;
-    destShape[destShape.length - 1] *= srcLast;
-    offset[offset.length - 1] *= srcLast;
+  if (srcShape.length < 2 || destShape.length < 2) {
+    return params;
   }
 
-  return { srcShape, destShape, offset };
+  const [srcRest, srcLast] = splitLast(srcShape);
+  const [destRest, destLast] = splitLast(destShape);
+  const [offsetRest, offsetLast] = splitLast(offset);
+
+  if (srcLast !== destLast || offsetLast !== 0) {
+    return params;
+  }
+
+  srcRest[srcRest.length - 1] *= srcLast;
+  destRest[destRest.length - 1] *= srcLast;
+  offsetRest[offsetRest.length - 1] *= srcLast;
+
+  return consolidateContiguous({ srcShape: srcRest, destShape: destRest, offset: offsetRest });
 };
 
 const shapeToStrides = (shape: number[], length: number): number[] => {
-  const strides = shape.reduceRight((strides, dim) => [dim * (strides[0] ?? 1), ...strides], [] as number[]);
+  const strides = shape.reduceRight<number[]>((strides, dim) => [dim * (strides[0] ?? 1), ...strides], []);
   const [expectedLength, result] = splitHead(strides);
   if (expectedLength !== length) {
     throw new Error(
