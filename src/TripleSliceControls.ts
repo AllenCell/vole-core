@@ -24,7 +24,7 @@ export default class TripleSliceControls {
 
   private dragging = false;
   private dragPane?: "xy" | "yz" | "xz";
-  private dragAxis?: "u" | "v";
+  private dragAxis?: "u" | "v" | "both";
   private boundPointerDown?: (e: PointerEvent) => void;
   private boundPointerMove?: (e: PointerEvent) => void;
   private boundPointerUp?: (e: PointerEvent) => void;
@@ -72,6 +72,7 @@ export default class TripleSliceControls {
     this.boundDblClick = undefined;
     this.dragging = false;
     this.dragAxis = undefined;
+    this.host.containerdiv.style.cursor = "";
   }
 
   // --- Hit testing ---
@@ -116,7 +117,7 @@ export default class TripleSliceControls {
     return { u, v };
   }
 
-  private hitTestCrosshairLine(clientX: number, clientY: number, paneKey: "xy" | "yz" | "xz"): "u" | "v" | null {
+  private hitTestCrosshairLine(clientX: number, clientY: number, paneKey: "xy" | "yz" | "xz"): "u" | "v" | "both" | null {
     if (!this.source) {
       return null;
     }
@@ -158,9 +159,9 @@ export default class TripleSliceControls {
     const distToVertical = Math.abs(mx - verticalLineX);
     const distToHorizontal = Math.abs(my - horizontalLineY);
 
-    // If both are within threshold, pick the closer one
+    // If near the intersection, signal that both axes will move together
     if (distToVertical <= threshold && distToHorizontal <= threshold) {
-      return distToVertical <= distToHorizontal ? "v" : "u";
+      return "both";
     }
     if (distToVertical <= threshold) {
       return "v";
@@ -169,6 +170,14 @@ export default class TripleSliceControls {
       return "u";
     }
     return null;
+  }
+
+  // --- Cursor styling ---
+
+  /** "v" = vertical line grabbed (drag horizontally); "u" = horizontal line; "both" = intersection. */
+  private static cursorForAxis(axis: "u" | "v" | "both"): string {
+    if (axis === "both") return "move";
+    return axis === "v" ? "ew-resize" : "ns-resize";
   }
 
   // --- Event handlers ---
@@ -183,6 +192,7 @@ export default class TripleSliceControls {
       this.dragging = true;
       this.dragPane = pane;
       this.dragAxis = selectedAxis;
+      this.host.containerdiv.style.cursor = TripleSliceControls.cursorForAxis(selectedAxis);
       this.handleDrag(e.clientX, e.clientY, pane, selectedAxis);
     }
   }
@@ -190,13 +200,19 @@ export default class TripleSliceControls {
   private onPointerMove(e: PointerEvent): void {
     if (this.dragging && this.dragPane && this.dragAxis) {
       this.handleDrag(e.clientX, e.clientY, this.dragPane, this.dragAxis);
+      return;
     }
+
+    const pane = this.hitTestPane(e.clientX, e.clientY);
+    const hoveredAxis = pane ? this.hitTestCrosshairLine(e.clientX, e.clientY, pane) : null;
+    this.host.containerdiv.style.cursor = hoveredAxis ? TripleSliceControls.cursorForAxis(hoveredAxis) : "";
   }
 
   private onPointerUp(_e: PointerEvent): void {
     this.dragging = false;
     this.dragPane = undefined;
     this.dragAxis = undefined;
+    this.host.containerdiv.style.cursor = "";
   }
 
   private onDblClick(e: MouseEvent): void {
@@ -231,7 +247,7 @@ export default class TripleSliceControls {
     this.host.redraw();
   }
 
-  private handleDrag(clientX: number, clientY: number, paneKey: "xy" | "yz" | "xz", axis: "u" | "v"): void {
+  private handleDrag(clientX: number, clientY: number, paneKey: "xy" | "yz" | "xz", axis: "u" | "v" | "both"): void {
     if (!this.source) {
       return;
     }
@@ -242,28 +258,31 @@ export default class TripleSliceControls {
 
     const volSize = this.source.getVolumeSize();
 
-    // The vertical or horizontal axis depends on which projection pane we are in.
-    // axis "v" → dragging the vertical line → updates the u-coordinate
-    // axis "u" → dragging the horizontal line → updates the v-coordinate
+    // axis "v"    → dragging the vertical line   → updates the u-coordinate
+    // axis "u"    → dragging the horizontal line  → updates the v-coordinate
+    // axis "both" → near intersection             → updates both coordinates
     switch (paneKey) {
       case "xy":
-        if (axis === "v") {
+        if (axis === "v" || axis === "both") {
           this.source.setSliceIndex(Axis.X, Math.round(uv.u * (volSize.x - 1)));
-        } else {
+        }
+        if (axis === "u" || axis === "both") {
           this.source.setSliceIndex(Axis.Y, Math.round(uv.v * (volSize.y - 1)));
         }
         break;
       case "yz":
-        if (axis === "v") {
+        if (axis === "v" || axis === "both") {
           this.source.setSliceIndex(Axis.Z, Math.round(uv.u * (volSize.z - 1)));
-        } else {
+        }
+        if (axis === "u" || axis === "both") {
           this.source.setSliceIndex(Axis.Y, Math.round(uv.v * (volSize.y - 1)));
         }
         break;
       case "xz":
-        if (axis === "v") {
+        if (axis === "v" || axis === "both") {
           this.source.setSliceIndex(Axis.X, Math.round(uv.u * (volSize.x - 1)));
-        } else {
+        }
+        if (axis === "u" || axis === "both") {
           this.source.setSliceIndex(Axis.Z, Math.round(uv.v * (volSize.z - 1)));
         }
         break;
