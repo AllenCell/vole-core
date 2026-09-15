@@ -1,9 +1,13 @@
 import { ARRAY_CONSTRUCTORS, type NumberType, type TypedArray } from "../types.js";
 
 export type CopyChunkParams = {
+  /** Dimensions of the source array, in majority-increasing order. */
   srcShape: number[];
+  /** Dimensions of the destination array, in majority-increasing order. */
   destShape: number[];
+  /** Offset at which to copy the source chunk in the destination array per dimension. */
   offset: number[];
+  /** Order of dimensions in the destination array, assuming source dimension order is `[1, 2, 3, ... ]`. */
   dimensionOrder?: number[];
 };
 
@@ -102,6 +106,7 @@ export const copyChunk = (src: TypedArray, dest: TypedArray, params: CopyChunkPa
   }
 };
 
+/** Special case of `copyChunk`: reorders the dimensions of `src` according to `order` into a new buffer. */
 export const reorderChunk = (src: TypedArray, shape: number[], order: number[], dtype: NumberType): TypedArray => {
   const dest = new ARRAY_CONSTRUCTORS[dtype](src.length);
   const params = {
