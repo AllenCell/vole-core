@@ -11,13 +11,43 @@ export type CopyChunkParams = {
   dimensionOrder?: number[];
 };
 
+export class ChunkIndexError extends Error {
+  constructor(message: string) {
+    super("ChunkIndexError: " + message);
+  }
+}
+
+const last = <T>(arr: T[]): T => arr[arr.length - 1];
+
+const validateCopyChunkParams = ({ srcShape, destShape, offset, dimensionOrder }: CopyChunkParams): void => {
+  const srcRank = srcShape.length;
+  const destRank = destShape.length;
+  if (destRank !== srcRank) {
+    throw new ChunkIndexError(`destination array rank (${destRank}) does not match source chunk rank (${srcRank})`);
+  }
+  if (offset.length !== srcRank) {
+    throw new ChunkIndexError(`offset rank ${offset.length} does not match source chunk rank ${srcRank}`);
+  }
+  if (dimensionOrder !== undefined && dimensionOrder.length !== srcRank) {
+    const { length } = dimensionOrder;
+    throw new ChunkIndexError(`dimension order rank (${length}) does not match source chunk rank (${srcRank})`);
+  }
+  destShape.forEach((destDim, idx) => {
+    const srcDim = srcShape[idx];
+    const offsetI = offset[idx];
+    if (srcDim + offsetI > destDim) {
+      throw new ChunkIndexError(
+        `dimension ${idx} out of bounds (destination length ${destDim} vs. source length ${srcDim} + offset ${offsetI})`
+      );
+    }
+  });
+};
+
 const shapeToStrides = (shape: number[], length: number): number[] => {
   const strides = shape.reduceRight<number[]>((strides, dim) => [dim * strides[0], ...strides], [1]);
   const expectedLength = strides.shift();
   if (expectedLength !== length) {
-    throw new Error(
-      `n-dimensional array length does not match dimensions (expected ${expectedLength}, found ${length})`
-    );
+    throw new ChunkIndexError(`buffer length does not match dimensions (expected ${expectedLength}, found ${length})`);
   }
   return strides;
 };
@@ -60,9 +90,14 @@ function* indexes(start: number[], step: number[], count: number[]) {
   }
 }
 
-const last = <T>(arr: T[]): T => arr[arr.length - 1];
-
+/**
+ * Copies an n-dimensional chunk into an n-dimensional destination array of equal or larger size.
+ *
+ * Handles placing the chunk at arbitrary offsets in the larger array (if )
+ */
 export const copyChunk = (src: TypedArray, dest: TypedArray, params: CopyChunkParams): void => {
+  validateCopyChunkParams(params);
+
   const srcStrides = shapeToStrides(params.srcShape, src.length);
   let destStrides = shapeToStrides(params.destShape, dest.length);
   let destStart = destStrides.map((stride, i) => stride * params.offset[i]);
@@ -71,7 +106,7 @@ export const copyChunk = (src: TypedArray, dest: TypedArray, params: CopyChunkPa
   // Resolve dimension order
   if (params.dimensionOrder) {
     if ([...params.dimensionOrder].sort().some((val, idx) => val !== idx)) {
-      throw new Error(`invalid dimension order: missing or duplicated dimensions (${params.dimensionOrder})`);
+      throw new ChunkIndexError(`invalid dimension order: missing or duplicated dimensions (${params.dimensionOrder})`);
     }
     destStart = params.dimensionOrder.map((i) => destStart[i]);
     destStrides = params.dimensionOrder.map((i) => destStrides[i]);
@@ -106,7 +141,10 @@ export const copyChunk = (src: TypedArray, dest: TypedArray, params: CopyChunkPa
   }
 };
 
-/** Special case of `copyChunk`: reorders the dimensions of `src` according to `order` into a new buffer. */
+/**
+ * Special case of `copyChunk`: reorders the dimensions of a chunk in buffer `src` with shape `shape` and data type
+ * `dtype` into a new buffer according to `order`.
+ */
 export const reorderChunk = (src: TypedArray, shape: number[], order: number[], dtype: NumberType): TypedArray => {
   const dest = new ARRAY_CONSTRUCTORS[dtype](src.length);
   const params = {
