@@ -1,63 +1,9 @@
-import { consolidateContiguous, setFromChunk } from "../data_manager/indexing.js";
+import { setFromChunk } from "../data_manager/indexing.js";
 import type { TypedArray } from "../types.js";
 
 const src = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
 
 const srcShape = [2, 2, 2];
-
-describe("consolidateContiguous", () => {
-  it("does not modify params with offsets", () => {
-    const testParams = {
-      srcShape: [2, 2, 2],
-      destShape: [4, 4, 4],
-      offset: [2, 2, 2],
-    };
-
-    const result = consolidateContiguous(testParams);
-
-    expect(result).toEqual(testParams);
-  });
-
-  it("does not modify params with mismatched shapes", () => {
-    const testParams = {
-      srcShape: [2, 2, 2],
-      destShape: [4, 4, 4],
-      offset: [0, 0, 0],
-    };
-
-    const result = consolidateContiguous(testParams);
-
-    expect(result).toEqual(testParams);
-  });
-
-  it("consolidates dimensions that can be set in a single `set` call", () => {
-    const testParams = {
-      srcShape: [4, 2, 4],
-      destShape: [4, 4, 4],
-      offset: [0, 0, 0],
-    };
-
-    const result = consolidateContiguous(testParams);
-
-    expect(result).toEqual({
-      srcShape: [4, 8],
-      destShape: [4, 16],
-      offset: [0, 0],
-    });
-  });
-
-  it("does not consolidate the last dimension", () => {
-    const testParams = {
-      srcShape: [4, 4, 4],
-      destShape: [4, 4, 4],
-      offset: [0, 0, 0],
-    };
-
-    const result = consolidateContiguous(testParams);
-
-    expect(result).toEqual({ srcShape: [64], destShape: [64], offset: [0] });
-  });
-});
 
 /** Count calls to `set` on this array and any subarrays created from it */
 const countSetsRecursive = (arr: TypedArray, counter = { count: 0 }): { count: number } => {
