@@ -1,6 +1,6 @@
 import type { TypedArray } from "../types.js";
 
-export type SetChunkParams = {
+export type CopyChunkParams = {
   srcShape: number[];
   destShape: number[];
   offset: number[];
@@ -58,7 +58,7 @@ function* indexes(start: number[], step: number[], count: number[]) {
 
 const last = <T>(arr: T[]): T => arr[arr.length - 1];
 
-export const setFromChunk = (src: TypedArray, dest: TypedArray, params: SetChunkParams) => {
+export const copyChunk = (src: TypedArray, dest: TypedArray, params: CopyChunkParams) => {
   const srcStrides = shapeToStrides(params.srcShape, src.length);
   let destStrides = shapeToStrides(params.destShape, dest.length);
   let destStart = destStrides.map((stride, i) => stride * params.offset[i]);
