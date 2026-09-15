@@ -89,7 +89,7 @@ const borrowedMarker = "TaskPool.borrowedArray";
  * When the task runs, the array inside the `BorrowGuard` is automatically *transferred* to the assigned worker, where
  * it can be safely modified in-place. When the task completes, the array is transferred back into the `BorrowGuard`.
  */
-export type BorrowedArray<T extends NumberType> = TypedArray<T> & { [borrowedMarker]: true };
+export type BorrowedArray<T extends NumberType = NumberType> = TypedArray<T> & { [borrowedMarker]: true };
 
 export const markBorrowed = <T extends TypedArray<NumberType>>(value: T): { [borrowedMarker]: T } => ({
   [borrowedMarker]: value,
