@@ -34,16 +34,17 @@ function* indexes(start: number[], step: number[], count: number[]) {
 
   const counters = Array(step.length).fill(0);
   const sums = [...start];
-  let i = sums.length - 1;
+  const lastIndex = sums.length - 1;
+  let i = 0;
 
   while (true) {
-    while (i > 0) {
+    while (i < lastIndex) {
       const prevSum = sums[i];
-      i -= 1;
+      i += 1;
       sums[i] += prevSum;
     }
 
-    yield sums[0];
+    yield sums[lastIndex];
 
     while (true) {
       counters[i] += 1;
@@ -55,9 +56,9 @@ function* indexes(start: number[], step: number[], count: number[]) {
 
       counters[i] = 0;
       sums[i] = start[i];
-      i += 1;
+      i -= 1;
 
-      if (i >= step.length) {
+      if (i < 0) {
         return;
       }
     }
@@ -104,7 +105,7 @@ export const setFromChunk = (src: TypedArray, dest: SetDestination, params: SetC
   const srcStride = last(srcStrides);
   let srcStart = 0;
   let srcEnd = srcStride;
-  for (const destIndex of indexes(destStart.reverse(), destStrides.reverse(), counts.reverse())) {
+  for (const destIndex of indexes(destStart, destStrides, counts)) {
     const slice = src.subarray(srcStart, srcEnd);
     dest.set(slice, destIndex);
     srcStart = srcEnd;
