@@ -1,4 +1,4 @@
-import type { TypedArray } from "../types.js";
+import { ARRAY_CONSTRUCTORS, type NumberType, type TypedArray } from "../types.js";
 
 export type CopyChunkParams = {
   srcShape: number[];
@@ -58,7 +58,7 @@ function* indexes(start: number[], step: number[], count: number[]) {
 
 const last = <T>(arr: T[]): T => arr[arr.length - 1];
 
-export const copyChunk = (src: TypedArray, dest: TypedArray, params: CopyChunkParams) => {
+export const copyChunk = (src: TypedArray, dest: TypedArray, params: CopyChunkParams): void => {
   const srcStrides = shapeToStrides(params.srcShape, src.length);
   let destStrides = shapeToStrides(params.destShape, dest.length);
   let destStart = destStrides.map((stride, i) => stride * params.offset[i]);
@@ -100,4 +100,16 @@ export const copyChunk = (src: TypedArray, dest: TypedArray, params: CopyChunkPa
     srcStart = srcEnd;
     srcEnd += srcStride;
   }
+};
+
+export const reorderChunk = (src: TypedArray, shape: number[], order: number[], dtype: NumberType): TypedArray => {
+  const dest = new ARRAY_CONSTRUCTORS[dtype](src.length);
+  const params = {
+    srcShape: shape,
+    destShape: shape,
+    dimensionOrder: order,
+    offset: Array(shape.length).fill(0),
+  };
+  copyChunk(src, dest, params);
+  return dest;
 };
