@@ -7,22 +7,13 @@ export type SetChunkParams = {
   dimensionOrder?: number[];
 };
 
-interface SetDestination {
-  set(array: ArrayLike<number>, offset?: number): void;
-  length: number;
-  innerLength?: number;
-}
-
-const shapeToStrides = (shape: number[], length: number, innerLength?: number): number[] => {
+const shapeToStrides = (shape: number[], length: number): number[] => {
   const strides = shape.reduceRight<number[]>((strides, dim) => [dim * strides[0], ...strides], [1]);
   const expectedLength = strides.shift();
   if (expectedLength !== length) {
     throw new Error(
       `n-dimensional array length does not match dimensions (expected ${expectedLength}, found ${length})`
     );
-  }
-  if (innerLength !== undefined && strides.indexOf(innerLength) === -1) {
-    throw new Error(`write a better error message (expected ${innerLength})`);
   }
   return strides;
 };
@@ -67,9 +58,9 @@ function* indexes(start: number[], step: number[], count: number[]) {
 
 const last = <T>(arr: T[]): T => arr[arr.length - 1];
 
-export const setFromChunk = (src: TypedArray, dest: SetDestination, params: SetChunkParams) => {
+export const setFromChunk = (src: TypedArray, dest: TypedArray, params: SetChunkParams) => {
   const srcStrides = shapeToStrides(params.srcShape, src.length);
-  let destStrides = shapeToStrides(params.destShape, dest.length, dest.innerLength);
+  let destStrides = shapeToStrides(params.destShape, dest.length);
   let destStart = destStrides.map((stride, i) => stride * params.offset[i]);
   let counts = [...params.srcShape];
 
@@ -78,23 +69,21 @@ export const setFromChunk = (src: TypedArray, dest: SetDestination, params: SetC
     if ([...params.dimensionOrder].sort().some((val, idx) => val !== idx)) {
       throw new Error(`invalid dimension order: missing or duplicated dimensions (${params.dimensionOrder})`);
     }
-    destStrides = params.dimensionOrder.map((i) => destStrides[i]);
     destStart = params.dimensionOrder.map((i) => destStart[i]);
+    destStrides = params.dimensionOrder.map((i) => destStrides[i]);
     counts = params.dimensionOrder.map((i) => counts[i]);
   }
 
-  // Even if the dimensions are contiguous, we can't `set` across `TypedArray` boundaries
-  const maxStride = dest.innerLength ?? Infinity;
+  // Remove dims where `src` covers the whole domain in `dest`, so they get copied in one contiguous `set` call
   let lastStart = 0;
-
-  // Consolidate dims where `src` covers the whole domain in `dest`, so they get copied in one contiguous `set` call
-  while (last(srcStrides) === last(destStrides) && lastStart === 0 && last(srcStrides) <= maxStride) {
+  while (last(srcStrides) === last(destStrides) && lastStart === 0) {
     srcStrides.pop();
     destStrides.pop();
     counts.pop();
     lastStart = destStart.pop()!;
 
     if (srcStrides.length === 0 || destStrides.length === 0) {
+      // We can just copy the whole thing in one shot!
       dest.set(src, lastStart);
       return;
     }
