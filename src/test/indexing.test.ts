@@ -1,16 +1,16 @@
-import { setFromChunk } from "../data_manager/indexing.js";
+import { copyChunk } from "../data_manager/indexing.js";
 
 const src = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
 
 const srcShape = [2, 2, 2];
 
-describe("setFromChunk", () => {
+describe("copyChunk", () => {
   it("can copy a chunk into a destination array of equal size", () => {
     const params = { srcShape, destShape: srcShape, offset: [0, 0, 0] };
     const dest = new Uint8Array(8).fill(0);
     const set = vi.spyOn(dest, "set");
 
-    setFromChunk(src, dest, params);
+    copyChunk(src, dest, params);
 
     expect(dest).toEqual(src);
     expect(set).toHaveBeenCalledTimes(1);
@@ -21,7 +21,7 @@ describe("setFromChunk", () => {
     const dest = new Uint8Array(64).fill(0);
     const set = vi.spyOn(dest, "set");
 
-    setFromChunk(src, dest, params);
+    copyChunk(src, dest, params);
 
     // prettier-ignore
     expect(dest).toEqual(new Uint8Array([
@@ -38,7 +38,7 @@ describe("setFromChunk", () => {
     const dest = new Uint8Array(32).fill(0);
     const set = vi.spyOn(dest, "set");
 
-    setFromChunk(src, dest, params);
+    copyChunk(src, dest, params);
 
     // prettier-ignore
     expect(dest).toEqual(new Uint8Array([
@@ -55,7 +55,7 @@ describe("setFromChunk", () => {
     const dest = new Uint8Array(8).fill(0);
     const set = vi.spyOn(dest, "set");
 
-    setFromChunk(src, dest, params);
+    copyChunk(src, dest, params);
 
     expect(dest).toEqual(new Uint8Array([1, 2, 5, 6, 3, 4, 7, 8]));
     expect(set).toHaveBeenCalledTimes(4);
@@ -66,7 +66,7 @@ describe("setFromChunk", () => {
     const dest = new Uint8Array(64).fill(0);
     const set = vi.spyOn(dest, "set");
 
-    setFromChunk(src, dest, params);
+    copyChunk(src, dest, params);
 
     // prettier-ignore
     expect(dest).toEqual(new Uint8Array([
