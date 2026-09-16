@@ -72,6 +72,7 @@
     "prettier": "^3.8.3",
     "rimraf": "^3.0.2",
     "ts-node": "^10.9.2",
+    "typedoc": "^0.28.20",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.58.2",
     "vite": "^8.1.0",
