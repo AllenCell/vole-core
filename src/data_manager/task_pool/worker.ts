@@ -4,7 +4,7 @@ import { TASK_HANDLERS } from "./registry.js";
 import { getBorrowed, type WorkerRequest, type WorkerResponse } from "./task.js";
 import type { TypedArray, NumberType } from "../../types.js";
 
-import "./test_task.js";
+import "../indexing_task.js";
 
 const runTask = ({ id, task, args }: WorkerRequest): [WorkerResponse, Transferable[]] => {
   const handler = TASK_HANDLERS.get(task);
