@@ -7,7 +7,7 @@ export type CopyChunkParams = {
   destShape: number[];
   /** Offset at which to copy the source chunk in the destination array per dimension. */
   offset: number[];
-  /** Order of dimensions in the destination array, assuming source dimension order is `[1, 2, 3, ... ]`. */
+  /** Order of dimensions in the destination array, assuming source dimension order is `[0, 1, 2, ... ]`. */
   dimensionOrder?: number[];
 };
 
@@ -93,7 +93,7 @@ function* indexes(start: number[], step: number[], count: number[]) {
 /**
  * Copies an n-dimensional chunk into an n-dimensional destination array of equal or larger size.
  *
- * Handles placing the chunk at arbitrary offsets in the larger array (if )
+ * Handles placing the chunk at arbitrary n-dimensional offsets in the larger array, and reordering dimensions.
  */
 export const copyChunk = (src: TypedArray, dest: TypedArray, params: CopyChunkParams): void => {
   validateCopyChunkParams(params);
@@ -142,8 +142,8 @@ export const copyChunk = (src: TypedArray, dest: TypedArray, params: CopyChunkPa
 };
 
 /**
- * Special case of `copyChunk`: reorders the dimensions of a chunk in buffer `src` with shape `shape` and data type
- * `dtype` into a new buffer according to `order`.
+ * Special case of `copyChunk`: copies a chunk with shape `shape` and type `dtype` from `src` into a new buffer
+ * of equal length, with dimension order `order`.
  */
 export const reorderChunk = (src: TypedArray, shape: number[], order: number[], dtype: NumberType): TypedArray => {
   const dest = new ARRAY_CONSTRUCTORS[dtype](src.length);
