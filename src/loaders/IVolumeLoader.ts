@@ -69,50 +69,7 @@ export type RawChannelDataCallback = (
  * Loaders may keep state for reuse between volume creation and volume loading, and should be kept alive until volume
  * loading is complete. (See `createVolume`)
  */
-export interface IVolumeLoader {
-  /** Use VolumeDims to further refine a `LoadSpec` for use in `createVolume` */
-  loadDims(loadSpec: LoadSpec): Promise<VolumeDims[]>;
-
-  /**
-   * Create an empty `Volume` from a `LoadSpec`, which must be passed to `loadVolumeData` to begin loading.
-   * Optionally pass a callback to respond whenever new channel data is loaded into the volume.
-   */
-  createVolume(loadSpec: LoadSpec, onChannelLoaded?: PerChannelCallback): Promise<Volume>;
-
-  /**
-   * Begin loading a volume's data, as specified in its `LoadSpec`.
-   *
-   * Pass a callback to respond when this request loads a new channel. This callback will execute after the one
-   * assigned in `createVolume`, if any.
-   *
-   * The returned `Promise` resolves once all channels load, or rejects with any error that occurs during loading.
-   */
-  // TODO make this return a promise that resolves when loading is done?
-  // TODO this is not cancellable in the sense that any async requests initiated here are not stored
-  // in a way that they can be interrupted.
-  // TODO explicitly passing a `LoadSpec` is now rarely useful. Remove?
-  loadVolumeData(volume: Volume, loadSpec?: LoadSpec, onChannelLoaded?: PerChannelCallback): Promise<void>;
-
-  /** Change which directions to prioritize when prefetching. Currently only implemented on `OMEZarrLoader`. */
-  setPrefetchPriority(directions: PrefetchDirection[]): void;
-
-  /**
-   * By default channel data can arrive out of order and at different times.
-   * This can cause the rendering to update in a way that is not visually appealing.
-   * In particular, during time series playback or Z slice playback, we would like
-   * to see all channels update at the same time.
-   * @param sync Set true to force all requested channels to load at the same time
-   */
-  syncMultichannelLoading(sync: boolean): void;
-}
-
-/**
- * Loads volume data from a source specified by a `LoadSpec`.
- *
- * Loaders may keep state for reuse between volume creation and volume loading, and should be kept alive until volume
- * loading is complete. (See `createVolume`)
- */
-export abstract class VolumeLoader implements IVolumeLoader {
+export abstract class VolumeLoader {
   /** Use `VolumeDims` to further refine a `LoadSpec` for use in `createVolume` */
   abstract loadDims(loadSpec: LoadSpec): Promise<VolumeDims[]>;
 
