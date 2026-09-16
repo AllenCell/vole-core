@@ -5,7 +5,7 @@ import { colormaps as colorizercolormaps, features as colorizerfeatures } from "
 import {
   CreateLoaderOptions,
   ImageInfo,
-  IVolumeLoader,
+  VolumeLoader,
   LoadSpec,
   Lut,
   JsonImageInfoLoader,
@@ -1105,7 +1105,7 @@ function createTestVolume(dtype: NumberType): RawArrayLoaderOptions {
   };
 }
 
-async function createLoader(data: TestDataSpec): Promise<IVolumeLoader[]> {
+async function createLoader(data: TestDataSpec): Promise<VolumeLoader[]> {
   if (data.type === "opencell") {
     return [new OpenCellLoader()];
   }
@@ -1145,7 +1145,7 @@ async function createLoader(data: TestDataSpec): Promise<IVolumeLoader[]> {
   }
 }
 
-async function loadVolume(name: string, loadSpec: LoadSpec, loader: IVolumeLoader): Promise<void> {
+async function loadVolume(name: string, loadSpec: LoadSpec, loader: VolumeLoader): Promise<void> {
   const fullDims = await loader.loadDims(loadSpec);
   console.log(fullDims);
 
