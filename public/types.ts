@@ -1,6 +1,6 @@
 import { Volume, Light } from "../src/index.js";
 import { VolumeFileFormat } from "../src/loaders/index.js";
-import { IVolumeLoader } from "../src/loaders/IVolumeLoader.js";
+import { VolumeLoader } from "../src/loaders/IVolumeLoader.js";
 import type { NumberType } from "../src/types.js";
 
 export interface TestDataSpec {
@@ -26,7 +26,7 @@ export interface State {
   timerId: number;
   scene: number;
 
-  loader: IVolumeLoader[];
+  loader: VolumeLoader[];
 
   density: number;
   maskAlpha: number;
