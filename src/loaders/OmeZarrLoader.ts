@@ -8,8 +8,14 @@ import type { VolumeDims } from "../VolumeDims.js";
 import VolumeCache from "../VolumeCache.js";
 import { getDataRange } from "../utils/num_utils.js";
 import SubscribableRequestQueue from "../utils/SubscribableRequestQueue.js";
-import type { RawChannelDataCallback, LoadedVolumeInfo, Region } from "./IVolumeLoader.js";
-import { ThreadableVolumeLoader, LoadSpec, box3ToRegion } from "./IVolumeLoader.js";
+import {
+  VolumeLoader,
+  LoadSpec,
+  type RawChannelDataCallback,
+  type LoadedVolumeInfo,
+  box3ToRegion,
+  Region,
+} from "./IVolumeLoader.js";
 import {
   composeSubregion,
   computePackedAtlasDims,
@@ -90,7 +96,7 @@ const DEFAULT_FETCH_OPTIONS = {
   maxPrefetchChunks: 30,
 };
 
-class OMEZarrLoader extends ThreadableVolumeLoader {
+class OMEZarrLoader extends VolumeLoader {
   /** The ID of the subscriber responsible for "actual loads" (non-prefetch requests) */
   private loadSubscriber: SubscriberId | undefined;
   /** The ID of the subscriber responsible for prefetches, so that requests can be cancelled and reissued */
@@ -567,13 +573,19 @@ class OMEZarrLoader extends ThreadableVolumeLoader {
     }
 
     this.lowResWarmSubscriber = this.requestQueue.addSubscriber();
-    const { plan, availableBytes } = planLowResPrefetch(this.sources, this.lowResCache.maxSize, MINIMUM_LOW_RES_CACHED_EXTENT);
+    const { plan, availableBytes } = planLowResPrefetch(
+      this.sources,
+      this.lowResCache.maxSize,
+      MINIMUM_LOW_RES_CACHED_EXTENT
+    );
     for (const { sourceIndex, level, coords } of plan) {
       const coordsTCZYX = this.orderByTCZYX(coords, 0, sourceIndex);
       this.prefetchChunk(sourceIndex, level, coordsTCZYX, this.lowResWarmSubscriber, true);
     }
     if (plan.length > 0) {
-      console.info(`Prefetching ${plan.length} low-res chunks. ${(this.lowResCache.maxSize - availableBytes)/1_000_000}MB will be used.`);
+      console.info(
+        `Prefetching ${plan.length} low-res chunks. ${(this.lowResCache.maxSize - availableBytes) / 1_000_000}MB will be used.`
+      );
     }
   }
 

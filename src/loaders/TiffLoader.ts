@@ -1,12 +1,7 @@
 import { fromUrl, type GeoTIFF, type GeoTIFFImage } from "geotiff";
 import { ErrorObject, deserializeError } from "serialize-error";
 
-import {
-  ThreadableVolumeLoader,
-  LoadSpec,
-  type RawChannelDataCallback,
-  type LoadedVolumeInfo,
-} from "./IVolumeLoader.js";
+import { VolumeLoader, LoadSpec, type RawChannelDataCallback, type LoadedVolumeInfo } from "./IVolumeLoader.js";
 import { computePackedAtlasDims, MAX_ATLAS_EDGE } from "./VolumeLoaderUtils.js";
 import { VolumeLoadError, VolumeLoadErrorType, wrapVolumeLoadError } from "./VolumeLoadError.js";
 import { type ImageInfo, CImageInfo } from "../ImageInfo.js";
@@ -128,7 +123,7 @@ const getPixelType = (pxSize: number): string => (pxSize === 1 ? "uint8" : pxSiz
 
 // Despite the class `TiffLoader` extends, this loader is not threadable, since geotiff internally uses features that
 // aren't available on workers. It uses its own specialized workers anyways.
-class TiffLoader extends ThreadableVolumeLoader {
+class TiffLoader extends VolumeLoader {
   private url: string[];
   dims?: OMEDims;
 
