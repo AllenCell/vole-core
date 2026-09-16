@@ -5,7 +5,7 @@ import VolumeMaker from "../VolumeMaker.js";
 import { LUT_ARRAY_LENGTH } from "../Lut.js";
 import Channel from "../Channel.js";
 import { CImageInfo, ImageInfo } from "../ImageInfo.js";
-import { IVolumeLoader, LoadSpec } from "../loaders/IVolumeLoader.js";
+import { VolumeLoader, LoadSpec } from "../loaders/IVolumeLoader.js";
 import { getDataRange } from "../utils/num_utils.js";
 
 // PREPARE SOME TEST DATA TO TRY TO DISPLAY A VOLUME.
@@ -60,13 +60,16 @@ const multiscaleTestimgdata: ImageInfo = {
   ],
 };
 
-function createTestLoader(multiscaleLevelDims: ImageInfo["multiscaleLevelDims"]): IVolumeLoader {
+function createTestLoader(multiscaleLevelDims: ImageInfo["multiscaleLevelDims"]): VolumeLoader {
   return {
     loadDims: vi.fn().mockResolvedValue(multiscaleLevelDims),
     createVolume: vi.fn(),
     loadVolumeData: vi.fn(),
     setPrefetchPriority: vi.fn(),
     syncMultichannelLoading: vi.fn(),
+    createImageInfo: vi.fn(),
+    loadRawChannelData: vi.fn(),
+    updateFetchOptions: vi.fn(),
   };
 }
 

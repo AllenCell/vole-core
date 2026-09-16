@@ -34,7 +34,7 @@ export type { ImageInfo } from "./ImageInfo.js";
 export type { ControlPoint } from "./Lut.js";
 export type { CreateLoaderOptions } from "./loaders/index.js";
 // TODO export `IVolumeLoader`, `ThreadableVolumeLoader` as `VolumeLoader` aliases?
-export type { IVolumeLoader, PerChannelCallback, VolumeLoader } from "./loaders/IVolumeLoader.js";
+export type { PerChannelCallback, VolumeLoader } from "./loaders/IVolumeLoader.js";
 export type { ZarrLoaderFetchOptions } from "./loaders/OmeZarrLoader.js";
 export type { WorkerLoader } from "./workers/VolumeLoaderContext.js";
 export {

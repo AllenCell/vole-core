@@ -4,7 +4,7 @@ import Channel from "./Channel.js";
 import Histogram from "./Histogram.js";
 import { Lut } from "./Lut.js";
 import { getColorByChannelIndex } from "./constants/colors.js";
-import type { IVolumeLoader, PerChannelCallback } from "./loaders/IVolumeLoader.js";
+import type { PerChannelCallback, VolumeLoader } from "./loaders/IVolumeLoader.js";
 import { cloneLoadSpec, defaultLoadSpec, LoadSpec, regionToBox3 } from "./loaders/IVolumeLoader.js";
 import { pickLevelToLoadUnscaled } from "./loaders/VolumeLoaderUtils.js";
 import type { NumberType, TypedArray } from "./types.js";
@@ -19,7 +19,7 @@ interface VolumeDataObserver {
   onVolumeLoadError: (vol: Volume, error: unknown) => void;
 }
 
-export type VolumeEvent = {
+export type VolumeEvents = {
   loadStart: void;
 };
 
@@ -28,10 +28,10 @@ export type VolumeEvent = {
  * @class
  * @param {ImageInfo} imageInfo
  */
-export default class Volume extends EventDispatcher<VolumeEvent> {
+export default class Volume extends EventDispatcher<VolumeEvents> {
   public imageInfo: CImageInfo;
   public loadSpec: Required<LoadSpec>;
-  public loader?: IVolumeLoader;
+  public loader?: VolumeLoader;
   /** `LoadSpec` representing the minimum data required to display what's in the viewer (subregion, channels, etc.).
    * Used to intelligently issue load requests whenever required by a state change. Modify with `updateRequiredData`.
    */
@@ -78,7 +78,7 @@ export default class Volume extends EventDispatcher<VolumeEvent> {
   private volumeDataObservers: VolumeDataObserver[];
   private loaded: boolean;
 
-  constructor(imageInfo: ImageInfo = defaultImageInfo(), loadSpec: LoadSpec = new LoadSpec(), loader?: IVolumeLoader) {
+  constructor(imageInfo: ImageInfo = defaultImageInfo(), loadSpec: LoadSpec = new LoadSpec(), loader?: VolumeLoader) {
     super();
     this.loaded = false;
     this.imageInfo = new CImageInfo(imageInfo);
