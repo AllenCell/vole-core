@@ -1,11 +1,6 @@
 import { Box3, Vector3 } from "three";
 
-import {
-  ThreadableVolumeLoader,
-  type LoadSpec,
-  type RawChannelDataCallback,
-  type LoadedVolumeInfo,
-} from "./IVolumeLoader.js";
+import { VolumeLoader, type LoadSpec, type RawChannelDataCallback, type LoadedVolumeInfo } from "./IVolumeLoader.js";
 import { computePackedAtlasDims } from "./VolumeLoaderUtils.js";
 import type { ImageInfo } from "../ImageInfo.js";
 import type { VolumeDims } from "../VolumeDims.js";
@@ -96,7 +91,7 @@ const convertImageInfo = (json: RawArrayInfo, dtype: NumberType): ImageInfo => {
   };
 };
 
-class RawArrayLoader extends ThreadableVolumeLoader {
+class RawArrayLoader extends VolumeLoader {
   data: RawArrayData;
   jsonInfo: RawArrayInfo;
 

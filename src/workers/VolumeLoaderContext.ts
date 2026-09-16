@@ -4,12 +4,7 @@ import { throttledQueue } from "throttled-queue";
 import { ImageInfo } from "../ImageInfo.js";
 import { VolumeDims } from "../VolumeDims.js";
 import { CreateLoaderOptions, PrefetchDirection, VolumeFileFormat, pathToFileType } from "../loaders/index.js";
-import {
-  ThreadableVolumeLoader,
-  LoadSpec,
-  RawChannelDataCallback,
-  LoadedVolumeInfo,
-} from "../loaders/IVolumeLoader.js";
+import { VolumeLoader, LoadSpec, RawChannelDataCallback, LoadedVolumeInfo } from "../loaders/IVolumeLoader.js";
 import { RawArrayLoader } from "../loaders/RawArrayLoader.js";
 import { TiffLoader } from "../loaders/TiffLoader.js";
 import type {
@@ -240,7 +235,7 @@ class VolumeLoaderContext {
  *
  * Created with `VolumeLoaderContext.createLoader`. See its documentation for more.
  */
-class WorkerLoader extends ThreadableVolumeLoader {
+class WorkerLoader extends VolumeLoader {
   private loaderId: number | undefined;
   private workerHandle: SharedLoadWorkerHandle;
   private context: VolumeLoaderContext;

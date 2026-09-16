@@ -2,7 +2,7 @@ import { serializeError } from "serialize-error";
 
 import VolumeCache from "../VolumeCache.js";
 import { VolumeFileFormat, createVolumeLoader, pathToFileType } from "../loaders/index.js";
-import { ThreadableVolumeLoader } from "../loaders/IVolumeLoader.js";
+import { VolumeLoader } from "../loaders/IVolumeLoader.js";
 import { VolumeLoadError } from "../loaders/VolumeLoadError.js";
 import RequestQueue from "../utils/RequestQueue.js";
 import SubscribableRequestQueue from "../utils/SubscribableRequestQueue.js";
@@ -16,7 +16,7 @@ import type {
 import { WorkerEventType, WorkerMsgType, WorkerResponseResult } from "./types.js";
 import { rebuildLoadSpec } from "./util.js";
 
-type LoaderEntry = { loader: ThreadableVolumeLoader; copyOnLoad: boolean };
+type LoaderEntry = { loader: VolumeLoader; copyOnLoad: boolean };
 
 // 250MB: same size as the regular cache, and large enough for many AICS ZARRs
 const LOW_RES_CACHE_DEFAULT_SIZE = 250_000_000;

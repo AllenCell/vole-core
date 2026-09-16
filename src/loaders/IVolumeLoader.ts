@@ -107,7 +107,7 @@ export interface IVolumeLoader {
 }
 
 /** Abstract class which allows loaders to accept and return types that are easier to transfer to/from a worker. */
-export abstract class ThreadableVolumeLoader implements IVolumeLoader {
+export abstract class VolumeLoader implements IVolumeLoader {
   /** Unchanged from `IVolumeLoader`. See that interface for details. */
   abstract loadDims(loadSpec: LoadSpec): Promise<VolumeDims[]>;
 
