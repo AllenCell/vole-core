@@ -5,7 +5,11 @@ name: Node.js CI
 env:
   NODE_VERSION: "20"
 
-on: [push]
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["**"]
 
 jobs:
   lint:
