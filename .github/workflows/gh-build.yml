@@ -21,8 +21,8 @@ jobs:
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 #v6.0.0
         with:
           node-version: ${{env.NODE_VERSION}}
-          cache: "npm"
-          cache-dependency-path: "package-lock.json"
+          registry-url: https://registry.npmjs.org/
+          package-manager-cache: false # Do not cache when publishing to prevent cache pollution attacks
 
       - name: Cache dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
