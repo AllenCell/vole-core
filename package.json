@@ -61,7 +61,6 @@
     "babel-plugin-inline-import": "^3.0.0",
     "babel-plugin-inline-import-data-uri": "^1.0.1",
     "cross-env": "^7.0.3",
-    "documentation": "^14.0.0",
     "eslint": "^10.2.1",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.5.0",
