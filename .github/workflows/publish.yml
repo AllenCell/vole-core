@@ -9,11 +9,8 @@ on:
     # Sequence of patterns matched against refs/tags
     tags:
       - "v*" # Push events to matching v*, i.e. v1.0, v20.15.10
+
 permissions:
-  # Required for OIDC token for NPM Trusted Publishers.
-  # See https://docs.github.com/en/actions/concepts/security/openid-connect
-  # and https://docs.npmjs.com/trusted-publishers.
-  id-token: write
   contents: read
 
 jobs:
@@ -74,6 +71,11 @@ jobs:
       - run: npm run build
 
   publish-npm:
+    permissions:
+      # Required for OIDC token for NPM Trusted Publishers.
+      # See https://docs.github.com/en/actions/concepts/security/openid-connect
+      # and https://docs.npmjs.com/trusted-publishers.
+      id-token: write
     needs: build
     runs-on: ubuntu-latest
     steps:
