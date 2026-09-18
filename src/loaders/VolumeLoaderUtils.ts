@@ -32,7 +32,7 @@ const SI_PREFIX_ABBVS = {
 };
 
 /** Converts a full spatial or temporal unit name supported by OME-Zarr to its unit symbol */
-// (see https://ngff.openmicroscopy.org/latest/#axes-md)
+// (see https://ngff.openmicroscopy.org/specifications/0.5/index.html#axes-metadata)
 export function unitNameToSymbol(unitName?: string): string | null {
   if (unitName === undefined) {
     return null;
