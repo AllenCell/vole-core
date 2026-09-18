@@ -1,0 +1,1 @@
+import{t as e}from"./VolumeLoadWorker-BSyY_8Rx.js";var t=class extends e{decodeBlock(e){return e}};export{t as default};
