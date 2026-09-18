@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "prepare": "npm run build",
-    "build-docs": "node node_modules/documentation/bin/documentation.js build src/Histogram.ts src/View3d.ts src/Volume.ts src/VolumeMaker.ts src/VolumeLoader.ts -f html -o docs --shallow",
+    "build-docs": "npx typedoc src/index.ts",
     "build": "npm run transpileES && npm run build-types",
     "build-types": "tsc -p tsconfig.types.json",
     "build-demo": "vite build public/ --config vite.config.ts --outDir ./demo",
