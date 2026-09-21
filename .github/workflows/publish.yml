@@ -4,16 +4,14 @@
 name: NPM Package
 env:
   NODE_VERSION: "24"
+
 on:
   push:
     # Sequence of patterns matched against refs/tags
     tags:
       - "v*" # Push events to matching v*, i.e. v1.0, v20.15.10
+
 permissions:
-  # Required for OIDC token for NPM Trusted Publishers.
-  # See https://docs.github.com/en/actions/concepts/security/openid-connect
-  # and https://docs.npmjs.com/trusted-publishers.
-  id-token: write
   contents: read
 
 jobs:
@@ -21,55 +19,74 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Setup Node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 #v6.2.0
         with:
           node-version: ${{env.NODE_VERSION}}
-          cache: "npm"
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org/
       - run: npm ci
       - run: npm run lint --if-present
   test:
     name: Unit Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Setup Node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 #v6.2.0
         with:
           node-version: ${{env.NODE_VERSION}}
-          cache: "npm"
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org/
       - run: npm ci
       - run: npm test --if-present
   typeCheck:
     name: Type Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Setup Node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 #v6.2.0
         with:
           node-version: ${{env.NODE_VERSION}}
-          cache: "npm"
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org/
       - run: npm ci
       - run: npm run typeCheck --if-present
   build:
     needs: [lint, typeCheck, test]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 #v6.2.0
         with:
           node-version: ${{env.NODE_VERSION}}
-          cache: "npm"
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org/
       - run: npm ci
       - run: npm run build
 
   publish-npm:
+    permissions:
+      # Required for OIDC token for NPM Trusted Publishers.
+      # See https://docs.github.com/en/actions/concepts/security/openid-connect
+      # and https://docs.npmjs.com/trusted-publishers.
+      id-token: write
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 #v6.2.0
         with:
           node-version: ${{env.NODE_VERSION}}
