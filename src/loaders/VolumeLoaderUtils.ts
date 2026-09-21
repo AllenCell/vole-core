@@ -8,21 +8,35 @@ export const MAX_ATLAS_EDGE = 4096;
 // Map from units to their symbols
 const UNIT_SYMBOLS = {
   angstrom: "Å",
+  angstroms: "Å",
   day: "d",
+  days: "d",
   foot: "ft",
+  feet: "ft",
   hour: "h",
+  hours: "h",
   inch: "in",
+  inches: "in",
   meter: "m",
+  meters: "m",
+  metre: "m",
+  metres: "m",
   micron: "μm",
+  microns: "μm",
   mile: "mi",
+  miles: "mi",
   minute: "min",
+  minutes: "min",
   parsec: "pc",
+  parsecs: "pc",
   second: "s",
+  seconds: "s",
   yard: "yd",
+  yards: "yd",
 };
 
 // Units which may take SI prefixes (e.g. micro-, tera-)
-const SI_UNITS: (keyof typeof UNIT_SYMBOLS)[] = ["meter", "second"];
+const SI_UNITS: (keyof typeof UNIT_SYMBOLS)[] = ["meter", "meters", "metre", "metres", "second", "seconds"];
 
 // SI prefixes which abbreviate in nonstandard ways
 const SI_PREFIX_ABBVS = {
@@ -30,8 +44,11 @@ const SI_PREFIX_ABBVS = {
   deca: "da",
 };
 
-/** Converts a full spatial or temporal unit name supported by OME-Zarr to its unit symbol */
-// (see https://ngff.openmicroscopy.org/latest/#axes-md)
+/**
+ * Converts a full spatial or temporal unit name supported by OME-Zarr to its unit symbol.
+ *
+ * See https://ngff.openmicroscopy.org/specifications/0.5/index.html#axes-metadata for valid unit names.
+ */
 export function unitNameToSymbol(unitName?: string): string | null {
   if (unitName === undefined) {
     return null;
