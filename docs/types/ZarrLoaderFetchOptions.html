@@ -12,7 +12,7 @@
 <h1>Type Alias ZarrLoaderFetchOptions</h1></div>
 <div class="tsd-signature"><span class="tsd-signature-keyword">type</span> <span class="tsd-kind-type-alias">ZarrLoaderFetchOptions</span> <span class="tsd-signature-symbol">=</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#concurrencylimit">concurrencyLimit</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#maxprefetchchunks">maxPrefetchChunks</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#maxprefetchdistance">maxPrefetchDistance</a><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">[</span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#onlyprioritydirections">onlyPriorityDirections</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#prefetchconcurrencylimit">prefetchConcurrencyLimit</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#prioritydirections">priorityDirections</a><span class="tsd-signature-symbol">?:</span> <a href="../enums/PrefetchDirection.html" class="tsd-signature-type tsd-kind-enum">PrefetchDirection</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/AllenCell/vole-core/blob/91d4f9abc902aa0160222064cc118c282932a559/src/loaders/OmeZarrLoader.ts#L65">src/loaders/OmeZarrLoader.ts:65</a></li></ul></aside>
+<li>Defined in <a href="https://github.com/AllenCell/vole-core/blob/ad2c8221de9408cfb9828f5ddb835a46f0484b02/src/loaders/OmeZarrLoader.ts#L65">src/loaders/OmeZarrLoader.ts:65</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -36,14 +36,14 @@
 <div class="tsd-comment tsd-typography"><p>The max. number of requests the loader can issue at a time. Ignored if the constructor also receives a queue.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/AllenCell/vole-core/blob/91d4f9abc902aa0160222064cc118c282932a559/src/loaders/OmeZarrLoader.ts#L67">src/loaders/OmeZarrLoader.ts:67</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/AllenCell/vole-core/blob/ad2c8221de9408cfb9828f5ddb835a46f0484b02/src/loaders/OmeZarrLoader.ts#L67">src/loaders/OmeZarrLoader.ts:67</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="maxprefetchchunks"><span>max<wbr/>Prefetch<wbr/>Chunks</span><a href="#maxprefetchchunks" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">maxPrefetchChunks</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>The max. number of total chunks that can be prefetched after any load.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/AllenCell/vole-core/blob/91d4f9abc902aa0160222064cc118c282932a559/src/loaders/OmeZarrLoader.ts#L80">src/loaders/OmeZarrLoader.ts:80</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/AllenCell/vole-core/blob/ad2c8221de9408cfb9828f5ddb835a46f0484b02/src/loaders/OmeZarrLoader.ts#L80">src/loaders/OmeZarrLoader.ts:80</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="maxprefetchdistance"><span>max<wbr/>Prefetch<wbr/>Distance</span><a href="#maxprefetchdistance" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">maxPrefetchDistance</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">[</span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">]</span></div>
@@ -52,14 +52,14 @@ and 4 and <code>maxPrefetchDistance</code> in z is 2, the loader will prefetch s
 (or until it hits <code>maxPrefetchChunks</code>). Ordered TZYX.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/AllenCell/vole-core/blob/91d4f9abc902aa0160222064cc118c282932a559/src/loaders/OmeZarrLoader.ts#L78">src/loaders/OmeZarrLoader.ts:78</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/AllenCell/vole-core/blob/ad2c8221de9408cfb9828f5ddb835a46f0484b02/src/loaders/OmeZarrLoader.ts#L78">src/loaders/OmeZarrLoader.ts:78</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="onlyprioritydirections"><code class="tsd-tag">Optional</code><span>only<wbr/>Priority<wbr/>Directions</span><a href="#onlyprioritydirections" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">onlyPriorityDirections</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>only use priority directions</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/AllenCell/vole-core/blob/91d4f9abc902aa0160222064cc118c282932a559/src/loaders/OmeZarrLoader.ts#L84">src/loaders/OmeZarrLoader.ts:84</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/AllenCell/vole-core/blob/ad2c8221de9408cfb9828f5ddb835a46f0484b02/src/loaders/OmeZarrLoader.ts#L84">src/loaders/OmeZarrLoader.ts:84</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="prefetchconcurrencylimit"><code class="tsd-tag">Optional</code><span>prefetch<wbr/>Concurrency<wbr/>Limit</span><a href="#prefetchconcurrencylimit" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">prefetchConcurrencyLimit</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
@@ -67,14 +67,14 @@ and 4 and <code>maxPrefetchDistance</code> in z is 2, the loader will prefetch s
 that prefetching leaves room in the queue for actual loads. Ignored if the constructor also receives a queue.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/AllenCell/vole-core/blob/91d4f9abc902aa0160222064cc118c282932a559/src/loaders/OmeZarrLoader.ts#L72">src/loaders/OmeZarrLoader.ts:72</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/AllenCell/vole-core/blob/ad2c8221de9408cfb9828f5ddb835a46f0484b02/src/loaders/OmeZarrLoader.ts#L72">src/loaders/OmeZarrLoader.ts:72</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="prioritydirections"><code class="tsd-tag">Optional</code><span>priority<wbr/>Directions</span><a href="#prioritydirections" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">priorityDirections</span><span class="tsd-signature-symbol">?:</span> <a href="../enums/PrefetchDirection.html" class="tsd-signature-type tsd-kind-enum">PrefetchDirection</a><span class="tsd-signature-symbol">[]</span></div>
 <div class="tsd-comment tsd-typography"><p>The initial directions to prioritize when prefetching</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/AllenCell/vole-core/blob/91d4f9abc902aa0160222064cc118c282932a559/src/loaders/OmeZarrLoader.ts#L82">src/loaders/OmeZarrLoader.ts:82</a></li></ul></aside></section></section></details></div>
+<li>Defined in <a href="https://github.com/AllenCell/vole-core/blob/ad2c8221de9408cfb9828f5ddb835a46f0484b02/src/loaders/OmeZarrLoader.ts#L82">src/loaders/OmeZarrLoader.ts:82</a></li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

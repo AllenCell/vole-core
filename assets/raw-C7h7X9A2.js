@@ -1,1 +1,0 @@
-import{t as e}from"./index-59-FUl5o.js";var t=class extends e{decodeBlock(e){return e}};export{t as default};
