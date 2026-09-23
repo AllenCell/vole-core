@@ -15,7 +15,7 @@ import {
   type LoadedVolumeInfo,
   box3ToRegion,
   Region,
-} from "./IVolumeLoader.js";
+} from "./VolumeLoader.js";
 import {
   composeSubregion,
   computePackedAtlasDims,

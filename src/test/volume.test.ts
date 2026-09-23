@@ -5,7 +5,7 @@ import VolumeMaker from "../VolumeMaker.js";
 import { LUT_ARRAY_LENGTH } from "../Lut.js";
 import Channel from "../Channel.js";
 import { CImageInfo, ImageInfo } from "../ImageInfo.js";
-import { VolumeLoader, LoadSpec } from "../loaders/IVolumeLoader.js";
+import { VolumeLoader, LoadSpec } from "../loaders/VolumeLoader.js";
 import { getDataRange } from "../utils/num_utils.js";
 
 // PREPARE SOME TEST DATA TO TRY TO DISPLAY A VOLUME.

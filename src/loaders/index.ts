@@ -1,4 +1,4 @@
-import { VolumeLoader } from "./IVolumeLoader.js";
+import { VolumeLoader } from "./VolumeLoader.js";
 import { OMEZarrLoader, type ZarrLoaderFetchOptions } from "./OmeZarrLoader.js";
 import { JsonImageInfoLoader } from "./JsonImageInfoLoader.js";
 import { RawArrayLoader, RawArrayLoaderOptions } from "./RawArrayLoader.js";
