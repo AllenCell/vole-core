@@ -80,6 +80,21 @@ export class CImageInfo {
     this.imageInfo = imageInfo || defaultImageInfo();
   }
 
+  /** Human-readable name of the image */
+  get name(): string | undefined {
+    return this.imageInfo.name;
+  }
+
+  /** Dimensions of each scale level, at original size, from the first data source */
+  get multiscaleLevelDims(): VolumeDims[] {
+    return this.imageInfo.multiscaleLevelDims;
+  }
+
+  /** Arbitrary additional metadata not captured by other `ImageInfo` properties */
+  get userData(): Record<string, unknown> | undefined {
+    return this.imageInfo.userData;
+  }
+
   get currentLevelDims(): VolumeDims {
     return this.imageInfo.multiscaleLevelDims[this.imageInfo.multiscaleLevel];
   }
