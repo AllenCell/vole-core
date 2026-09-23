@@ -10,7 +10,7 @@ import Histogram from "./Histogram.js";
 import { Lut, remapControlPoints } from "./Lut.js";
 import { type AxisName, type ColorizeFeature, type NumberType, type TripleViewPanes, ViewportCorner } from "./types.js";
 import { VolumeFileFormat, createVolumeLoader, PrefetchDirection } from "./loaders/index.js";
-import { LoadSpec } from "./loaders/IVolumeLoader.js";
+import { LoadSpec } from "./loaders/VolumeLoader.js";
 import { OMEZarrLoader } from "./loaders/OmeZarrLoader.js";
 import { JsonImageInfoLoader } from "./loaders/JsonImageInfoLoader.js";
 import {
@@ -34,7 +34,7 @@ export type { ImageInfo } from "./ImageInfo.js";
 export type { ControlPoint } from "./Lut.js";
 export type { CreateLoaderOptions } from "./loaders/index.js";
 // TODO export `IVolumeLoader`, `ThreadableVolumeLoader` as `VolumeLoader` aliases?
-export type { PerChannelCallback, VolumeLoader } from "./loaders/IVolumeLoader.js";
+export type { PerChannelCallback, VolumeLoader } from "./loaders/VolumeLoader.js";
 export type { ZarrLoaderFetchOptions } from "./loaders/OmeZarrLoader.js";
 export type { WorkerLoader } from "./workers/VolumeLoaderContext.js";
 export {

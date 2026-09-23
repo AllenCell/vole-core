@@ -1,7 +1,7 @@
 import { fromUrl, type GeoTIFF, type GeoTIFFImage } from "geotiff";
 import { ErrorObject, deserializeError } from "serialize-error";
 
-import { VolumeLoader, LoadSpec, type RawChannelDataCallback, type LoadedVolumeInfo } from "./IVolumeLoader.js";
+import { VolumeLoader, LoadSpec, type RawChannelDataCallback, type LoadedVolumeInfo } from "./VolumeLoader.js";
 import { computePackedAtlasDims, MAX_ATLAS_EDGE } from "./VolumeLoaderUtils.js";
 import { VolumeLoadError, VolumeLoadErrorType, wrapVolumeLoadError } from "./VolumeLoadError.js";
 import { type ImageInfo, CImageInfo } from "../ImageInfo.js";
