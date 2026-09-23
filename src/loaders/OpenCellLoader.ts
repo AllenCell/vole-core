@@ -1,4 +1,4 @@
-import { VolumeLoader, LoadSpec, RawChannelDataCallback, LoadedVolumeInfo } from "./IVolumeLoader.js";
+import { VolumeLoader, LoadSpec, RawChannelDataCallback, LoadedVolumeInfo } from "./VolumeLoader.js";
 import { computeAtlasSize, type ImageInfo } from "../ImageInfo.js";
 import type { VolumeDims } from "../VolumeDims.js";
 import { JsonImageInfoLoader } from "./JsonImageInfoLoader.js";

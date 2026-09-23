@@ -2,7 +2,7 @@ import { serializeError } from "serialize-error";
 
 import VolumeCache from "../VolumeCache.js";
 import { VolumeFileFormat, createVolumeLoader, pathToFileType } from "../loaders/index.js";
-import { VolumeLoader } from "../loaders/IVolumeLoader.js";
+import { VolumeLoader } from "../loaders/VolumeLoader.js";
 import { VolumeLoadError } from "../loaders/VolumeLoadError.js";
 import RequestQueue from "../utils/RequestQueue.js";
 import SubscribableRequestQueue from "../utils/SubscribableRequestQueue.js";
