@@ -14,7 +14,7 @@ import {
   WebGLRenderer,
 } from "three";
 
-import Atlas2DSlice from "./Atlas2DSlice.js";
+import Atlas2DSlice, { SliceEdge } from "./Atlas2DSlice.js";
 import Channel from "./Channel.js";
 import { OVERLAY_LAYER } from "./ThreeJsPanel.js";
 import Volume from "./Volume.js";
@@ -76,6 +76,12 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
     const xzSlice = new Atlas2DSlice(volume, projectionSettings.clone());
     xzSlice.setViewAxis(Axis.Y);
 
+    // Tick marks are drawn only on each pane's external edges, so that they don't
+    // reach into the gap between neighboring panes. See the updateLayout diagram.
+    xySlice.setTickMarkEdges(SliceEdge.BOTTOM | SliceEdge.LEFT);
+    yzSlice.setTickMarkEdges(SliceEdge.BOTTOM | SliceEdge.TOP | SliceEdge.RIGHT);
+    xzSlice.setTickMarkEdges(SliceEdge.TOP | SliceEdge.LEFT | SliceEdge.RIGHT);
+
     this.renderers = [xySlice, yzSlice, xzSlice];
 
     // Share the XY renderer's fused texture atlas with YZ and XZ renderers
@@ -134,6 +140,8 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
   // --- VolumeRenderImpl interface ---
 
   updateSettings(settings: VolumeRenderSettings, dirtyFlags?: number | SettingsFlags): void {
+    // Track the latest settings reference so bounds appearance stays in sync.
+    this.baseSettings = settings;
     if (dirtyFlags !== undefined && dirtyFlags & SettingsFlags.ROI) {
       // Apply per-axis slice indices to each renderer
       this.applyAllSliceIndices();
@@ -149,7 +157,10 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
     // Recompute layout when resolution or view parameters change. A transform
     // update also touches each slice renderer's root node, which is where the
     // fixed pane position lives, so restore the pane layout afterward.
-    if (dirtyFlags === undefined || dirtyFlags & (SettingsFlags.SAMPLING | SettingsFlags.VIEW | SettingsFlags.TRANSFORM)) {
+    if (
+      dirtyFlags === undefined ||
+      dirtyFlags & (SettingsFlags.SAMPLING | SettingsFlags.VIEW | SettingsFlags.TRANSFORM)
+    ) {
       this.updateCrosshairs();
       this.updateLayout();
     }
@@ -397,6 +408,10 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
     const xzY = totalH / 2 - pz / 2;
     this.renderers[2].get3dObject().position.set(xzX, xzY, 0);
 
+    // Tick marks are sized in screen pixels, so each renderer needs the layout scale.
+    for (const r of this.renderers) {
+      r.setParentScale(fitScale);
+    }
     // Shadow offset above depends on pixelsPerWorldUnit/fitScale, just computed.
     this.updateCrosshairs();
   }
