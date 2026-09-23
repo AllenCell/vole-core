@@ -6,8 +6,6 @@ import {
   Group,
   Line,
   LineBasicMaterial,
-  LineLoop,
-  LineSegments,
   Object3D,
   OrthographicCamera,
   PerspectiveCamera,
@@ -16,7 +14,7 @@ import {
   WebGLRenderer,
 } from "three";
 
-import Atlas2DSlice from "./Atlas2DSlice.js";
+import Atlas2DSlice, { SliceEdge } from "./Atlas2DSlice.js";
 import Channel from "./Channel.js";
 import { OVERLAY_LAYER } from "./ThreeJsPanel.js";
 import Volume from "./Volume.js";
@@ -50,11 +48,6 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
   private pixelsPerWorldUnit = 0;
   private fitScale = 1;
 
-  // Per-pane bounding-box outlines and tick marks.
-  private boundsMaterial: LineBasicMaterial;
-  private paneOutlines: [LineLoop, LineLoop, LineLoop];
-  private paneTickMarks: [LineSegments, LineSegments, LineSegments];
-
   /**
    * Triple view has a fixed, screen-aligned pane layout. Preserve axis flips,
    * but do not let the volume alignment transform affect the panes.
@@ -64,8 +57,6 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
     projectionSettings.translation.set(0, 0, 0);
     projectionSettings.rotation.set(0, 0, 0);
     projectionSettings.scale.set(1, 1, 1);
-    // The bounding box is drawn by TripleSliceVolume itself, per pane.
-    projectionSettings.showBoundingBox = false;
     return projectionSettings;
   }
 
@@ -84,6 +75,12 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
 
     const xzSlice = new Atlas2DSlice(volume, projectionSettings.clone());
     xzSlice.setViewAxis(Axis.Y);
+
+    // Tick marks are drawn only on each pane's external edges, so that they don't
+    // reach into the gap between neighboring panes. See the updateLayout diagram.
+    xySlice.setTickMarkEdges(SliceEdge.BOTTOM | SliceEdge.LEFT);
+    yzSlice.setTickMarkEdges(SliceEdge.BOTTOM | SliceEdge.TOP | SliceEdge.RIGHT);
+    xzSlice.setTickMarkEdges(SliceEdge.TOP | SliceEdge.LEFT | SliceEdge.RIGHT);
 
     this.renderers = [xySlice, yzSlice, xzSlice];
 
@@ -135,28 +132,6 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
       .get3dObject()
       .add(this.crosshairShadowLines[4], this.crosshairShadowLines[5], this.crosshairLines[4], this.crosshairLines[5]);
 
-    // Per-pane bounding box outlines and tick marks. Geometry is populated
-    // (and re-populated) by rebuildBoundsGeometry(); visibility/color come
-    // from the base settings' showBoundingBox / boundingBoxColor.
-    this.boundsMaterial = new LineBasicMaterial({ color: TripleSliceVolume.BOUNDING_BOX_DEFAULT_COLOR });
-    this.paneOutlines = [
-      new LineLoop(new BufferGeometry(), this.boundsMaterial),
-      new LineLoop(new BufferGeometry(), this.boundsMaterial),
-      new LineLoop(new BufferGeometry(), this.boundsMaterial),
-    ];
-    this.paneTickMarks = [
-      new LineSegments(new BufferGeometry(), this.boundsMaterial),
-      new LineSegments(new BufferGeometry(), this.boundsMaterial),
-      new LineSegments(new BufferGeometry(), this.boundsMaterial),
-    ];
-    for (let i = 0; i < 3; i++) {
-      this.paneOutlines[i].frustumCulled = false;
-      this.paneTickMarks[i].frustumCulled = false;
-      this.renderers[i].get3dObject().add(this.paneOutlines[i], this.paneTickMarks[i]);
-    }
-    this.rebuildBoundsGeometry();
-    this.updateBoundsAppearance();
-
     // Apply initial slice indices to renderers
     this.applyAllSliceIndices();
     this.updateCrosshairs();
@@ -178,9 +153,6 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
       for (const r of this.renderers) {
         r.updateSettings(projectionSettings, nonRoiFlags);
       }
-    }
-    if (dirtyFlags === undefined || dirtyFlags & SettingsFlags.BOUNDING_BOX) {
-      this.updateBoundsAppearance();
     }
     // Recompute layout when resolution or view parameters change. A transform
     // update also touches each slice renderer's root node, which is where the
@@ -226,7 +198,6 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
     indices.z = clampSliceIndex(indices.z, volSize.z);
 
     this.applyAllSliceIndices();
-    this.rebuildBoundsGeometry();
     this.updateCrosshairs();
     this.updateLayout();
   }
@@ -240,14 +211,6 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
     }
     for (const line of this.crosshairShadowLines) {
       line.geometry.dispose();
-    }
-    // Dispose bounding-box resources
-    this.boundsMaterial.dispose();
-    for (const outline of this.paneOutlines) {
-      outline.geometry.dispose();
-    }
-    for (const ticks of this.paneTickMarks) {
-      ticks.geometry.dispose();
     }
     // Clean up non-primary renderers first (they share primary's channel data)
     this.renderers[1].cleanup();
@@ -390,115 +353,6 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
   /** Color of the crosshair drop-shadow lines (a dark, but not pure black, gray). */
   private static readonly CROSSHAIR_SHADOW_COLOR = 0x333333;
 
-  /** Default bounding-box / tick-mark color (hex 0xFFFF00 yellow). */
-  private static readonly BOUNDING_BOX_DEFAULT_COLOR = 0xffff00;
-
-  /** Tick-mark length, in screen pixels. */
-  private static readonly TICK_LENGTH_PIXELS = 8;
-
-  /** Converts TICK_LENGTH_PIXELS into the unscaled physical-size units used for bounds geometry. */
-  private getTickLength(): number {
-    if (this.pixelsPerWorldUnit <= 0 || this.fitScale <= 0) {
-      return 0;
-    }
-    return TripleSliceVolume.TICK_LENGTH_PIXELS / (this.pixelsPerWorldUnit * this.fitScale);
-  }
-
-  /**
-   * Rebuilds the per-pane outline and tick-mark geometry based on the volume's
-   * physical size and the current tick-mark spacing. Tick marks are only drawn
-   * along each pane's external (non-junction) edges, so that they don't visually
-   * overlap with neighboring panes.
-   *
-   * Pane layout (see updateLayout diagram):
-   *   XY (bottom-left):  external = bottom, left        (skip top, right)
-   *   YZ (bottom-right): external = bottom, right, top  (skip left)
-   *   XZ (top-left):     external = top, left, right    (skip bottom)
-   */
-  private rebuildBoundsGeometry(): void {
-    const phys = this.volume.normPhysicalSize;
-    const halfPx = phys.x * 0.5;
-    const halfPy = phys.y * 0.5;
-    const halfPz = phys.z * 0.5;
-
-    const setLineGeometry = (line: Line | LineSegments, verts: number[]): void => {
-      line.geometry.dispose();
-      const g = new BufferGeometry();
-      g.setAttribute("position", new Float32BufferAttribute(verts, 3));
-      line.geometry = g;
-    };
-
-    // prettier-ignore
-    setLineGeometry(this.paneOutlines[0], [
-      -halfPx, -halfPy, 0,   halfPx, -halfPy, 0,   halfPx, halfPy, 0,   -halfPx, halfPy, 0,
-    ]);
-    // prettier-ignore
-    setLineGeometry(this.paneOutlines[1], [
-      -halfPz, -halfPy, 0,   halfPz, -halfPy, 0,   halfPz, halfPy, 0,   -halfPz, halfPy, 0,
-    ]);
-    // prettier-ignore
-    setLineGeometry(this.paneOutlines[2], [
-      -halfPx, -halfPz, 0,   halfPx, -halfPz, 0,   halfPx, halfPz, 0,   -halfPx, halfPz, 0,
-    ]);
-
-    const tickLen = this.getTickLength();
-    const { physicalScale, tickMarkPhysicalLength } = this.volume;
-    // Same tick spacing (in normalized physical units) as RayMarchedAtlasVolume.
-    const numTickMarks = Math.max(1, physicalScale / tickMarkPhysicalLength);
-    const spacing = 1 / numTickMarks;
-
-    const xyVerts: number[] = [];
-    const yzVerts: number[] = [];
-    const xzVerts: number[] = [];
-    // Push a tick perpendicular to a horizontal edge (extends in ±Y).
-    const pushHTick = (dst: number[], x: number, y: number, outSign: number): void => {
-      dst.push(x, y, 0, x, y + outSign * tickLen, 0);
-    };
-    // Push a tick perpendicular to a vertical edge (extends in ±X).
-    const pushVTick = (dst: number[], x: number, y: number, outSign: number): void => {
-      dst.push(x, y, 0, x + outSign * tickLen, y, 0);
-    };
-
-    const epsilon = 1e-6;
-    if (tickLen > 0) {
-      // Along the volume X axis (spans px). Shown on XY bottom and XZ top.
-      for (let x = -halfPx; x <= halfPx + epsilon; x += spacing) {
-        pushHTick(xyVerts, x, -halfPy, -1); // XY bottom
-        pushHTick(xzVerts, x, halfPz, +1); // XZ top
-      }
-      // Along the volume Y axis (spans py). Shown on XY left and YZ right.
-      for (let y = -halfPy; y <= halfPy + epsilon; y += spacing) {
-        pushVTick(xyVerts, -halfPx, y, -1); // XY left
-        pushVTick(yzVerts, halfPz, y, +1); // YZ right
-      }
-      // Along the volume Z axis (spans pz). Shown on YZ bottom+top (mesh X=Z)
-      // and XZ left+right (mesh Y=Z).
-      for (let z = -halfPz; z <= halfPz + epsilon; z += spacing) {
-        pushHTick(yzVerts, z, -halfPy, -1); // YZ bottom
-        pushHTick(yzVerts, z, halfPy, +1); // YZ top
-        pushVTick(xzVerts, -halfPx, z, -1); // XZ left
-        pushVTick(xzVerts, halfPx, z, +1); // XZ right
-      }
-    }
-
-    setLineGeometry(this.paneTickMarks[0], xyVerts);
-    setLineGeometry(this.paneTickMarks[1], yzVerts);
-    setLineGeometry(this.paneTickMarks[2], xzVerts);
-  }
-
-  /** Updates visibility and color of the per-pane outlines and tick marks. */
-  private updateBoundsAppearance(): void {
-    const visible = this.baseSettings.showBoundingBox;
-    for (const outline of this.paneOutlines) {
-      outline.visible = visible;
-    }
-    for (const ticks of this.paneTickMarks) {
-      ticks.visible = visible;
-    }
-    const c = this.baseSettings.boundingBoxColor;
-    this.boundsMaterial.color.setRGB(c[0], c[1], c[2]);
-  }
-
   /**
    * Recomputes the layout of the three slice panes to fit within the current camera frustum.
    * Uses `baseSettings.resolution` and `baseSettings.orthoScale` to derive the frustum,
@@ -554,9 +408,11 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
     const xzY = totalH / 2 - pz / 2;
     this.renderers[2].get3dObject().position.set(xzX, xzY, 0);
 
-    // Tick-mark lengths depend on pixelsPerWorldUnit/fitScale (just computed);
-    // crosshair shadow offset depends on the same. Rebuild both before rendering.
-    this.rebuildBoundsGeometry();
+    // Tick marks are sized in screen pixels, so each renderer needs the combined
+    // world-to-pixel scale; the crosshair shadow offset depends on the same.
+    for (const r of this.renderers) {
+      r.setPixelsPerUnit(pixelsPerWorldUnit * fitScale);
+    }
     this.updateCrosshairs();
   }
 

@@ -1,10 +1,12 @@
 import {
   Box3,
-  Box3Helper,
   BufferGeometry,
-  Color,
+  Float32BufferAttribute,
   Group,
+  Line,
   LineBasicMaterial,
+  LineLoop,
+  LineSegments,
   Material,
   Matrix4,
   Mesh,
@@ -24,7 +26,24 @@ import { SettingsFlags, VolumeRenderSettings } from "./VolumeRenderSettings.js";
 import FusedChannelData from "./FusedChannelData.js";
 import { Axis, type AxisName, type FuseChannel } from "./types.js";
 
-const BOUNDING_BOX_DEFAULT_COLOR = new Color(0xffff00);
+const BOUNDING_BOX_DEFAULT_COLOR = 0xffff00;
+
+/** Tick-mark length, in screen pixels. */
+const TICK_LENGTH_PIXELS = 8;
+
+/**
+ * Identifies the edges of a slice's bounding rectangle, in the slice's own 2D
+ * display space (not volume axes). Used to select which edges get tick marks;
+ * in triple-slice mode the edges that abut another pane are left bare.
+ */
+export enum SliceEdge {
+  NONE = 0b0000,
+  LEFT = 0b0001,
+  RIGHT = 0b0010,
+  BOTTOM = 0b0100,
+  TOP = 0b1000,
+  ALL = 0b1111,
+}
 
 /** Maps the slice axis to the integer expected by the viewAxis shader uniform. */
 function axisToShaderInt(axis: AxisName): number {
@@ -38,6 +57,13 @@ function axisToShaderInt(axis: AxisName): number {
   }
 }
 
+function setLineGeometry(line: Line | LineSegments, verts: number[]): void {
+  line.geometry.dispose();
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new Float32BufferAttribute(verts, 3));
+  line.geometry = geometry;
+}
+
 /**
  * Creates a plane that renders a 2D XY slice of volume atlas data.
  */
@@ -47,7 +73,9 @@ export default class Atlas2DSlice implements VolumeRenderImpl {
   private geometry: PlaneGeometry;
   protected geometryMesh: Mesh<BufferGeometry, Material>;
   private geometryTransformNode: Group;
-  private boxHelper: Box3Helper;
+  private boundsMaterial: LineBasicMaterial;
+  private boundsOutline: LineLoop;
+  private tickMarks: LineSegments;
   private uniforms: ReturnType<typeof sliceShaderUniforms>;
   private channelData!: FusedChannelData;
   /** When false, `channelData` is shared from another renderer and must not be cleaned up by this instance. */
@@ -57,6 +85,10 @@ export default class Atlas2DSlice implements VolumeRenderImpl {
   private viewAxisValue: Axis = Axis.Z;
   /** When true, always request the full volume (all Z slices) even for viewAxis 0. */
   private requireFullVolume = false;
+  /** Which edges of the bounding rectangle get tick marks. */
+  private tickMarkEdges: SliceEdge = SliceEdge.NONE;
+  /** Screen pixels per local world unit; 0 until a caller supplies it, which suppresses tick marks. */
+  private pixelsPerUnit = 0;
 
   /**
    * Creates a new Atlas2DSlice.
@@ -69,17 +101,18 @@ export default class Atlas2DSlice implements VolumeRenderImpl {
     this.uniforms = sliceShaderUniforms();
     [this.geometry, this.geometryMesh] = this.createGeometry(this.uniforms);
 
-    this.boxHelper = new Box3Helper(
-      new Box3(new Vector3(-0.5, -0.5, -0.5), new Vector3(0.5, 0.5, 0.5)),
-      BOUNDING_BOX_DEFAULT_COLOR
-    );
-    this.boxHelper.updateMatrixWorld();
-    this.boxHelper.visible = false;
+    this.boundsMaterial = new LineBasicMaterial({ color: BOUNDING_BOX_DEFAULT_COLOR });
+    this.boundsOutline = new LineLoop(new BufferGeometry(), this.boundsMaterial);
+    this.tickMarks = new LineSegments(new BufferGeometry(), this.boundsMaterial);
+    this.boundsOutline.frustumCulled = false;
+    this.tickMarks.frustumCulled = false;
+    this.boundsOutline.visible = false;
+    this.tickMarks.visible = false;
 
     this.geometryTransformNode = new Group();
     this.geometryTransformNode.name = "VolumeContainerNode";
 
-    this.geometryTransformNode.add(this.boxHelper, this.geometryMesh);
+    this.geometryTransformNode.add(this.boundsOutline, this.tickMarks, this.geometryMesh);
 
     this.setUniform("SLICE_INDEX", Math.floor(volume.imageInfo.volumeSize.z / 2));
     this.settings = settings;
@@ -156,7 +189,7 @@ export default class Atlas2DSlice implements VolumeRenderImpl {
     }
 
     this.setUniform("volumeScale", regionScale);
-    this.boxHelper.box.set(volumeScale.clone().multiplyScalar(-0.5), volumeScale.clone().multiplyScalar(0.5));
+    this.rebuildBoundsGeometry();
 
     const { atlasTileDims, subregionSize, volumeSize } = this.volume.imageInfo;
     const atlasSize = new Vector2(subregionSize.x, subregionSize.y).multiply(atlasTileDims);
@@ -205,10 +238,10 @@ export default class Atlas2DSlice implements VolumeRenderImpl {
 
     if (dirtyFlags & SettingsFlags.BOUNDING_BOX) {
       // Configure bounding box
-      this.boxHelper.visible = this.settings.showBoundingBox;
+      this.boundsOutline.visible = this.settings.showBoundingBox;
+      this.tickMarks.visible = this.settings.showBoundingBox;
       const colorVector = this.settings.boundingBoxColor;
-      const newBoxColor = new Color(colorVector[0], colorVector[1], colorVector[2]);
-      (this.boxHelper.material as LineBasicMaterial).color = newBoxColor;
+      this.boundsMaterial.color.setRGB(colorVector[0], colorVector[1], colorVector[2]);
     }
 
     if (dirtyFlags & SettingsFlags.TRANSFORM) {
@@ -301,6 +334,9 @@ export default class Atlas2DSlice implements VolumeRenderImpl {
   public cleanup(): void {
     this.geometry.dispose();
     this.geometryMesh.material.dispose();
+    this.boundsMaterial.dispose();
+    this.boundsOutline.geometry.dispose();
+    this.tickMarks.geometry.dispose();
 
     if (this.ownsChannelData) {
       this.channelData?.cleanup();
@@ -400,5 +436,77 @@ export default class Atlas2DSlice implements VolumeRenderImpl {
    */
   public setRequireFullVolume(require: boolean): void {
     this.requireFullVolume = require;
+  }
+
+  /** Selects which edges of the bounding rectangle are decorated with tick marks. */
+  public setTickMarkEdges(edges: SliceEdge): void {
+    if (this.tickMarkEdges === edges) {
+      return;
+    }
+    this.tickMarkEdges = edges;
+    this.rebuildBoundsGeometry();
+  }
+
+  /**
+   * Reports how many screen pixels one unit of this renderer's local space covers, including
+   * any scale applied by a parent object. Used to keep tick marks a constant length on screen.
+   */
+  public setPixelsPerUnit(pixelsPerUnit: number): void {
+    if (this.pixelsPerUnit === pixelsPerUnit) {
+      return;
+    }
+    this.pixelsPerUnit = pixelsPerUnit;
+    this.rebuildBoundsGeometry();
+  }
+
+  /** Half-width and half-height of this slice's face, in the local space of the plane mesh. */
+  private getFaceHalfExtents(): [number, number] {
+    const size = this.volume.normPhysicalSize.clone().multiply(this.settings.scale).multiplyScalar(0.5);
+    switch (this.viewAxisValue) {
+      case Axis.X: // YZ face: volume Z → mesh X, volume Y → mesh Y
+        return [size.z, size.y];
+      case Axis.Y: // XZ face: volume X → mesh X, volume Z → mesh Y
+        return [size.x, size.z];
+      default: // XY face
+        return [size.x, size.y];
+    }
+  }
+
+  /** Rebuilds the bounding rectangle outline and its tick marks for the current view axis. */
+  private rebuildBoundsGeometry(): void {
+    const [halfW, halfH] = this.getFaceHalfExtents();
+
+    // prettier-ignore
+    setLineGeometry(this.boundsOutline, [
+      -halfW, -halfH, 0,   halfW, -halfH, 0,   halfW, halfH, 0,   -halfW, halfH, 0,
+    ]);
+
+    const tickLength = this.pixelsPerUnit > 0 ? TICK_LENGTH_PIXELS / this.pixelsPerUnit : 0;
+    const verts: number[] = [];
+
+    if (tickLength > 0 && this.tickMarkEdges !== SliceEdge.NONE) {
+      const { physicalScale, tickMarkPhysicalLength } = this.volume;
+      const spacing = 1 / Math.max(1, physicalScale / tickMarkPhysicalLength);
+      const epsilon = 1e-6;
+
+      for (let x = -halfW; x <= halfW + epsilon; x += spacing) {
+        if (this.tickMarkEdges & SliceEdge.BOTTOM) {
+          verts.push(x, -halfH, 0, x, -halfH - tickLength, 0);
+        }
+        if (this.tickMarkEdges & SliceEdge.TOP) {
+          verts.push(x, halfH, 0, x, halfH + tickLength, 0);
+        }
+      }
+      for (let y = -halfH; y <= halfH + epsilon; y += spacing) {
+        if (this.tickMarkEdges & SliceEdge.LEFT) {
+          verts.push(-halfW, y, 0, -halfW - tickLength, y, 0);
+        }
+        if (this.tickMarkEdges & SliceEdge.RIGHT) {
+          verts.push(halfW, y, 0, halfW + tickLength, y, 0);
+        }
+      }
+    }
+
+    setLineGeometry(this.tickMarks, verts);
   }
 }
