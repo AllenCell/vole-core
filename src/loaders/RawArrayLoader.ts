@@ -1,6 +1,6 @@
 import { Box3, Vector3 } from "three";
 
-import { VolumeLoader, type LoadSpec, type RawChannelDataCallback, type LoadedVolumeInfo } from "./IVolumeLoader.js";
+import { VolumeLoader, type LoadSpec, type RawChannelDataCallback, type LoadedVolumeInfo } from "./VolumeLoader.js";
 import { computePackedAtlasDims } from "./VolumeLoaderUtils.js";
 import type { ImageInfo } from "../ImageInfo.js";
 import type { VolumeDims } from "../VolumeDims.js";

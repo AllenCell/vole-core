@@ -8,7 +8,7 @@ import type { VolumeDims } from "../VolumeDims.js";
 import VolumeCache from "../VolumeCache.js";
 import { getDataRange } from "../utils/num_utils.js";
 import SubscribableRequestQueue from "../utils/SubscribableRequestQueue.js";
-import { VolumeLoader, LoadSpec, type RawChannelDataCallback, type LoadedVolumeInfo } from "./IVolumeLoader.js";
+import { VolumeLoader, LoadSpec, type RawChannelDataCallback, type LoadedVolumeInfo } from "./VolumeLoader.js";
 import {
   composeSubregion,
   computePackedAtlasDims,

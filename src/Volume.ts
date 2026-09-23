@@ -4,7 +4,7 @@ import Channel from "./Channel.js";
 import Histogram from "./Histogram.js";
 import { Lut } from "./Lut.js";
 import { getColorByChannelIndex } from "./constants/colors.js";
-import { LoadSpec, type PerChannelCallback, type VolumeLoader } from "./loaders/IVolumeLoader.js";
+import { LoadSpec, type PerChannelCallback, type VolumeLoader } from "./loaders/VolumeLoader.js";
 import { MAX_ATLAS_EDGE, pickLevelToLoadUnscaled } from "./loaders/VolumeLoaderUtils.js";
 import type { NumberType, TypedArray } from "./types.js";
 import { type ImageInfo, CImageInfo, defaultImageInfo } from "./ImageInfo.js";

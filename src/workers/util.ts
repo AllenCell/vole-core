@@ -1,6 +1,6 @@
 import { Box3, Vector3 } from "three";
 
-import { LoadSpec } from "../loaders/IVolumeLoader.js";
+import { LoadSpec } from "../loaders/VolumeLoader.js";
 
 /** Recreates a `LoadSpec` that has just been sent to/from a worker to restore three.js object prototypes */
 export function rebuildLoadSpec(spec: LoadSpec): LoadSpec {

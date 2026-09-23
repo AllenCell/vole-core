@@ -4,7 +4,7 @@ import { throttledQueue } from "throttled-queue";
 import { ImageInfo } from "../ImageInfo.js";
 import { VolumeDims } from "../VolumeDims.js";
 import { CreateLoaderOptions, PrefetchDirection, VolumeFileFormat, pathToFileType } from "../loaders/index.js";
-import { VolumeLoader, LoadSpec, RawChannelDataCallback, LoadedVolumeInfo } from "../loaders/IVolumeLoader.js";
+import { VolumeLoader, LoadSpec, RawChannelDataCallback, LoadedVolumeInfo } from "../loaders/VolumeLoader.js";
 import { RawArrayLoader } from "../loaders/RawArrayLoader.js";
 import { TiffLoader } from "../loaders/TiffLoader.js";
 import type {

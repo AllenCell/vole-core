@@ -4,7 +4,7 @@ import { Vector3 } from "three";
 import type { TypedArray } from "zarrita";
 
 import RequestQueue, { type Request } from "../utils/RequestQueue.js";
-import { LoadSpec, loadSpecToString } from "../loaders/IVolumeLoader.js";
+import { LoadSpec, loadSpecToString } from "../loaders/VolumeLoader.js";
 
 // Fixes a type error where process is undefined
 declare const process: {
