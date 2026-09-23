@@ -412,6 +412,7 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
     for (const r of this.renderers) {
       r.setParentScale(fitScale);
     }
+    // Shadow offset above depends on pixelsPerWorldUnit/fitScale, just computed.
     this.updateCrosshairs();
   }
 
