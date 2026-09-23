@@ -34,7 +34,8 @@ const TICK_LENGTH_PIXELS = 8;
 /**
  * Identifies the edges of a slice's bounding rectangle, in the slice's own 2D
  * display space (not volume axes). Used to select which edges get tick marks;
- * in triple-slice mode the edges that abut another pane are left bare.
+ * in triple-slice mode the edges that abut another pane do not get tick marks,
+ * so that they don't overlap into the other pane.
  */
 export enum SliceEdge {
   NONE = 0b0000,
@@ -73,9 +74,15 @@ export default class Atlas2DSlice implements VolumeRenderImpl {
   private geometry: PlaneGeometry;
   protected geometryMesh: Mesh<BufferGeometry, Material>;
   private geometryTransformNode: Group;
+
   private boundsMaterial: LineBasicMaterial;
   private boundsOutline: LineLoop;
   private tickMarks: LineSegments;
+  /** Which edges of the bounding rectangle get tick marks. */
+  private tickMarkEdges: SliceEdge = SliceEdge.NONE;
+  /** Screen pixels per local world unit; 0 until a caller supplies it, which suppresses tick marks. */
+  private pixelsPerUnit = 0;
+
   private uniforms: ReturnType<typeof sliceShaderUniforms>;
   private channelData!: FusedChannelData;
   /** When false, `channelData` is shared from another renderer and must not be cleaned up by this instance. */
@@ -85,10 +92,6 @@ export default class Atlas2DSlice implements VolumeRenderImpl {
   private viewAxisValue: Axis = Axis.Z;
   /** When true, always request the full volume (all Z slices) even for viewAxis 0. */
   private requireFullVolume = false;
-  /** Which edges of the bounding rectangle get tick marks. */
-  private tickMarkEdges: SliceEdge = SliceEdge.NONE;
-  /** Screen pixels per local world unit; 0 until a caller supplies it, which suppresses tick marks. */
-  private pixelsPerUnit = 0;
 
   /**
    * Creates a new Atlas2DSlice.
