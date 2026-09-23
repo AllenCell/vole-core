@@ -80,7 +80,9 @@ export default class Atlas2DSlice implements VolumeRenderImpl {
   private tickMarks: LineSegments;
   /** Which edges of the bounding rectangle get tick marks. */
   private tickMarkEdges: SliceEdge = SliceEdge.NONE;
-  /** Screen pixels per local world unit; 0 until a caller supplies it, which suppresses tick marks. */
+  /** Scale applied to this renderer's local space by a parent object, e.g. the triple-slice layout. */
+  private parentScale = 1;
+  /** Cached screen pixels per unit of local space. 0 when unknown, which suppresses tick marks. */
   private pixelsPerUnit = 0;
 
   private uniforms: ReturnType<typeof sliceShaderUniforms>;
@@ -237,6 +239,7 @@ export default class Atlas2DSlice implements VolumeRenderImpl {
       } else {
         this.setUniform("orthoThickness", 1.0);
       }
+      this.updatePixelsPerUnit();
     }
 
     if (dirtyFlags & SettingsFlags.BOUNDING_BOX) {
@@ -297,6 +300,7 @@ export default class Atlas2DSlice implements VolumeRenderImpl {
     if (dirtyFlags & SettingsFlags.SAMPLING) {
       this.setUniform("interpolationEnabled", this.settings.useInterpolation);
       this.setUniform("iResolution", this.settings.resolution);
+      this.updatePixelsPerUnit();
     }
 
     if (dirtyFlags & SettingsFlags.MASK_ALPHA) {
@@ -451,10 +455,22 @@ export default class Atlas2DSlice implements VolumeRenderImpl {
   }
 
   /**
-   * Reports how many screen pixels one unit of this renderer's local space covers, including
-   * any scale applied by a parent object. Used to keep tick marks a constant length on screen.
+   * Reports a scale applied to this renderer's local space by a parent object, so that
+   * tick marks can stay a constant length on screen.
    */
-  public setPixelsPerUnit(pixelsPerUnit: number): void {
+  public setParentScale(scale: number): void {
+    if (this.parentScale === scale) {
+      return;
+    }
+    this.parentScale = scale;
+    this.updatePixelsPerUnit();
+  }
+
+  /** Recomputes the local-space-to-screen scale from the ortho frustum, rebuilding tick marks if it changed. */
+  private updatePixelsPerUnit(): void {
+    const { isOrtho, orthoScale, resolution } = this.settings;
+    // Frustum height in world units is 2 * orthoScale; tick marks are meaningless without it.
+    const pixelsPerUnit = isOrtho && orthoScale > 0 ? (resolution.y / (2 * orthoScale)) * this.parentScale : 0;
     if (this.pixelsPerUnit === pixelsPerUnit) {
       return;
     }

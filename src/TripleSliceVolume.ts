@@ -408,10 +408,9 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
     const xzY = totalH / 2 - pz / 2;
     this.renderers[2].get3dObject().position.set(xzX, xzY, 0);
 
-    // Tick marks are sized in screen pixels, so each renderer needs the combined
-    // world-to-pixel scale; the crosshair shadow offset depends on the same.
+    // Tick marks are sized in screen pixels, so each renderer needs the layout scale.
     for (const r of this.renderers) {
-      r.setPixelsPerUnit(pixelsPerWorldUnit * fitScale);
+      r.setParentScale(fitScale);
     }
     this.updateCrosshairs();
   }
