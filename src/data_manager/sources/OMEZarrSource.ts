@@ -1,13 +1,19 @@
 import * as zarr from "zarrita";
 
-import { type ExtVolumeDims, ChunkSource } from "./ChunkSource.js";
+import { type ExtVolumeDims, ChunkSource, type VolumeMetadata } from "./ChunkSource.js";
 import {
   assertMetadataHasMultiscales,
   toOMEZarrMetaV4,
   validateOMEZarrMetadata,
 } from "../../loaders/zarr_utils/validation.js";
 import type { NumericZarrArray, OMEMultiscale, OmeroTransitionalMetadata } from "../../loaders/zarr_utils/types.js";
-import { getScale, orderByDimension, orderByTCZYX, remapAxesToTCZYX } from "../../loaders/zarr_utils/utils.js";
+import {
+  getScale,
+  getSourceChannelMeta,
+  orderByDimension,
+  orderByTCZYX,
+  remapAxesToTCZYX,
+} from "../../loaders/zarr_utils/utils.js";
 import { unitNameToSymbol } from "../../loaders/VolumeLoaderUtils.js";
 import type { Chunk, LocalChunkId } from "../types.js";
 import type { NumberType, TypedArray } from "../../types.js";
@@ -16,11 +22,16 @@ const PLACEHOLDER_NAME = "zarr source";
 const PLACEHOLDER_SCENE_INDEX = 0;
 
 export class OMEZarrSource extends ChunkSource {
+  // Magic number that makes `getSourceChannelMeta` (below) work.
+  // TODO if/when this class becomes the primary adapter for zarrs, move that util over here and adapt it such that
+  //   this property can be removed and the remaining properties can be made `private`.
+  public readonly channelOffset = 0;
+
   private constructor(
-    private scaleLevels: NumericZarrArray[],
-    private multiscaleMetadata: OMEMultiscale,
-    private omeroMetadata: OmeroTransitionalMetadata | undefined,
-    private axesTCZYX: [number, number, number, number, number]
+    public readonly scaleLevels: NumericZarrArray[],
+    public readonly multiscaleMetadata: OMEMultiscale,
+    public readonly omeroMetadata: OmeroTransitionalMetadata | undefined,
+    public readonly axesTCZYX: [number, number, number, number, number]
   ) {
     super();
   }
@@ -83,6 +94,21 @@ export class OMEZarrSource extends ChunkSource {
       }
     }
     return chunksInKey;
+  }
+
+  getMeta(): VolumeMetadata {
+    const { names: channelNames, colors: channelColors } = getSourceChannelMeta(this);
+
+    return {
+      name: this.omeroMetadata?.name ?? PLACEHOLDER_NAME,
+      channelNames,
+      channelColors,
+      transform: {
+        translation: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+      },
+    };
   }
 
   getDims(): ExtVolumeDims[] {
