@@ -15,7 +15,7 @@ import {
 import type { NumberType, TypedArray } from "../types.js";
 import PriorityQueue from "./PriorityQueue.js";
 import type { DeviceInterface } from "./device_interface.js";
-import { ChunkSource, type ExtVolumeDims } from "./sources/ChunkSource.js";
+import { ChunkSource, type VolumeMetadata, type ExtVolumeDims } from "./sources/ChunkSource.js";
 import SlotMap from "./SlotMap.js";
 
 const SUBSCRIBER_ID = Symbol("DataManager.subscriberId");
@@ -626,6 +626,11 @@ export default class DataManager<Dev, Tex> {
   /** Returns the dimensions of the given source. */
   getSourceDims(sourceId: number): ExtVolumeDims[] | undefined {
     return this.sources[sourceId]?.source.getDims();
+  }
+
+  /** Returns the metadata of the given source. */
+  getSourceMeta(sourceId: number): VolumeMetadata | undefined {
+    return this.sources[sourceId]?.source.getMeta();
   }
 
   /** Subscribes `subscriber` to data events from the source with id `sourceId` */
