@@ -142,7 +142,7 @@ export const stringToChunkId = (id: string): ChunkId => {
   };
 };
 
-export type Chunk<T extends NumberType> = {
+export type Chunk<T extends NumberType = NumberType> = {
   id: LocalChunkId;
   data: TypedArray<T>;
   dtype: T;
