@@ -153,20 +153,19 @@ export default class DataManager<Dev, Tex> {
 
   /** Resolves a chunk's overall priority based on all requests for it, then updates its queue position. */
   private updateChunkPriority(key: string, entry: ChunkEntry<Tex>) {
-    const [nextMemory, nextDevice] = entry.subscriberPriorities.reduce(
-      ([prevMemory, prevDevice], { priority, device }) => {
-        const m = comparePriority(priority, prevMemory) < 0 ? priority : prevMemory;
-        const d = device && comparePriority(priority, prevDevice) < 0 ? priority : prevDevice;
-        return [m, d];
-      },
-      [getMinChunkPriority(), getMinChunkPriority()]
-    );
-
-    if (nextDevice.level === ChunkPriorityLevel.RECENT) {
-      nextMemory.score = this.recentCounter;
-      if (nextMemory.level === ChunkPriorityLevel.RECENT) {
-        nextMemory.score = this.recentCounter;
+    let nextMemory = getMinChunkPriority();
+    let nextDevice = getMinChunkPriority();
+    entry.subscriberPriorities.forEach(({ priority, device }) => {
+      if (comparePriority(priority, nextMemory) < 0) {
+        nextMemory = priority;
       }
+      if (device && comparePriority(priority, nextDevice) < 0) {
+        nextDevice = priority;
+      }
+    });
+
+    if (nextMemory.level === ChunkPriorityLevel.RECENT) {
+      nextMemory.score = this.recentCounter;
       this.recentCounter += 1;
     }
 
