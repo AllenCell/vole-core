@@ -116,10 +116,17 @@ export type ChunkData<Tex> =
   | { state: ChunkState.MEMORY; memory: TypedArray; dtype: NumberType }
   | { state: ChunkState.DEVICE; memory: TypedArray; dtype: NumberType; texture: Tex };
 
+export type SubscriberPriority = {
+  subscriberId: number;
+  priority: ChunkPriority;
+  device: boolean;
+};
+
 export type ChunkEntry<Tex> = {
   data: ChunkData<Tex>;
-  subscriberPriorities: [number, ChunkPriority][];
-  priority: ChunkPriority;
+  subscriberPriorities: SubscriberPriority[];
+  memoryPriority: ChunkPriority;
+  devicePriority: ChunkPriority;
 };
 
 export type LocalChunkId = {
