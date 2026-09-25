@@ -133,17 +133,17 @@ export default class DataManager<Dev, Tex> {
   private updateChunkInQueue(key: string, entry: ChunkEntry<Tex>) {
     switch (entry.data.state) {
       case ChunkState.QUEUED:
-        this.queues.load.insert(key, entry.priority);
+        this.queues.load.insert(key, entry.memoryPriority);
         break;
       case ChunkState.MEMORY:
-        this.queues.deviceLoad.insert(key, entry.priority);
-        this.queues.evict.insert(key, entry.priority);
+        this.queues.deviceLoad.insert(key, entry.devicePriority);
+        this.queues.evict.insert(key, entry.memoryPriority);
         break;
       case ChunkState.DEVICE:
-        this.queues.deviceEvict.insert(key, entry.priority);
+        this.queues.deviceEvict.insert(key, entry.devicePriority);
         break;
       case ChunkState.LOADING:
-        if (entry.priority.level === ChunkPriorityLevel.RECENT) {
+        if (entry.memoryPriority.level === ChunkPriorityLevel.RECENT) {
           // TODO cancel request here
         }
         break;
@@ -153,17 +153,29 @@ export default class DataManager<Dev, Tex> {
 
   /** Resolves a chunk's overall priority based on all requests for it, then updates its queue position. */
   private updateChunkPriority(key: string, entry: ChunkEntry<Tex>) {
-    const nextPriority = entry.subscriberPriorities.reduce((prevPriority, [_, priority]) => {
-      return comparePriority(priority, prevPriority) < 0 ? priority : prevPriority;
-    }, getMinChunkPriority());
+    const [nextMemory, nextDevice] = entry.subscriberPriorities.reduce(
+      ([prevMemory, prevDevice], { priority, device }) => {
+        const m = comparePriority(priority, prevMemory) < 0 ? priority : prevMemory;
+        const d = device && comparePriority(priority, prevDevice) < 0 ? priority : prevDevice;
+        return [m, d];
+      },
+      [getMinChunkPriority(), getMinChunkPriority()]
+    );
 
-    if (nextPriority.level === ChunkPriorityLevel.RECENT) {
-      nextPriority.score = this.recentCounter;
+    if (nextDevice.level === ChunkPriorityLevel.RECENT) {
+      nextMemory.score = this.recentCounter;
+      if (nextMemory.level === ChunkPriorityLevel.RECENT) {
+        nextMemory.score = this.recentCounter;
+      }
       this.recentCounter += 1;
     }
 
-    if (nextPriority.level !== entry.priority.level || nextPriority.score !== entry.priority.score) {
-      entry.priority = { ...nextPriority };
+    if (
+      comparePriority(nextMemory, entry.memoryPriority) !== 0 ||
+      comparePriority(nextDevice, entry.devicePriority) !== 0
+    ) {
+      entry.memoryPriority = { ...nextMemory };
+      entry.devicePriority = { ...nextDevice };
       this.updateChunkInQueue(key, entry);
     }
   }
@@ -460,7 +472,8 @@ export default class DataManager<Dev, Tex> {
       chunkEntry = {
         data,
         subscriberPriorities: [],
-        priority: { level: ChunkPriorityLevel.RECENT, score: this.recentCounter },
+        memoryPriority: { level: ChunkPriorityLevel.RECENT, score: this.recentCounter },
+        devicePriority: { level: ChunkPriorityLevel.RECENT, score: this.recentCounter },
       };
       this.chunks.set(key, chunkEntry);
       this.recentCounter += 1;
@@ -468,8 +481,8 @@ export default class DataManager<Dev, Tex> {
       chunkEntry.data = data;
     }
 
-    this.queues.deviceLoad.insert(key, chunkEntry.priority);
-    this.queues.evict.insert(key, chunkEntry.priority);
+    this.queues.deviceLoad.insert(key, chunkEntry.memoryPriority);
+    this.queues.evict.insert(key, chunkEntry.memoryPriority);
 
     this.memorySize += memory.byteLength;
     sourceEntry.subscribers.forEach((s) => s.onChunkLoaded?.(id, chunk));
@@ -483,7 +496,7 @@ export default class DataManager<Dev, Tex> {
    * If the chunk is not already in memory, this will queue the chunk to be loaded. Chunk load requests are not
    * submitted until the next call to `update`.
    */
-  queueChunkRequest(subscriber: IDataSubscriber<Tex>, chunkId: ChunkId, priority: ChunkPriority) {
+  queueChunkRequest(subscriber: IDataSubscriber<Tex>, chunkId: ChunkId, priority: ChunkPriority, device: boolean) {
     const subscriberId = this.getIdForSubscriber(subscriber);
     const chunkIdString = chunkIdToString(chunkId);
     const chunkEntry = this.chunks.get(chunkIdString);
@@ -491,15 +504,18 @@ export default class DataManager<Dev, Tex> {
     if (chunkEntry === undefined) {
       const newChunkEntry: ChunkEntry<Tex> = {
         data: { state: ChunkState.QUEUED },
-        subscriberPriorities: [[subscriberId, { ...priority }]],
-        priority: { ...priority },
+        subscriberPriorities: [{ subscriberId, priority: { ...priority }, device }],
+        memoryPriority: { ...priority },
+        devicePriority: device ? { ...priority } : getMinChunkPriority(),
       };
       this.chunks.set(chunkIdString, newChunkEntry);
       this.queues.load.insert(chunkIdString, priority);
     } else {
-      const subscriberPriorityIndex = chunkEntry.subscriberPriorities.findIndex(([id]) => id === subscriberId);
+      const subscriberPriorityIndex = chunkEntry.subscriberPriorities.findIndex(
+        (entry) => entry.subscriberId === subscriberId
+      );
       if (subscriberPriorityIndex === -1) {
-        chunkEntry.subscriberPriorities.push([subscriberId, priority]);
+        chunkEntry.subscriberPriorities.push({ subscriberId, priority: { ...priority }, device });
       } else {
         chunkEntry.subscriberPriorities[subscriberPriorityIndex][1] = priority;
       }
@@ -521,7 +537,7 @@ export default class DataManager<Dev, Tex> {
       return;
     }
 
-    const index = chunkEntry.subscriberPriorities.findIndex(([id]) => id === subscriberId);
+    const index = chunkEntry.subscriberPriorities.findIndex((entry) => entry.subscriberId === subscriberId);
     if (index < 0) {
       return;
     }
