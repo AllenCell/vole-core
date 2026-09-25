@@ -1,12 +1,4 @@
-import type {
-  ChunkId,
-  ChunkPriority,
-  ChunkEntry,
-  DataManagerLimits,
-  LocalChunkId,
-  Chunk,
-  DeviceInterface,
-} from "./types.js";
+import type { ChunkId, ChunkPriority, ChunkEntry, DataManagerLimits, LocalChunkId, Chunk } from "./types.js";
 import {
   chunkIdToString,
   ChunkState,
@@ -23,6 +15,7 @@ import {
 import type { NumberType, TypedArray } from "../types.js";
 import PriorityQueue from "./PriorityQueue.js";
 import { VolumeDims } from "../VolumeDims.js";
+import type { DeviceInterface } from "./device_interface.js";
 
 const SUBSCRIBER_ID = Symbol("DataManager.subscriberId");
 

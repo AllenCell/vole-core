@@ -46,21 +46,6 @@ export const validateDataManagerLimits = (limits: DataManagerLimits): DataManage
   concurrentPrefetches: Math.min(limits.concurrentRequests, limits.concurrentPrefetches),
 });
 
-/** Abstraction over the graphics API or library used by `DataManager` to move chunks to/from the GPU. */
-export interface DeviceInterface<Dev, Tex> {
-  /**
-   * Type predicate for this interface's *device handle*, for APIs (like WebGPU) that require explicit access to a
-   * shared resource to perform GPU operations.
-   */
-  isDeviceHandle(val: unknown): val is Dev;
-  /** Create a texture with the given `data`, `dtype`, and `size` using `deviceHandle`. */
-  createTexture(data: TypedArray, dtype: NumberType, size: [number, number, number], deviceHandle: Dev): Tex;
-  /** Destroy a texture and clean up its GPU resources. */
-  destroyTexture(tex: Tex): void;
-  /** Called when `DataManager` is done with an update cycle, in case the interface has state to clean up. */
-  finishUpdate(): void;
-}
-
 /** Reasons that a chunk is tracked by `DataManager`, in increasing order of priority. */
 export const enum ChunkPriorityLevel {
   /**
