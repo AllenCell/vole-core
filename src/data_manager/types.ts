@@ -44,13 +44,6 @@ export const validateDataManagerLimits = (limits: DataManagerLimits): DataManage
   concurrentPrefetches: Math.min(limits.concurrentRequests, limits.concurrentPrefetches),
 });
 
-export interface DeviceInterface<Dev, Tex> {
-  isDeviceHandle(val: unknown): val is Dev;
-  createTexture(data: TypedArray, dtype: NumberType, size: [number, number, number], deviceHandle: Dev): Tex;
-  destroyTexture(tex: Tex): void;
-  finishUpdate(): void;
-}
-
 export const enum ChunkPriorityLevel {
   /**
    * Chunks that were recently loaded but which aren't currently needed.
