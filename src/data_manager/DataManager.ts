@@ -307,6 +307,8 @@ export default class DataManager<Dev, Tex> {
 
       loadEntry.data = { state: ChunkState.DEVICE, memory, texture, dtype: dataType };
     }
+
+    this.deviceInterface.finishUpdate();
   }
 
   /**
