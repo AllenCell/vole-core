@@ -1,20 +1,12 @@
-import {
-  ByteType,
-  Data3DTexture,
-  FloatType,
-  IntType,
-  type PixelFormat,
-  PixelFormatGPU,
-  RedFormat,
-  RedIntegerFormat,
-  ShortType,
-  type TextureDataType,
-  UnsignedByteType,
-  UnsignedIntType,
-  UnsignedShortType,
-} from "three";
-
-import type { ChunkId, ChunkPriority, ChunkEntry, DataManagerLimits, LocalChunkId, Chunk } from "./types.js";
+import type {
+  ChunkId,
+  ChunkPriority,
+  ChunkEntry,
+  DataManagerLimits,
+  LocalChunkId,
+  Chunk,
+  DeviceInterface,
+} from "./types.js";
 import {
   chunkIdToString,
   ChunkState,
@@ -28,9 +20,9 @@ import {
   ChunkPriorityLevel,
   deviceSizeLimitForPriority,
 } from "./types.js";
+import type { NumberType, TypedArray } from "../types.js";
 import PriorityQueue from "./PriorityQueue.js";
 import { VolumeDims } from "../VolumeDims.js";
-import { ARRAY_CONSTRUCTORS, type NumberType, type TypedArray } from "../types.js";
 
 const SUBSCRIBER_ID = Symbol("DataManager.subscriberId");
 
@@ -43,17 +35,17 @@ export interface IChunkSource {
   getChunk(id: LocalChunkId, signal?: AbortSignal): Promise<Chunk<NumberType>>;
 }
 
-export interface IDataSubscriber {
+export interface IDataSubscriber<Tex> {
   [SUBSCRIBER_ID]?: number;
   onChunkLoaded?: (id: ChunkId, chunk: Chunk<NumberType>) => void;
-  onChunkOnGpu?: (id: ChunkId, texture: Data3DTexture) => void;
+  onChunkOnGpu?: (id: ChunkId, texture: Tex) => void;
   // TODO events for when chunks are evicted?
 }
 
 // TODO move to types file? along with above interfaces...?
-type SourceEntry = {
+type SourceEntry<Tex> = {
   source: IChunkSource;
-  subscribers: IDataSubscriber[];
+  subscribers: IDataSubscriber<Tex>[];
 };
 
 const swapRemove = <T>(arr: T[], index: number) => {
@@ -66,19 +58,6 @@ const swapRemove = <T>(arr: T[], index: number) => {
   if (replace !== undefined && index < length) {
     arr[index] = replace;
   }
-};
-
-// TODO these maps should go in a utils module somewhere (src/types.ts?)
-const dataTypeToTextureProperties: {
-  [T in Exclude<NumberType, "float64">]: [TextureDataType, PixelFormat, PixelFormatGPU];
-} = {
-  int8: [ByteType, RedIntegerFormat, "R8I"],
-  int16: [ShortType, RedIntegerFormat, "R16I"],
-  int32: [IntType, RedIntegerFormat, "R32I"],
-  uint8: [UnsignedByteType, RedIntegerFormat, "R8UI"],
-  uint16: [UnsignedShortType, RedIntegerFormat, "R16UI"],
-  uint32: [UnsignedIntType, RedIntegerFormat, "R32UI"],
-  float32: [FloatType, RedFormat, "R32F"],
 };
 
 const dataTypeToByteLength: { [T in NumberType]: number } = {
@@ -105,11 +84,11 @@ class ChunkQueues {
   deviceEvict: ChunkQueue = new PriorityQueue(reverseComparePriority);
 }
 
-export default class DataManager {
+export default class DataManager<Dev, Tex> {
   /** Data and current state for every chunk of data tracked and managed by this class. */
-  private chunks = new Map<string, ChunkEntry>();
+  private chunks = new Map<string, ChunkEntry<Tex>>();
   private queues = new ChunkQueues();
-  private sources: SourceEntry[] = [];
+  private sources: SourceEntry<Tex>[] = [];
   /**
    * Information about each in-flight request.
    *
@@ -127,7 +106,10 @@ export default class DataManager {
 
   public limits: DataManagerLimits;
 
-  constructor(limits?: Partial<DataManagerLimits>) {
+  constructor(
+    private deviceInterface: DeviceInterface<Dev, Tex>,
+    limits?: Partial<DataManagerLimits>
+  ) {
     this.limits = validateDataManagerLimits({
       ...DEFAULT_DATA_MANAGER_LIMITS,
       ...(limits ?? {}),
@@ -135,7 +117,7 @@ export default class DataManager {
   }
 
   /** Gets the id of data subscriber `subscriber`, assigning it one if it doesn't have one. */
-  private getIdForSubscriber(subscriber: IDataSubscriber): number {
+  private getIdForSubscriber(subscriber: IDataSubscriber<Tex>): number {
     if (subscriber[SUBSCRIBER_ID] === undefined) {
       subscriber[SUBSCRIBER_ID] = this.subscriberCount;
       this.subscriberCount += 1;
@@ -148,7 +130,7 @@ export default class DataManager {
    *
    * Assumes that the chunk is not in any queues that don't match its state.
    */
-  private updateChunkInQueue(key: string, entry: ChunkEntry) {
+  private updateChunkInQueue(key: string, entry: ChunkEntry<Tex>) {
     switch (entry.data.state) {
       case ChunkState.QUEUED:
         this.queues.load.insert(key, entry.priority);
@@ -170,7 +152,7 @@ export default class DataManager {
   }
 
   /** Resolves a chunk's overall priority based on all requests for it, then updates its queue position. */
-  private updateChunkPriority(key: string, entry: ChunkEntry) {
+  private updateChunkPriority(key: string, entry: ChunkEntry<Tex>) {
     const nextPriority = entry.subscriberPriorities.reduce((prevPriority, [_, priority]) => {
       return comparePriority(priority, prevPriority) < 0 ? priority : prevPriority;
     }, getMinChunkPriority());
@@ -219,9 +201,9 @@ export default class DataManager {
    *
    * In other words, this function drives the `deviceLoad` and `deviceEvict` queues.
    */
-  private updateDeviceData() {
+  private updateDeviceData(deviceHandle: Dev) {
     // STEP 1: pull eligible chunks out of the `deviceLoad` queue
-    const loads: [string, ChunkEntry][] = [];
+    const loads: [string, ChunkEntry<Tex>][] = [];
     // This one's easier if we just loop unconditionally and `break` when done.
     while (true) {
       const nextLoad = this.queues.deviceLoad.peek();
@@ -281,11 +263,9 @@ export default class DataManager {
       if (evictEntry !== undefined) {
         if (evictEntry.data.state === ChunkState.DEVICE) {
           // this chunk was previously on the GPU; demote to `MEMORY` and destroy its texture
-          const array = evictEntry.data.texture.image.data as TypedArray<NumberType> | null;
-          const memory = array ?? new ARRAY_CONSTRUCTORS[evictEntry.data.dtype](0);
+          const { memory, dtype } = evictEntry.data;
           this.deviceSize -= memory?.byteLength;
-          evictEntry.data.texture.dispose();
-          const { dtype } = evictEntry.data;
+          this.deviceInterface.destroyTexture(evictEntry.data.texture);
           evictEntry.data = { state: ChunkState.MEMORY, memory, dtype };
         } else if (evictEntry.data.state === ChunkState.MEMORY) {
           // this chunk was promoted in the previous step; put it back
@@ -320,18 +300,12 @@ export default class DataManager {
       }
 
       const { x, y, z, dataType } = dims;
-      const [texType, texFormat, texInternalFormat] = dataTypeToTextureProperties[dataType];
-      const data = (loadEntry.data as { memory: TypedArray<NumberType> }).memory;
-
-      const texture = new Data3DTexture(data, x, y, z);
-      texture.type = texType;
-      texture.format = texFormat;
-      texture.internalFormat = texInternalFormat;
-      texture.needsUpdate = true;
+      const { memory } = loadEntry.data as { memory: TypedArray };
+      const texture = this.deviceInterface.createTexture(memory, dataType, [x, y, z], deviceHandle);
 
       this.sources[loadId.source].subscribers.forEach((s) => s.onChunkOnGpu?.(loadId, texture));
 
-      loadEntry.data = { state: ChunkState.DEVICE, texture, dtype: dataType };
+      loadEntry.data = { state: ChunkState.DEVICE, memory, texture, dtype: dataType };
     }
   }
 
@@ -364,9 +338,9 @@ export default class DataManager {
           break;
         case ChunkState.DEVICE:
           console.error(`chunk ${evictKey} queued for eviction while in the "device" state`);
-          this.deviceSize -= evictEntry.data.texture.image.data?.byteLength ?? 0;
-          this.memorySize -= evictEntry.data.texture.image.data?.byteLength ?? 0;
-          evictEntry.data.texture.dispose();
+          this.deviceSize -= evictEntry.data.memory.byteLength;
+          this.memorySize -= evictEntry.data.memory.byteLength;
+          this.deviceInterface.destroyTexture(evictEntry.data.texture);
           this.queues.deviceEvict.remove(evictKey);
           // TODO if subscribers get "chunk removed from GPU" events, one should go here
           break;
@@ -455,8 +429,10 @@ export default class DataManager {
    * priority order before submitting. If requests were submitted immediately upon being added to the queue, the first
    * requests in a batch would submit in the order they were queued, not priority order.
    */
-  update() {
-    this.updateDeviceData();
+  update(deviceHandle?: Dev) {
+    if (this.deviceInterface.isDeviceHandle(deviceHandle)) {
+      this.updateDeviceData(deviceHandle);
+    }
     this.evictCachedData();
     this.submitRequests();
   }
@@ -505,13 +481,13 @@ export default class DataManager {
    * If the chunk is not already in memory, this will queue the chunk to be loaded. Chunk load requests are not
    * submitted until the next call to `update`.
    */
-  queueChunkRequest(subscriber: IDataSubscriber, chunkId: ChunkId, priority: ChunkPriority) {
+  queueChunkRequest(subscriber: IDataSubscriber<Tex>, chunkId: ChunkId, priority: ChunkPriority) {
     const subscriberId = this.getIdForSubscriber(subscriber);
     const chunkIdString = chunkIdToString(chunkId);
     const chunkEntry = this.chunks.get(chunkIdString);
 
     if (chunkEntry === undefined) {
-      const newChunkEntry: ChunkEntry = {
+      const newChunkEntry: ChunkEntry<Tex> = {
         data: { state: ChunkState.QUEUED },
         subscriberPriorities: [[subscriberId, { ...priority }]],
         priority: { ...priority },
@@ -535,7 +511,7 @@ export default class DataManager {
    *
    * The `DataManager` will not respond to this change until the next call to `update`.
    */
-  removeChunkRequest(subscriber: IDataSubscriber, chunkId: ChunkId) {
+  removeChunkRequest(subscriber: IDataSubscriber<Tex>, chunkId: ChunkId) {
     const subscriberId = this.getIdForSubscriber(subscriber);
     const chunkKey = chunkIdToString(chunkId);
     const chunkEntry = this.chunks.get(chunkKey);
@@ -560,17 +536,15 @@ export default class DataManager {
       return undefined;
     }
 
-    if (entry.data.state === ChunkState.MEMORY) {
+    if (entry.data.state === ChunkState.MEMORY || entry.data.state === ChunkState.DEVICE) {
       return entry.data.memory;
-    } else if (entry.data.state === ChunkState.DEVICE) {
-      return (entry.data.texture.image.data as TypedArray<NumberType> | null) ?? undefined;
     }
 
     return undefined;
   }
 
   /** Get a chunk's texture, if it is on the GPU. */
-  getChunkTexture(chunkId: ChunkId): Data3DTexture | undefined {
+  getChunkTexture(chunkId: ChunkId): Tex | undefined {
     const key = chunkIdToString(chunkId);
     const entry = this.chunks.get(key);
     if (entry?.data.state === ChunkState.DEVICE) {
@@ -596,7 +570,7 @@ export default class DataManager {
   }
 
   /** Subscribes `subscriber` to data events from the source with id `sourceId` */
-  subscribeToSource(subscriber: IDataSubscriber, sourceId: number): boolean {
+  subscribeToSource(subscriber: IDataSubscriber<Tex>, sourceId: number): boolean {
     const sourceEntry = this.sources[sourceId];
     if (sourceEntry === undefined) {
       return false;
@@ -610,7 +584,7 @@ export default class DataManager {
   }
 
   /** Unsubscribes `subscriber` from data events from the source with id `sourceId` */
-  unsubscribeFromSource(subscriber: IDataSubscriber, sourceId: number): boolean {
+  unsubscribeFromSource(subscriber: IDataSubscriber<Tex>, sourceId: number): boolean {
     const sourceEntry = this.sources[sourceId];
     if (sourceEntry === undefined) {
       return false;
