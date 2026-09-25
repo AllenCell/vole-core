@@ -1,4 +1,3 @@
-import type { Data3DTexture } from "three";
 import type { NumberType, TypedArray } from "../types.ts";
 
 export type DataManagerLimits = {
@@ -44,6 +43,12 @@ export const validateDataManagerLimits = (limits: DataManagerLimits): DataManage
   devicePrefetchSize: Math.min(limits.size, limits.deviceSize, limits.devicePrefetchSize),
   concurrentPrefetches: Math.min(limits.concurrentRequests, limits.concurrentPrefetches),
 });
+
+export interface DeviceInterface<Dev, Tex> {
+  isDeviceHandle(val: unknown): val is Dev;
+  createTexture(data: TypedArray, dtype: NumberType, size: [number, number, number], deviceHandle: Dev): Tex;
+  destroyTexture(tex: Tex): void;
+}
 
 export const enum ChunkPriorityLevel {
   /**
@@ -105,13 +110,13 @@ export const enum ChunkState {
   WORKER = "worker",
 }
 
-export type ChunkData =
+export type ChunkData<Tex> =
   | { state: ChunkState.QUEUED | ChunkState.WORKER | ChunkState.LOADING }
-  | { state: ChunkState.MEMORY; memory: TypedArray<NumberType>; dtype: NumberType }
-  | { state: ChunkState.DEVICE; texture: Data3DTexture; dtype: NumberType };
+  | { state: ChunkState.MEMORY; memory: TypedArray; dtype: NumberType }
+  | { state: ChunkState.DEVICE; memory: TypedArray; dtype: NumberType; texture: Tex };
 
-export type ChunkEntry = {
-  data: ChunkData;
+export type ChunkEntry<Tex> = {
+  data: ChunkData<Tex>;
   subscriberPriorities: [number, ChunkPriority][];
   priority: ChunkPriority;
 };
