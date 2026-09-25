@@ -53,6 +53,7 @@ const swapRemove = <T>(arr: T[], index: number) => {
   }
 };
 
+// TODO also used in `device_interface`; consolidate to utils module or something
 const dataTypeToByteLength: { [T in NumberType]: number } = {
   int8: 1,
   int16: 2,
