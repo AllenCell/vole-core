@@ -1,4 +1,4 @@
-import { Color, Vector3 } from "three";
+import { Color, type Data3DTexture, Vector3 } from "three";
 import GUI from "lil-gui";
 
 import { colormaps as colorizercolormaps, features as colorizerfeatures } from "./colorizer.js";
@@ -29,6 +29,7 @@ import { RawArrayLoaderOptions } from "../src/loaders/RawArrayLoader.js";
 import DataManager, { IDataSubscriber } from "../src/data_manager/DataManager.js";
 import { OMEZarrSource } from "../src/data_manager/sources/index.js";
 import { ChunkId, ChunkPriority, ChunkPriorityLevel } from "../src/data_manager/types.js";
+import { ThreeInterface } from "../src/data_manager/device_interface.js";
 
 const CACHE_MAX_SIZE = 1_000_000_000;
 const CONCURRENCY_LIMIT = 8;
@@ -924,13 +925,13 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 async function testDataManager() {
-  const dataManager = new DataManager();
+  const dataManager = new DataManager(new ThreeInterface());
   const zarrSource = await OMEZarrSource.new(
     // "https://animatedcell-test-data.s3.us-west-2.amazonaws.com/variance/1.zarr"
     "https://uk1s3.embassy.ebi.ac.uk/idr/zarr/v0.4/idr0048A/9846152.zarr/"
   );
   const sourceId = dataManager.addSource(zarrSource);
-  const mockSubscriber: IDataSubscriber = {
+  const mockSubscriber: IDataSubscriber<Data3DTexture> = {
     onChunkLoaded: (id, chunk) => console.log("load", id, chunk),
     onChunkOnGpu: (id, texture) => console.log("on device", id, texture),
   };
@@ -966,7 +967,7 @@ async function testDataManager() {
 
   for (const [id, priority] of shuffle(requests)) {
     console.log("request", id, priority);
-    dataManager.queueChunkRequest(mockSubscriber, id, priority);
+    dataManager.queueChunkRequest(mockSubscriber, id, priority, true);
   }
 
   dataManager.update();
