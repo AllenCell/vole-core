@@ -179,7 +179,7 @@ export default class DataManager<Dev, Tex> {
     }
   }
 
-  private getChunkSpatialDims(chunkId: ChunkId): { x: number; y: number; z: number; dataType: NumberType } | undefined {
+  private getChunkDims(chunkId: ChunkId): { x: number; y: number; z: number; dataType: NumberType } | undefined {
     const sourceEntry = this.sources[chunkId.source];
     if (sourceEntry === undefined) {
       return undefined;
@@ -190,16 +190,20 @@ export default class DataManager<Dev, Tex> {
       return undefined;
     }
 
-    // TODO fix config so we don't need this
-    // see @typescript-eslint/naming-convention, @typescript-eslint/no-unused-vars
-    // eslint-disable-next-line
-    const [_t, _c, z, y, x] = multiscale.chunkShape;
-    const { dataType } = multiscale;
+    const { shape, chunkShape, dataType } = multiscale;
+    const [, , iz, iy, ix] = chunkId.tczyx;
+    const [, , cz, cy, cx] = chunkShape;
+    const [, , sz, sy, sx] = shape;
+    // Chunks that abut the max edge of the volume in any dimension may be smaller in that dimension.
+    // e.g. for a volume with chunk size 10 & volume size 35 in x, chunks at x = 3 have size 5 in x.
+    const z = Math.min(cz, sz - cz * iz);
+    const y = Math.min(cy, sy - cy * iy);
+    const x = Math.min(cx, sx - cx * ix);
     return { x, y, z, dataType };
   }
 
   private estimateChunkSize(chunkId: ChunkId): number {
-    const dims = this.getChunkSpatialDims(chunkId);
+    const dims = this.getChunkDims(chunkId);
     if (dims === undefined) {
       return 0;
     }
@@ -299,7 +303,7 @@ export default class DataManager<Dev, Tex> {
     // STEP 3: create textures for newly-promoted chunks
     for (const [loadKey, loadEntry] of loads) {
       const loadId = stringToChunkId(loadKey);
-      const dims = this.getChunkSpatialDims(loadId);
+      const dims = this.getChunkDims(loadId);
 
       if (dims === undefined) {
         console.error(
