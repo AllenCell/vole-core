@@ -1,42 +1,44 @@
 import type { NumberType, TypedArray } from "../types.ts";
 
+/** Settings for the maximum resources a `DataManager` may use (memory, request concurrency, etc.) */
 export type DataManagerLimits = {
-  size: number;
-  deviceSize: number;
-  devicePrefetchSize: number;
-  concurrentRequests: number;
-  concurrentPrefetches: number;
-};
-
-const ONE_GIGABYTE = 1024 * 1024 * 1024;
-
-export const DEFAULT_DATA_MANAGER_LIMITS: DataManagerLimits = {
   /** The maximum amount of data that can be kept in memory, in bytes. */
-  size: ONE_GIGABYTE,
+  size: number;
   /**
    * The maximum amount of data that can be kept on the GPU, in bytes.
    *
    * Cannot be set higher than `size`.
    */
-  deviceSize: ONE_GIGABYTE,
+  deviceSize: number;
   /**
    * The maximum amount of data that can be kept on the GPU if at least some GPU data has the `PREFETCH` priority.
    *
    * Setting this lower than `deviceSize` keeps the data manager from prematurely filling up GPU memory with prefetched
    * data that may never be used. Cannot be set higher than `deviceSize`.
    */
-  devicePrefetchSize: ONE_GIGABYTE / 2,
+  devicePrefetchSize: number;
   /** The maximum number of concurrent requests. */
-  concurrentRequests: 10,
+  concurrentRequests: number;
   /**
    * The maximum number of concurrent requests if at least one request has the `PREFETCH` priority.
    *
    * Setting this lower than `concurrentRequests` ensures that some concurrency always remains available for requests
    * with the `VISIBLE` priority. Cannot be set higher than `concurrentRequests`.
    */
+  concurrentPrefetches: number;
+};
+
+const ONE_GIGABYTE = 1024 * 1024 * 1024;
+
+export const DEFAULT_DATA_MANAGER_LIMITS: DataManagerLimits = {
+  size: ONE_GIGABYTE,
+  deviceSize: ONE_GIGABYTE,
+  devicePrefetchSize: ONE_GIGABYTE / 2,
+  concurrentRequests: 10,
   concurrentPrefetches: 4,
 };
 
+/** Enforces validity requirements on `DataManagerLimits`, e.g. `deviceSize` must not be greater than `size`. */
 export const validateDataManagerLimits = (limits: DataManagerLimits): DataManagerLimits => ({
   ...limits,
   deviceSize: Math.min(limits.size, limits.deviceSize),
@@ -44,33 +46,47 @@ export const validateDataManagerLimits = (limits: DataManagerLimits): DataManage
   concurrentPrefetches: Math.min(limits.concurrentRequests, limits.concurrentPrefetches),
 });
 
+/** Abstraction over the graphics API or library used by `DataManager` to move chunks to/from the GPU. */
 export interface DeviceInterface<Dev, Tex> {
+  /**
+   * Type predicate for this interface's *device handle*, for APIs (like WebGPU) that require explicit access to a
+   * shared resource to perform GPU operations.
+   */
   isDeviceHandle(val: unknown): val is Dev;
+  /** Create a texture with the given `data`, `dtype`, and `size` using `deviceHandle`. */
   createTexture(data: TypedArray, dtype: NumberType, size: [number, number, number], deviceHandle: Dev): Tex;
+  /** Destroy a texture and clean up its GPU resources. */
   destroyTexture(tex: Tex): void;
+  /** Called when `DataManager` is done with an update cycle, in case the interface has state to clean up. */
   finishUpdate(): void;
 }
 
+/** Reasons that a chunk is tracked by `DataManager`, in increasing order of priority. */
 export const enum ChunkPriorityLevel {
   /**
-   * Chunks that were recently loaded but which aren't currently needed.
+   * The chunk was recently loaded but is not currently needed.
    *
-   * A chunk is automatically assigned a priority at this level when one or more subscribers request them (at the
-   * `VISIBLE` or `PREFETCH` level), their data is loaded, and then all requests are removed. Subscribers shouldn't use
-   * this level explicitly when making requests -- if the chunk isn't already cached, the request will be ignored!
+   * A chunk is automatically assigned a priority at this level when one or more subscribers request it (at the
+   * `VISIBLE` or `PREFETCH` level), its data is loaded, and then all requests are removed. Subscribers shouldn't use
+   * this level explicitly when making requests: if the chunk isn't already cached, the request will be ignored!
    */
   RECENT = 0,
   /**
-   * Chunks that aren't currently visible, but that are expected to become necessary in the future.
+   * The chunk isn't currently visible, but is expected to become necessary in the future.
    *
    * Besides being loaded after `VISIBLE` chunks, chunks prioritized at this level may be subject to lower request
    * quotas and/or memory limits, depending on the `DataManager`'s configuration.
    */
   PREFETCH = 1,
-  /** Chunks that are currently needed for rendering. */
+  /** The chunk is currently needed for rendering. */
   VISIBLE = 2,
 }
 
+/**
+ * The priority at which a chunk is required.
+ *
+ * Chunks are prioritized by their `ChunkPriorityLevel`, then within their level by a numeric score.
+ */
 export type ChunkPriority = {
   level: ChunkPriorityLevel;
   score: number;
@@ -122,10 +138,19 @@ export type SubscriberPriority = {
   device: boolean;
 };
 
+/** `DataManager`-internal type containing full state of a single chunk. */
 export type ChunkEntry<Tex> = {
+  /** The current lifecycle state of a chunk, and the data associated with it. */
   data: ChunkData<Tex>;
+  /** A record of every request for this chunk. */
   subscriberPriorities: SubscriberPriority[];
+  /** Priority at which the chunk is required in memory. Derived from `subscriberPriorities` on request add/remove. */
   memoryPriority: ChunkPriority;
+  /**
+   * Priority at which the chunk is required in GPU memory. Derived from `subscriberPriorities` on request add/remove.
+   *
+   * Must never be greater than `memoryPriority`.
+   */
   devicePriority: ChunkPriority;
 };
 
