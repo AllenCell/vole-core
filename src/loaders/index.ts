@@ -45,7 +45,7 @@ export async function createVolumeLoader(
 
   switch (fileType) {
     case VolumeFileFormat.ZARR:
-      return await OMEZarrLoader.createLoader(
+      return await OMEZarrLoader.new(
         path,
         options?.scene,
         options?.cache,

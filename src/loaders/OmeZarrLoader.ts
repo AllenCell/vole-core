@@ -145,7 +145,7 @@ class OMEZarrLoader extends VolumeLoader {
    * @param fetchOptions Options to configure (pre)fetching behavior.
    * @param lowResCache A dedicated cache for the coarsest resolution level.
    */
-  static async createLoader(
+  static async new(
     urls: string | string[],
     scenes: number | number[] = 0,
     cache?: VolumeCache,
