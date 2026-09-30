@@ -108,7 +108,7 @@ class RawArrayLoader extends VolumeLoader {
     }
   }
 
-  async loadDims(_loadSpec: LoadSpec): Promise<VolumeDims[]> {
+  loadDims(_loadSpec: LoadSpec): VolumeDims[] {
     const jsonInfo = this.jsonInfo;
 
     const d: VolumeDims = {
@@ -121,7 +121,7 @@ class RawArrayLoader extends VolumeLoader {
     return [d];
   }
 
-  async createImageInfo(loadSpec: LoadSpec): Promise<LoadedVolumeInfo> {
+  createImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo {
     return { imageInfo: convertImageInfo(this.jsonInfo, this.data.dtype), loadSpec };
   }
 
