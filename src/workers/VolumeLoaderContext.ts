@@ -206,7 +206,7 @@ class VolumeLoaderContext {
     if (fileType === VolumeFileFormat.TIFF) {
       // tiff loader accepts array of paths for separate channel sources
       const pathArray = Array.isArray(path) ? path : [path];
-      return new TiffLoader(pathArray);
+      return await TiffLoader.new(pathArray);
     } else if (fileType === VolumeFileFormat.DATA) {
       if (!options?.rawArrayOptions) {
         throw new Error("Failed to create loader: Must provide RawArrayOptions for RawArrayLoader");
@@ -289,7 +289,7 @@ class WorkerLoader extends VolumeLoader {
     return this.workerHandle.sendMessage(WorkerMsgType.SYNCHRONIZE_MULTICHANNEL_LOADING, sync, this.getLoaderId());
   }
 
-  loadDims(loadSpec: LoadSpec): Promise<VolumeDims[]> {
+  loadDims(loadSpec: LoadSpec): VolumeDims[] {
     return this.workerHandle.sendMessage(WorkerMsgType.LOAD_DIMS, loadSpec, this.getLoaderId());
   }
 
