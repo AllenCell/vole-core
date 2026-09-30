@@ -115,7 +115,7 @@ const convertImageInfo = (json: JsonImageInfo): ImageInfo => {
 class JsonImageInfoLoader extends VolumeLoader {
   syncChannels = false;
 
-  constructor(
+  private constructor(
     private urls: string[],
     private jsonInfo: JsonImageInfo[],
     private cache?: VolumeCache
