@@ -312,7 +312,7 @@ class OMEZarrLoader extends VolumeLoader {
     this.fetchOptions = { ...this.fetchOptions, ...options };
   }
 
-  loadDims(loadSpec: LoadSpec): Promise<VolumeDims[]> {
+  loadDims(loadSpec: LoadSpec): VolumeDims[] {
     const [spaceUnit, timeUnit] = this.getUnitSymbols();
     // Compute subregion size so we can factor that in
     const maxExtent = this.maxExtent ?? { min: [0, 0, 0], max: [1, 1, 1] };
@@ -334,10 +334,10 @@ class OMEZarrLoader extends VolumeLoader {
       return dims;
     });
 
-    return Promise.resolve(result);
+    return result;
   }
 
-  createImageInfo(loadSpec: LoadSpec): Promise<LoadedVolumeInfo> {
+  createImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo {
     // We ensured most info (dims, chunks, etc.) matched between sources earlier, so we can just use the first source.
     const source0 = this.sources[0];
     const [t, , z, y, x] = source0.axesTCZYX;
@@ -448,7 +448,7 @@ class OMEZarrLoader extends VolumeLoader {
       subregion: { min: [0, 0, 0], max: [1, 1, 1] },
     };
 
-    return Promise.resolve({ imageInfo: imgdata, loadSpec: fullExtentLoadSpec });
+    return { imageInfo: imgdata, loadSpec: fullExtentLoadSpec };
   }
 
   private prefetchChunk(

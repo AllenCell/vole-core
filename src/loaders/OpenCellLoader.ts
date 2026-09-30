@@ -5,7 +5,7 @@ import { JsonImageInfoLoader } from "./JsonImageInfoLoader.js";
 import { getDataRange } from "../utils/num_utils.js";
 
 class OpenCellLoader extends VolumeLoader {
-  async loadDims(_: LoadSpec): Promise<VolumeDims[]> {
+  loadDims(_: LoadSpec): VolumeDims[] {
     const d: VolumeDims = {
       shape: [1, 2, 27, 600, 600],
       spacing: [1, 1, 2, 1, 1],
@@ -16,7 +16,7 @@ class OpenCellLoader extends VolumeLoader {
     return [d];
   }
 
-  async createImageInfo(_loadSpec: LoadSpec): Promise<LoadedVolumeInfo> {
+  createImageInfo(_loadSpec: LoadSpec): LoadedVolumeInfo {
     const numChannels = 2;
 
     // we know these are standardized to 600x600, two channels, one channel per jpg.

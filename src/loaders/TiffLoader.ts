@@ -124,73 +124,73 @@ const getPixelType = (pxSize: number): string => (pxSize === 1 ? "uint8" : pxSiz
 // Despite the class `TiffLoader` extends, this loader is not threadable, since geotiff internally uses features that
 // aren't available on workers. It uses its own specialized workers anyways.
 class TiffLoader extends VolumeLoader {
-  private url: string[];
-  dims?: OMEDims;
-
-  constructor(url: string[]) {
+  private constructor(
+    private url: string[],
+    private dims: OMEDims
+  ) {
     super();
-    this.url = url.map(remapUri);
   }
 
-  private async loadOmeDims(): Promise<OMEDims> {
-    if (!this.dims) {
-      const tiff = await fromUrl(this.url[0], { allowFullFile: true }).catch<GeoTIFF>(
-        wrapVolumeLoadError(`Could not open TIFF file at ${this.url[0]}`, VolumeLoadErrorType.NOT_FOUND)
-      );
-      // DO NOT DO THIS, ITS SLOW
-      // const imagecount = await tiff.getImageCount();
-      // read the FIRST image
-      const image = await tiff
-        .getImage()
-        .catch<GeoTIFFImage>(wrapVolumeLoadError("Failed to open TIFF image", VolumeLoadErrorType.NOT_FOUND));
+  static async new(url: string[]): Promise<TiffLoader> {
+    const remappedUrl = url.map(remapUri);
+    let dims: OMEDims;
 
-      const image0DescriptionRaw: string = image.getFileDirectory().ImageDescription;
-      // Get rid of null terminator, if it's there (`JSON.parse` doesn't know what to do with it)
-      const image0Description = trimNull(image0DescriptionRaw);
-      const omeEl = getOME(image0Description);
+    const tiff = await fromUrl(remappedUrl[0], { allowFullFile: true }).catch<GeoTIFF>(
+      wrapVolumeLoadError(`Could not open TIFF file at ${remappedUrl[0]}`, VolumeLoadErrorType.NOT_FOUND)
+    );
+    // DO NOT DO THIS, ITS SLOW
+    // const imagecount = await tiff.getImageCount();
+    // read the FIRST image
+    const image = await tiff
+      .getImage()
+      .catch<GeoTIFFImage>(wrapVolumeLoadError("Failed to open TIFF image", VolumeLoadErrorType.NOT_FOUND));
 
-      if (omeEl !== undefined) {
-        const image0El = omeEl.getElementsByTagName("Image")[0];
-        this.dims = getOMEDims(image0El);
-      } else {
-        console.warn("Could not read OME-TIFF metadata from file. Doing our best with base TIFF metadata.");
-        this.dims = new OMEDims();
-        let shape: number[] = [];
-        if (typeof image0Description === "string") {
-          try {
-            const description = JSON.parse(image0Description);
-            if (Array.isArray(description.shape)) {
-              shape = description.shape;
-            }
-            // eslint-disable-next-line no-empty
-          } catch {}
-        }
+    const image0DescriptionRaw: string = image.getFileDirectory().ImageDescription;
+    // Get rid of null terminator, if it's there (`JSON.parse` doesn't know what to do with it)
+    const image0Description = trimNull(image0DescriptionRaw);
+    const omeEl = getOME(image0Description);
 
-        // if `ImageDescription` is valid JSON with a `shape` field, we expect it to be an array of [t?, c?, z?, y, x].
-        this.dims.sizex = shape[shape.length - 1] ?? image.getWidth();
-        this.dims.sizey = shape[shape.length - 2] ?? image.getHeight();
-        this.dims.sizez = shape[shape.length - 3] ?? (await tiff.getImageCount());
-
-        // TODO this is a big hack/assumption about only loading multi-source tiffs that are not OMETIFF.
-        // We really have to check each url in the array for sizec to get the total number of channels
-        // See combinedNumChannels in ImageInfo below.
-        // Also compare with how OMEZarrLoader does this.
-        if (this.url.length > 1) {
-          // if multiple urls, assume one channel per url
-          this.dims.sizec = this.url.length;
-        } else {
-          this.dims.sizec = shape[shape.length - 4] ?? 1;
-        }
-
-        this.dims.pixeltype = getPixelType(image.getBytesPerPixel());
-        this.dims.channelnames = Array.from({ length: this.dims.sizec }, (_, i) => "Channel" + i);
+    if (omeEl !== undefined) {
+      const image0El = omeEl.getElementsByTagName("Image")[0];
+      dims = getOMEDims(image0El);
+    } else {
+      console.warn("Could not read OME-TIFF metadata from file. Doing our best with base TIFF metadata.");
+      dims = new OMEDims();
+      let shape: number[] = [];
+      if (typeof image0Description === "string") {
+        try {
+          const description = JSON.parse(image0Description);
+          if (Array.isArray(description.shape)) {
+            shape = description.shape;
+          }
+          // eslint-disable-next-line no-empty
+        } catch {}
       }
+
+      // if `ImageDescription` is valid JSON with a `shape` field, we expect it to be an array of [t?, c?, z?, y, x].
+      dims.sizex = shape[shape.length - 1] ?? image.getWidth();
+      dims.sizey = shape[shape.length - 2] ?? image.getHeight();
+      dims.sizez = shape[shape.length - 3] ?? (await tiff.getImageCount());
+
+      // TODO this is a big hack/assumption about only loading multi-source tiffs that are not OMETIFF.
+      // We really have to check each url in the array for sizec to get the total number of channels
+      // See combinedNumChannels in ImageInfo below.
+      // Also compare with how OMEZarrLoader does this.
+      if (remappedUrl.length > 1) {
+        // if multiple urls, assume one channel per url
+        dims.sizec = remappedUrl.length;
+      } else {
+        dims.sizec = shape[shape.length - 4] ?? 1;
+      }
+
+      dims.pixeltype = getPixelType(image.getBytesPerPixel());
+      dims.channelnames = Array.from({ length: dims.sizec }, (_, i) => "Channel" + i);
     }
-    return this.dims;
+    return new TiffLoader(remappedUrl, dims);
   }
 
-  async loadDims(_loadSpec: LoadSpec): Promise<VolumeDims[]> {
-    const dims = await this.loadOmeDims();
+  loadDims(_loadSpec: LoadSpec): VolumeDims[] {
+    const { dims } = this;
 
     const atlasDims = computePackedAtlasDims(dims.sizez, dims.sizex, dims.sizey);
     // fit tiles to max of 2048x2048?
@@ -214,8 +214,8 @@ class TiffLoader extends VolumeLoader {
     return [d];
   }
 
-  async createImageInfo(_loadSpec: LoadSpec): Promise<LoadedVolumeInfo> {
-    const dims = await this.loadOmeDims();
+  createImageInfo(_loadSpec: LoadSpec): LoadedVolumeInfo {
+    const { dims } = this;
     // compare with sizex, sizey
     //const width = image.getWidth();
     //const height = image.getHeight();
@@ -273,7 +273,7 @@ class TiffLoader extends VolumeLoader {
     _onUpdateMetadata: () => void,
     onData: RawChannelDataCallback
   ): Promise<void> {
-    const dims = await this.loadOmeDims();
+    const { dims } = this;
 
     // get some size info.
     const cimageinfo = new CImageInfo(imageInfo);
