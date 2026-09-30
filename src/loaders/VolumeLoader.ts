@@ -105,7 +105,7 @@ export type RawChannelDataCallback = (
  */
 export abstract class VolumeLoader {
   /** Use `VolumeDims` to further refine a `LoadSpec` for use in `createVolume` */
-  abstract loadDims(loadSpec: LoadSpec): Promise<VolumeDims[]>;
+  abstract loadDims(loadSpec: LoadSpec): VolumeDims[];
 
   /**
    * Creates an `ImageInfo` object from a `LoadSpec`, which may be passed to the `Volume` constructor to create an
@@ -114,7 +114,7 @@ export abstract class VolumeLoader {
    * Also returns a new `LoadSpec` that may have been modified from the input `LoadSpec` to reflect the constraints or
    * abilities of the loader. This new `LoadSpec` should be used when constructing the `Volume`, _not_ the original.
    */
-  abstract createImageInfo(loadSpec: LoadSpec): Promise<LoadedVolumeInfo>;
+  abstract createImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo;
 
   /**
    * Begins loading per-channel data for the volume specified by `imageInfo` and `loadSpec`.
