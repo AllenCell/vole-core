@@ -12,7 +12,9 @@ import {
   UnsignedByteType,
   UnsignedIntType,
   UnsignedShortType,
+  type WebGLRenderer,
 } from "three";
+import type { Renderer } from "three/webgpu";
 
 import type { NumberType, TypedArray } from "../types.js";
 
@@ -45,18 +47,24 @@ const dataTypeToThreeTextureProperties: {
   float32: [FloatType, RedFormat, "R32F"],
 };
 
-export class ThreeInterface implements DeviceInterface<void, Data3DTexture> {
-  isDeviceHandle(_val: unknown): _val is void {
-    return true;
+export class ThreeInterface implements DeviceInterface<Renderer | WebGLRenderer, Data3DTexture> {
+  isDeviceHandle(val: unknown): val is Renderer | WebGLRenderer {
+    return typeof (val as Renderer | WebGLRenderer).initTexture === "function";
   }
 
-  createTexture(data: TypedArray, dtype: NumberType, [x, y, z]: [number, number, number]) {
+  createTexture(
+    data: TypedArray,
+    dtype: NumberType,
+    [x, y, z]: [number, number, number],
+    renderer: Renderer | WebGLRenderer
+  ) {
     const [texType, texFormat, texInternalFormat] = dataTypeToThreeTextureProperties[dtype];
     const texture = new Data3DTexture(data, x, y, z);
     texture.type = texType;
     texture.format = texFormat;
     texture.internalFormat = texInternalFormat;
     texture.needsUpdate = true;
+    renderer.initTexture(texture);
     return texture;
   }
 
@@ -97,7 +105,7 @@ const dataTypeToSize: { [T in NumberType]: number } = {
 
 export class WebGPUInterface implements DeviceInterface<GPUDeviceHandle, GPUTexture> {
   isDeviceHandle(val: unknown): val is GPUDeviceHandle {
-    return Array.isArray(val) && val.length === 2 && val[0] instanceof GPUDevice && val[1] instanceof GPUQueue;
+    return (val as GPUDeviceHandle).device instanceof GPUDevice && (val as GPUDeviceHandle).queue instanceof GPUQueue;
   }
 
   createTexture(
