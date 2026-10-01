@@ -156,14 +156,6 @@ export abstract class VolumeLoader {
     // no-op by default
   }
 
-  async createVolume(loadSpec: LoadSpec, onChannelLoaded?: PerChannelCallback): Promise<Volume> {
-    const { imageInfo, loadSpec: adjustedLoadSpec } = await this.createImageInfo(loadSpec);
-    const vol = new Volume(imageInfo, adjustedLoadSpec, this);
-    vol.channelLoadCallback = onChannelLoaded;
-    vol.imageMetadata = createDefaultMetadata(imageInfo);
-    return vol;
-  }
-
   /**
    * Begin loading a volume's data, as specified in its `LoadSpec`.
    *
