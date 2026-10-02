@@ -2,10 +2,16 @@ import type { ErrorObject } from "serialize-error";
 
 import type { ImageInfo } from "../ImageInfo.js";
 import type { VolumeDims } from "../VolumeDims.js";
-import type { CreateLoaderOptions, PrefetchDirection } from "../loaders/index.js";
+import type { CreateLoaderOptions, PrefetchDirection, VolumeFileFormat } from "../loaders/index.js";
 import type { LoadSpec, LoadedVolumeInfo } from "../loaders/VolumeLoader.js";
 import type { TypedArray, NumberType } from "../types.js";
-import type { ZarrLoaderFetchOptions } from "../loaders/OmeZarrLoader.js";
+import type { ZarrLoaderFetchOptions, ZarrLoaderMetadata } from "../loaders/OmeZarrLoader.js";
+import type { JsonImageInfo } from "../loaders/JsonImageInfoLoader.js";
+
+export type VolumeLoaderMetadata =
+  | { type: undefined; imageInfo: ImageInfo; dims: VolumeDims[] }
+  | { type: VolumeFileFormat.JSON; info: JsonImageInfo[] }
+  | { type: VolumeFileFormat.ZARR; meta: ZarrLoaderMetadata };
 
 /** The types of requests that can be made to the worker. Mostly corresponds to methods on `IVolumeLoader`. */
 export const enum WorkerMsgType {
@@ -79,7 +85,7 @@ export type WorkerRequestPayload<T extends WorkerMsgType> = {
 /** Maps each `WorkerMsgType` to the type of the payload of responses of that type. */
 export type WorkerResponsePayload<T extends WorkerMsgType> = {
   [WorkerMsgType.INIT]: void;
-  [WorkerMsgType.CREATE_LOADER]: number | undefined;
+  [WorkerMsgType.CREATE_LOADER]: { id: number; meta: VolumeLoaderMetadata } | undefined;
   [WorkerMsgType.CLOSE_LOADER]: void;
   [WorkerMsgType.CREATE_VOLUME]: LoadedVolumeInfo;
   [WorkerMsgType.LOAD_DIMS]: VolumeDims[];
