@@ -12,7 +12,7 @@ interface PackedChannelsImage {
 }
 
 /* eslint-disable @typescript-eslint/naming-convention */
-type JsonImageInfo = {
+export type JsonImageInfo = {
   name: string;
   version?: string;
   images: PackedChannelsImage[];
@@ -71,7 +71,7 @@ const rescalePixelSize = (json: JsonImageInfo): [number, number, number] => {
   return [px, py, pz];
 };
 
-const convertImageInfo = (json: JsonImageInfo): ImageInfo => {
+export const jsonToImageInfo = (json: JsonImageInfo): ImageInfo => {
   const [px, py, pz] = rescalePixelSize(json);
   // translation is in pixels that are in the space of json.width, json.height.
   // We need to convert this to the space of the tile_width and tile_height.
@@ -112,12 +112,24 @@ const convertImageInfo = (json: JsonImageInfo): ImageInfo => {
   };
 };
 
+export const jsonToVolumeDims = (json: JsonImageInfo): VolumeDims => {
+  const [px, py, pz] = rescalePixelSize(json);
+
+  return {
+    shape: [json.times || 1, json.channels, json.tiles, json.tile_height, json.tile_width],
+    spacing: [1, 1, pz, py, px],
+    spaceUnit: json.pixel_size_unit ?? "μm",
+    dataType: "uint8",
+    timeUnit: json.time_unit ?? "s",
+  };
+};
+
 class JsonImageInfoLoader extends VolumeLoader {
   syncChannels = false;
 
   private constructor(
     private urls: string[],
-    private jsonInfo: JsonImageInfo[],
+    public jsonInfo: JsonImageInfo[],
     private cache?: VolumeCache
   ) {
     super();
@@ -143,22 +155,12 @@ class JsonImageInfoLoader extends VolumeLoader {
 
   loadDims(loadSpec: LoadSpec): VolumeDims[] {
     const jsonInfo = this.jsonInfo[loadSpec.time];
-
-    const [px, py, pz] = rescalePixelSize(jsonInfo);
-
-    const d: VolumeDims = {
-      shape: [jsonInfo.times || 1, jsonInfo.channels, jsonInfo.tiles, jsonInfo.tile_height, jsonInfo.tile_width],
-      spacing: [1, 1, pz, py, px],
-      spaceUnit: jsonInfo.pixel_size_unit ?? "μm",
-      dataType: "uint8",
-      timeUnit: jsonInfo.time_unit ?? "s",
-    };
-    return [d];
+    return [jsonToVolumeDims(jsonInfo)];
   }
 
   createImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo {
     const jsonInfo = this.jsonInfo[loadSpec.time];
-    return { imageInfo: convertImageInfo(jsonInfo), loadSpec };
+    return { imageInfo: jsonToImageInfo(jsonInfo), loadSpec };
   }
 
   async loadRawChannelData(
