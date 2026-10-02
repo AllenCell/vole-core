@@ -15,6 +15,7 @@ import {
   type LoadedVolumeInfo,
   box3ToRegion,
   Region,
+  regionToBox3,
 } from "./VolumeLoader.js";
 import {
   composeSubregion,
@@ -273,10 +274,6 @@ class OMEZarrLoader extends VolumeLoader {
     return source.scaleLevels.map(({ shape }) => [z === -1 ? 1 : shape[z], shape[y], shape[x]]);
   }
 
-  private getScale(level: number): TCZYX<number> {
-    return getScale(this.sources[0].multiscaleMetadata.datasets[level], this.sources[0].axesTCZYX);
-  }
-
   /**
    * Reorder an input array [T, C, Z, Y, X] based on the dimension order of the specified source.
    * In general, the sourceIdx should be provided, since `matchSourceScaleLevels` does not guarantee
@@ -330,29 +327,30 @@ class OMEZarrLoader extends VolumeLoader {
     this.fetchOptions = { ...this.fetchOptions, ...options };
   }
 
-  loadDims(loadSpec: LoadSpec): VolumeDims[] {
-    const [spaceUnit, timeUnit] = this.getUnitSymbols();
-    // Compute subregion size so we can factor that in
-    const maxExtent = this.maxExtent ?? { min: [0, 0, 0], max: [1, 1, 1] };
-    const subregion = composeSubregion(loadSpec.subregion, maxExtent);
-    const regionSize = subregion.getSize(new Vector3());
+  static metadataToDims(meta: ZarrLoaderMetadata, loadSpec: LoadSpec): VolumeDims[] {
+    const { spaceUnitSymbol, timeUnitSymbol, axesTCZYX } = meta;
+    const regionSize = regionToBox3(loadSpec.subregion).getSize(new Vector3());
     const regionArr = [1, 1, regionSize.z, regionSize.y, regionSize.x];
 
-    const result = this.sources[0].scaleLevels.map((level, i) => {
-      const scale = this.getScale(i);
+    const result = meta.levels.map((level) => {
+      const scale = getScale(level, axesTCZYX);
       const dims: VolumeDims = {
-        spaceUnit: spaceUnit,
-        timeUnit: timeUnit,
-        shape: this.orderByTCZYX(level.shape, 1).map((val, idx) =>
+        spaceUnit: spaceUnitSymbol,
+        timeUnit: timeUnitSymbol,
+        shape: orderByTCZYX(level.shape, axesTCZYX, 1).map((val, idx) =>
           Math.max(Math.ceil(val * regionArr[idx]), 1)
         ) as TCZYX<number>,
-        spacing: this.orderByTCZYX(scale, 1),
+        spacing: orderByTCZYX(scale, axesTCZYX, 1),
         dataType: level.dtype,
       };
       return dims;
     });
 
     return result;
+  }
+
+  loadDims(loadSpec: LoadSpec): VolumeDims[] {
+    return OMEZarrLoader.metadataToDims(this.createMetadata(), loadSpec);
   }
 
   createMetadata(): ZarrLoaderMetadata {
