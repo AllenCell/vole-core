@@ -91,17 +91,6 @@ const messageHandlers: { [T in WorkerMsgType]: MessageHandler<T> } = {
     return Promise.resolve();
   },
 
-  [WorkerMsgType.CREATE_VOLUME]: async (loadSpec, loaderId) => {
-    const { loader } = getLoader(loaderId);
-
-    return loader.createImageInfo(loadSpec);
-  },
-
-  [WorkerMsgType.LOAD_DIMS]: async (loadSpec, loaderId) => {
-    const { loader } = getLoader(loaderId);
-    return loader.loadDims(loadSpec);
-  },
-
   [WorkerMsgType.LOAD_VOLUME_DATA]: ({ imageInfo, loadSpec, loadId }, loaderId) => {
     const { loader, copyOnLoad } = getLoader(loaderId);
 
