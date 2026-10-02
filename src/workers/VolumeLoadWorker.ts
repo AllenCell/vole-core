@@ -2,11 +2,12 @@ import { serializeError } from "serialize-error";
 
 import VolumeCache from "../VolumeCache.js";
 import { VolumeFileFormat, createVolumeLoader, pathToFileType } from "../loaders/index.js";
-import { VolumeLoader } from "../loaders/VolumeLoader.js";
+import { LoadSpec, VolumeLoader } from "../loaders/VolumeLoader.js";
 import { VolumeLoadError } from "../loaders/VolumeLoadError.js";
 import RequestQueue from "../utils/RequestQueue.js";
 import SubscribableRequestQueue from "../utils/SubscribableRequestQueue.js";
 import type {
+  VolumeLoaderMetadata,
   WorkerMsgTypeWithLoader,
   WorkerRequest,
   WorkerRequestPayload,
@@ -14,6 +15,8 @@ import type {
   WorkerResponsePayload,
 } from "./types.js";
 import { WorkerEventType, WorkerMsgType, WorkerResponseResult } from "./types.js";
+import { OMEZarrLoader } from "../loaders/OmeZarrLoader.js";
+import { JsonImageInfoLoader } from "../loaders/JsonImageInfoLoader.js";
 
 type LoaderEntry = { loader: VolumeLoader; copyOnLoad: boolean };
 
@@ -64,10 +67,23 @@ const messageHandlers: { [T in WorkerMsgType]: MessageHandler<T> } = {
     const fileType = options?.fileType || pathToFileType(pathString);
     const copyOnLoad = fileType === VolumeFileFormat.JSON;
 
-    const loaderId = loaderCount;
+    const id = loaderCount;
     loaderCount += 1;
-    loaders.set(loaderId, { loader, copyOnLoad });
-    return loaderId;
+    loaders.set(id, { loader, copyOnLoad });
+
+    let meta: VolumeLoaderMetadata;
+    if (fileType === VolumeFileFormat.ZARR) {
+      meta = { type: VolumeFileFormat.ZARR, meta: (loader as OMEZarrLoader).createMetadata() };
+    } else if (fileType === VolumeFileFormat.JSON) {
+      meta = { type: VolumeFileFormat.JSON, info: (loader as JsonImageInfoLoader).jsonInfo };
+    } else {
+      meta = {
+        type: undefined,
+        imageInfo: loader.createImageInfo(new LoadSpec()).imageInfo,
+        dims: loader.loadDims(new LoadSpec()),
+      };
+    }
+    return { id, meta };
   },
 
   [WorkerMsgType.CLOSE_LOADER]: (_, loaderId) => {
@@ -78,12 +94,12 @@ const messageHandlers: { [T in WorkerMsgType]: MessageHandler<T> } = {
   [WorkerMsgType.CREATE_VOLUME]: async (loadSpec, loaderId) => {
     const { loader } = getLoader(loaderId);
 
-    return await loader.createImageInfo(loadSpec);
+    return loader.createImageInfo(loadSpec);
   },
 
   [WorkerMsgType.LOAD_DIMS]: async (loadSpec, loaderId) => {
     const { loader } = getLoader(loaderId);
-    return await loader.loadDims(loadSpec);
+    return loader.loadDims(loadSpec);
   },
 
   [WorkerMsgType.LOAD_VOLUME_DATA]: ({ imageInfo, loadSpec, loadId }, loaderId) => {
