@@ -18,6 +18,7 @@ import VolumeDrawable from "./VolumeDrawable.js";
 import { Light, AREA_LIGHT, SKY_LIGHT } from "./Light.js";
 import Volume from "./Volume.js";
 import {
+  type AxisName,
   type ColorizeFeature,
   type VolumeChannelDisplayOptions,
   type VolumeDisplayOptions,
@@ -26,10 +27,12 @@ import {
   RenderMode,
 } from "./types.js";
 import { IDrawableObject } from "./drawables/IDrawableObject.js";
-import { Axis } from "./VolumeRenderSettings.js";
+import { Axis } from "./types.js";
 import { PerChannelCallback } from "./loaders/IVolumeLoader.js";
 import { WorkerLoader } from "./workers/VolumeLoaderContext.js";
 import Line3d from "./drawables/lines/Line3d.js";
+import EventDispatcher from "./EventDispatcher.js";
+import { wrapTweakpaneCall } from "./utils/TweakpaneWrapper.js";
 
 // Constants are kept for compatibility reasons.
 export const RENDERMODE_RAYMARCH = RenderMode.RAYMARCH;
@@ -46,16 +49,24 @@ const allGlobalLoadingOptions = {
   throttleArrivingChannelData: true,
 };
 
+type View3dEvents = {
+  render: void;
+  renderIteration: { iteration: number; isPathtrace: boolean };
+};
+
 /**
  * @class
  */
-export class View3d {
+export class View3d extends EventDispatcher<View3dEvents> {
   private canvas3d: ThreeJsPanel;
   private scene: Scene;
   private backgroundColor: Color;
   private pixelSamplingRate: number;
   private exposure: number;
   private volumeRenderMode: RenderMode.PATHTRACE | RenderMode.RAYMARCH;
+  /** @deprecated Should be removed in the next major version. */
+  private renderListener?: () => void;
+  /** @deprecated Should be removed in the next major version. */
   private renderUpdateListener?: (iteration: number) => void;
   private loadErrorHandler?: (volume: Volume, error: unknown) => void;
   private image?: VolumeDrawable;
@@ -69,6 +80,9 @@ export class View3d {
 
   private tweakpane: Pane | null;
 
+  // Triple slice state
+  private tripleSliceCallback?: (indices: Vector3) => void;
+
   /**
    * @param {Object} options Optional options.
    * @param {boolean} options.useWebGL2 Default true
@@ -76,9 +90,14 @@ export class View3d {
    *   The viewer will attempt to fill this element if provided.
    */
   constructor(options?: View3dOptions) {
+    super();
     const useWebGL2 = options?.useWebGL2 === undefined ? true : options.useWebGL2;
 
     this.canvas3d = new ThreeJsPanel(options?.parentElement, useWebGL2);
+    this.canvas3d.setOnRenderCallback(() => {
+      this.dispatchEvent({ type: "render" });
+      this.renderListener?.();
+    });
     this.redraw = this.redraw.bind(this);
     this.scene = new Scene();
     this.backgroundColor = new Color(0x000000);
@@ -187,9 +206,11 @@ export class View3d {
 
   /**
    * Sets a listener that will be called after the 3D canvas renders.
+   * @deprecated Will be removed in the next major version. Use `addEventListener` to listen to the `render` event
+   * instead.
    */
-  setOnRenderCallback(callback: (() => void) | null): void {
-    this.canvas3d.setOnRenderCallback(callback);
+  setOnRenderCallback(callback: (() => void) | null | undefined): void {
+    this.renderListener = callback === null ? undefined : callback;
   }
 
   unsetImage(): VolumeDrawable | undefined {
@@ -204,7 +225,10 @@ export class View3d {
   }
 
   /**
-   * Add a new volume image to the viewer.  (The viewer currently only supports a single image at a time - adding repeatedly, without removing in between, is a potential resource leak)
+   * Add a new volume image to the viewer.
+   *
+   * (The viewer currently only supports a single image at a time - adding repeatedly, without removing in between, is
+   * a potential resource leak)
    * @param {Volume} volume
    * @param {VolumeDisplayOptions} options
    */
@@ -212,6 +236,13 @@ export class View3d {
     volume.addVolumeDataObserver(this);
     options = options || {};
     options.renderMode = this.volumeRenderMode;
+    if (this.canvas3d.getViewMode() === Axis.XYZ || this.canvas3d.getViewMode() === Axis.NONE) {
+      options.renderMode = this.volumeRenderMode;
+    } else if (this.canvas3d.getViewMode() === Axis.TRIPLE) {
+      options.renderMode = RenderMode.TRIPLE_SLICE;
+    } else {
+      options.renderMode = RenderMode.SLICE;
+    }
     this.setImage(new VolumeDrawable(volume, options));
   }
 
@@ -263,10 +294,11 @@ export class View3d {
 
   /**
    * @param {function} callback a function that will receive the number of render iterations when it changes
+   * @deprecated Will be removed in the next major version. Use `addEventListener` to listen to the `renderUpdate`
+   * event instead.
    */
   setRenderUpdateListener(callback: (iteration: number) => void): void {
     this.renderUpdateListener = callback;
-    this.image?.setRenderUpdateListener(callback);
   }
 
   // channels is an array of channel indices for which new data just arrived.
@@ -274,7 +306,8 @@ export class View3d {
     this.image?.updateScale();
     this.image?.onChannelLoaded(channels);
     if (volume.isLoaded() && this.tweakpane) {
-      this.tweakpane.refresh();
+      const tp = this.tweakpane;
+      wrapTweakpaneCall(() => tp.refresh());
     }
   }
 
@@ -308,6 +341,15 @@ export class View3d {
    */
   setScaleLevelBias(volume: Volume, scaleLevelBias: number): void {
     volume.updateRequiredData({ scaleLevelBias });
+  }
+
+  async enableScrubIndicator(volume: Volume): Promise<void> {
+    const selectsDifferentLevel = await volume.biasesSelectDifferentLevels();
+    this.canvas3d.setShowLowResIndicator(selectsDifferentLevel);
+  }
+
+  disableScrubIndicator(): void {
+    this.canvas3d.setShowLowResIndicator(false);
   }
 
   /**
@@ -405,6 +447,12 @@ export class View3d {
 
     this.image = img;
 
+    const isPathtrace = this.volumeRenderMode === RenderMode.PATHTRACE;
+    this.image.setRenderUpdateListener((iteration) => {
+      this.dispatchEvent({ type: "renderIteration", iteration, isPathtrace });
+      this.renderUpdateListener?.(iteration);
+    });
+
     this.scene.add(img.sceneRoot);
 
     // new image picks up current settings
@@ -429,6 +477,15 @@ export class View3d {
 
     this.updatePerspectiveScaleBar(img.volume);
     this.updateTimestepIndicator(img.volume);
+
+    // If we're in triple-slice mode, re-run setCameraMode with the current mode to
+    // re-establish the crosshair source coupling with the new image. The previous
+    // image's TripleSliceVolume was just removed from the scene, so the canvas3d's
+    // controls would otherwise keep hit-testing and updating a stale source,
+    // breaking drag and double-click interaction.
+    if (this.canvas3d.getViewMode() === Axis.TRIPLE) {
+      this.setCameraMode(this.canvas3d.getViewMode().toUpperCase());
+    }
 
     // redraw if not already in draw loop
     this.redraw();
@@ -520,12 +577,57 @@ export class View3d {
   // TODO: Change mode to an enum
   /**
    * Change the camera projection to look along an axis, or to view in a 3d perspective camera.
-   * @param {string} mode Mode can be "3D", or "XY" or "Z", or "YZ" or "X", or "XZ" or "Y".  3D is a perspective view, and all the others are orthographic projections
+   * @param {string} mode Mode can be "3D", "XY" or "Z", "YZ" or "X", "XZ" or "Y", or "TRIPLE".
+   *   3D is a perspective view, all single-axis modes are orthographic projections,
+   *   and TRIPLE shows three linked orthographic slices (XY, YZ, XZ).
    */
   setCameraMode(mode: string): void {
-    this.canvas3d.switchViewMode(mode);
+    // setViewMode must be called before switchViewMode so that the TripleSliceVolume
+    // is created (by VolumeDrawable) before ThreeJsPanel needs the source reference.
     this.image?.setViewMode(mode, this.volumeRenderMode);
-    this.image?.setIsOrtho(mode !== "3D");
+    this.image?.setIsOrtho(mode.toUpperCase() !== "3D");
+
+    // we need to set up a coupling between the canvas3d and the volumedrawable
+    // for triple slice mode, so that the canvas3d can update the slice indices
+    // in the volumedrawable when the user drags the crosshairs.
+    if (mode.toUpperCase() === "TRIPLE" && this.image) {
+      const source = this.image.getTripleSliceSource();
+      this.canvas3d.setTripleSliceSource(source);
+      this.canvas3d.setTripleSliceChangeCallback((indices) => this.tripleSliceCallback?.(indices));
+    } else {
+      this.canvas3d.setTripleSliceSource(undefined);
+      this.canvas3d.setTripleSliceChangeCallback(undefined);
+    }
+
+    this.canvas3d.switchViewMode(mode);
+
+    this.canvas3d.redraw();
+  }
+
+  // --- Public triple-slice API ---
+
+  /**
+   * Set a callback that fires when triple-slice crosshair indices change.
+   */
+  setTripleSliceCallback(cb: ((indices: Vector3) => void) | null): void {
+    this.tripleSliceCallback = cb ?? undefined;
+  }
+
+  /**
+   * Get a copy of the current triple-slice indices.
+   */
+  getTripleSliceIndices(): Vector3 | undefined {
+    return this.image?.tripleSliceIndices;
+  }
+
+  /**
+   * Set a triple-slice index for a given axis.
+   */
+  setTripleSliceIndex(axis: AxisName, index: number): void {
+    if (!this.image) {
+      return;
+    }
+    this.image.setTripleSliceIndex(axis, index);
     this.canvas3d.redraw();
   }
 
@@ -607,6 +709,15 @@ export class View3d {
    */
   setTimestepIndicatorPosition(marginX: number, marginY: number, corner = ViewportCorner.BOTTOM_RIGHT): void {
     this.canvas3d.setIndicatorPosition(true, marginX, marginY, corner);
+  }
+
+  /**
+   * Set the vertical position of the horizontally centered low-resolution indicator.
+   * @param {number} marginY
+   * @param {boolean} [fromTop] Whether the margin is measured from the top. Default: `false`.
+   */
+  setLowResIndicatorPosition(marginY: number, fromTop = false): void {
+    this.canvas3d.setLowResIndicatorPosition(marginY, fromTop);
   }
 
   /**
@@ -792,8 +903,8 @@ export class View3d {
    * @param {number} maxval 0..1, should be greater than minval
    * @param {boolean} isOrthoAxis is this an orthographic projection or just a clipping of the range for perspective view
    */
-  setAxisClip(volume: Volume, axis: "x" | "y" | "z", minval: number, maxval: number, isOrthoAxis: boolean): void {
-    this.image?.setAxisClip(axis as Axis, minval, maxval, isOrthoAxis);
+  setAxisClip(volume: Volume, axis: AxisName, minval: number, maxval: number, isOrthoAxis: boolean): void {
+    this.image?.setAxisClip(axis, minval, maxval, isOrthoAxis);
     this.redraw();
   }
 
@@ -873,6 +984,8 @@ export class View3d {
 
   /**
    * Switch between single pass ray-marched volume rendering and progressive path traced rendering.
+   * This setting is relevant for 3d modes and in particular is used to distinguish path trace
+   * from any other rendering algorithm.
    * @param {RenderMode} mode RAYMARCH for single pass ray march, PATHTRACE for progressive path trace
    */
   setVolumeRenderMode(mode: RenderMode.PATHTRACE | RenderMode.RAYMARCH): void {
@@ -882,8 +995,14 @@ export class View3d {
 
     this.volumeRenderMode = mode;
     if (this.image) {
+      const isPathtrace = mode === RenderMode.PATHTRACE;
+      this.image.setRenderUpdateListener((iteration) => {
+        this.dispatchEvent({ type: "renderIteration", iteration, isPathtrace });
+        this.renderUpdateListener?.(iteration);
+      });
+
       const viewMode = this.image.getViewMode();
-      if (viewMode === Axis.Z) {
+      if (viewMode === Axis.Z || viewMode === Axis.TRIPLE) {
         // if the camera view is in single-slice view, then we don't want to change
         // anything but still remember the mode for when we switch back to a volumetric view
         return;
@@ -900,8 +1019,6 @@ export class View3d {
       this.image.setIsOrtho(isOrthographicCamera(this.canvas3d.camera));
       this.image.setResolution(this.canvas3d.getWidth(), this.canvas3d.getHeight());
       this.setAutoRotate(this.canvas3d.controls.autoRotate);
-
-      this.image.setRenderUpdateListener(this.renderUpdateListener);
     }
 
     // TODO remove when pathtrace supports a bounding box
@@ -952,7 +1069,8 @@ export class View3d {
     // control-option-1 (mac) or ctrl-alt-1 (windows)
     if (event.code === "Digit1" && event.altKey && event.ctrlKey) {
       if (this.tweakpane) {
-        this.tweakpane.dispose();
+        const tp = this.tweakpane;
+        wrapTweakpaneCall(() => tp.dispose());
         this.tweakpane = null;
       } else {
         this.tweakpane = this.setupGui(this.canvas3d.containerdiv);
@@ -1079,55 +1197,57 @@ export class View3d {
   }
 
   private setupGui(container: HTMLElement): Pane {
-    const pane = new Pane({ title: "Advanced Settings", container });
-    const paneStyle: Partial<CSSStyleDeclaration> = {
-      position: "absolute",
-      top: "0",
-      right: "0",
-    };
-    Object.assign(pane.element.style, paneStyle);
+    return wrapTweakpaneCall(() => {
+      const pane = new Pane({ title: "Advanced Settings", container });
+      const paneStyle: Partial<CSSStyleDeclaration> = {
+        position: "absolute",
+        top: "0",
+        right: "0",
+      };
+      Object.assign(pane.element.style, paneStyle);
 
-    // LIGHTS
-    const lights = pane.addFolder({ title: "Lights (isosurface)" });
+      // LIGHTS
+      const lights = pane.addFolder({ title: "Lights (isosurface)" });
 
-    const addFolderForLight = (light: ThreeLight, title: string): void => {
-      const folder = lights.addFolder({ title, expanded: false });
-      folder.addInput(light, "color", { color: { type: "float" } }).on("change", (_event) => this.redraw());
-      folder.addInput(light, "intensity", { min: 0 }).on("change", (_event) => this.redraw());
-      if (!(light as AmbientLight).isAmbientLight) {
-        folder.addInput(light, "position").on("change", (_event) => this.redraw());
-      }
-    };
+      const addFolderForLight = (light: ThreeLight, title: string): void => {
+        const folder = lights.addFolder({ title, expanded: false });
+        folder.addInput(light, "color", { color: { type: "float" } }).on("change", (_event) => this.redraw());
+        folder.addInput(light, "intensity", { min: 0 }).on("change", (_event) => this.redraw());
+        if (!(light as AmbientLight).isAmbientLight) {
+          folder.addInput(light, "position").on("change", (_event) => this.redraw());
+        }
+      };
 
-    addFolderForLight(this.spotLight, "spot light");
-    addFolderForLight(this.ambientLight, "ambient light");
-    addFolderForLight(this.reflectedLight, "reflected light");
-    addFolderForLight(this.fillLight, "fill light");
+      addFolderForLight(this.spotLight, "spot light");
+      addFolderForLight(this.ambientLight, "ambient light");
+      addFolderForLight(this.reflectedLight, "reflected light");
+      addFolderForLight(this.fillLight, "fill light");
 
-    this.image?.setupGui(pane);
+      this.image?.setupGui(pane);
 
-    const prefetch = pane.addFolder({ title: "Prefetch" });
-    // Not all `IVolumeLoader`s implement `updateFetchOptions`. This cast makes it sound to try to call it, but we
-    //   still have to be careful to null-check it!
-    // TODO depending on how the relationship between loaders and images pans out, it's not impossible that the loader
-    //   for an image will be changeable and this variable will capture a stale reference to old loaders. Careful!
-    const loader = this.image?.volume.loader as WorkerLoader | undefined;
-    // one number will be used for all axis directions
-    prefetch.addInput(allGlobalLoadingOptions, "numChunksToPrefetchAhead").on("change", (event) => {
-      loader?.updateFetchOptions?.({
-        maxPrefetchDistance: [event.value, event.value, event.value, event.value],
+      const prefetch = pane.addFolder({ title: "Prefetch" });
+      // Not all `IVolumeLoader`s implement `updateFetchOptions`. This cast makes it sound to try to call it, but we
+      //   still have to be careful to null-check it!
+      // TODO depending on how the relationship between loaders and images pans out, it's not impossible that the loader
+      //   for an image will be changeable and this variable will capture a stale reference to old loaders. Careful!
+      const loader = this.image?.volume.loader as WorkerLoader | undefined;
+      // one number will be used for all axis directions
+      prefetch.addInput(allGlobalLoadingOptions, "numChunksToPrefetchAhead").on("change", (event) => {
+        loader?.updateFetchOptions?.({
+          maxPrefetchDistance: [event.value, event.value, event.value, event.value],
+        });
+        this.image?.volume.updateRequiredData({});
       });
-      this.image?.volume.updateRequiredData({});
-    });
-    // should we try to prefetch along Z even if we are only playing along T?
-    prefetch.addInput(allGlobalLoadingOptions, "prefetchAlongNonPlayingAxis").on("change", (event) => {
-      loader?.updateFetchOptions?.({ onlyPriorityDirections: !event.value });
-    });
-    // when multiple prefetch frames arrive at once, should we slow down how quickly we load them?
-    prefetch.addInput(allGlobalLoadingOptions, "throttleArrivingChannelData").on("change", (event) => {
-      loader?.getContext?.().setThrottleChannelData(event.value);
-    });
+      // should we try to prefetch along Z even if we are only playing along T?
+      prefetch.addInput(allGlobalLoadingOptions, "prefetchAlongNonPlayingAxis").on("change", (event) => {
+        loader?.updateFetchOptions?.({ onlyPriorityDirections: !event.value });
+      });
+      // when multiple prefetch frames arrive at once, should we slow down how quickly we load them?
+      prefetch.addInput(allGlobalLoadingOptions, "throttleArrivingChannelData").on("change", (event) => {
+        loader?.getContext?.().setThrottleChannelData(event.value);
+      });
 
-    return pane;
+      return pane;
+    });
   }
 }

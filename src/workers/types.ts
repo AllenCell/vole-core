@@ -55,6 +55,7 @@ type WorkerMsgBase<T extends WorkerMsgType, P> = {
 export type WorkerRequestPayload<T extends WorkerMsgType> = {
   [WorkerMsgType.INIT]: {
     maxCacheSize?: number;
+    maxLowResCacheSize?: number;
     maxActiveRequests?: number;
     maxLowPriorityRequests?: number;
   };

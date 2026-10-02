@@ -1,5 +1,7 @@
 import { Group, Vector3, Euler } from "three";
 
+import type { AxisName } from "../types.js";
+
 export interface IDrawableObject {
   cleanup(): void;
   setVisible(visible: boolean): void;
@@ -15,6 +17,6 @@ export interface IDrawableObject {
   setFlipAxes(flipX: number, flipY: number, flipZ: number): void;
   setOrthoThickness(thickness: number): void;
   setResolution(x: number, y: number): void;
-  setAxisClip(axis: "x" | "y" | "z", minval: number, maxval: number, _isOrthoAxis: boolean): void;
+  setAxisClip(axis: AxisName, minval: number, maxval: number, _isOrthoAxis: boolean): void;
   updateClipRegion(xmin: number, xmax: number, ymin: number, ymax: number, zmin: number, zmax: number): void;
 }

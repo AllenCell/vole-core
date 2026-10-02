@@ -5,6 +5,36 @@ export interface Bounds {
   bmax: Vector3;
 }
 
+// this enum represents all allowed viewing modes in Vol-E.
+export enum Axis {
+  X = "x",
+  Y = "y",
+  Z = "z",
+  /** Alias for NONE, indicates 3D mode */
+  XYZ = "",
+  /** No current axis, indicates 3D mode */
+  // eslint-disable-next-line @typescript-eslint/no-duplicate-enum-values
+  NONE = "",
+  /** Triple orthographic slice view (XY + YZ + XZ) */
+  TRIPLE = "triple",
+}
+
+/** Name of a single spatial axis: `"x"`, `"y"`, or `"z"`. */
+export type AxisName = Axis.X | Axis.Y | Axis.Z;
+
+/** Rectangle of a single triple-slice pane, in CSS pixels. */
+export type TripleViewPaneRect = { x: number; y: number; w: number; h: number };
+
+/** The three pane rectangles that make up the triple-slice view. */
+export type TripleViewPanes = {
+  /** XY slice (bottom-left) */
+  xy: TripleViewPaneRect;
+  /** YZ slice (bottom-right) */
+  yz: TripleViewPaneRect;
+  /** XZ slice (top-left) */
+  xz: TripleViewPaneRect;
+};
+
 // numeric types compatible with zarrita.js.
 // see https://github.com/manzt/zarrita.js/blob/main/packages/core/src/metadata.ts
 export type Int8 = "int8";
@@ -147,6 +177,7 @@ export enum RenderMode {
   RAYMARCH = 0,
   PATHTRACE = 1,
   SLICE = 2,
+  TRIPLE_SLICE = 3,
 }
 
 /**

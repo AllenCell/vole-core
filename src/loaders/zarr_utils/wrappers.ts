@@ -7,10 +7,12 @@ import type { SubscriberId } from "./types.js";
 export type VoleInstrumentationOpts = {
   baseUrl: string;
   cache?: VolumeCache;
+  lowResCache?: VolumeCache;
   queue?: SubscribableRequestQueue;
   subscriber?: SubscriberId;
   reportChunk?: (coords: number[], subscriber: SubscriberId) => void;
   isPrefetch?: boolean;
+  forLowResCache?: boolean;
 };
 
 /**
@@ -37,18 +39,28 @@ export const withVoleInstrumentation = defineArrayExtension((array, opts: VoleIn
       }
 
       const fullKey = keyBase + coords.join(",");
-      const cached = opts.cache?.get(fullKey);
+      const cachedLowRes = opts.lowResCache?.get(fullKey);
+      const cached = cachedLowRes ?? opts.cache?.get(fullKey);
+      // if cached is defined, isChunk(cached) is guaranteed: it's just a type guard
       if (cached && isChunk(cached)) {
+        if (opts.forLowResCache && !cachedLowRes) {
+          opts.lowResCache?.insert(fullKey, cached);
+        }
         return cached;
       }
 
-      const fetchChunk = () => array.getChunk(coords, options, inner);
+      const controller = new AbortController();
+      // Abort the chunk if either abort signal is triggered
+      const signal = AbortSignal.any([options?.signal, controller.signal].filter(s => s !== undefined));
+      const fetchChunk = () => array.getChunk(coords, { ...options, signal }, inner);
+      const abort = controller.abort.bind(controller);
       const result =
         opts.queue && opts.subscriber !== undefined
-          ? await opts.queue.addRequest(fullKey, opts.subscriber, fetchChunk, opts.isPrefetch)
+          ? await opts.queue.addRequest(fullKey, opts.subscriber, fetchChunk, opts.isPrefetch, undefined, abort)
           : await fetchChunk();
 
-      opts.cache?.insert(fullKey, result);
+      const cacheToWrite = opts.forLowResCache ? opts.lowResCache : opts.cache;
+      cacheToWrite?.insert(fullKey, result);
       return result;
     },
   };

@@ -1006,6 +1006,14 @@ function setSyncMultichannelLoading(sync: boolean) {
   myState.loader.forEach((loader) => loader.syncMultichannelLoading(sync));
 }
 
+function setLowResPreview(enabled: boolean) {
+  if (enabled) {
+    void view3D.enableScrubIndicator(myState.volume);
+  } else {
+    view3D.disableScrubIndicator();
+  }
+}
+
 function playTimeSeries(onNewFrameCallback: () => void) {
   window.clearTimeout(myState.timerId);
   setSyncMultichannelLoading(true);
@@ -1145,7 +1153,7 @@ async function loadVolume(name: string, loadSpec: LoadSpec, loader: IVolumeLoade
   onVolumeCreated(name, volume);
   loader.loadVolumeData(volume);
 
-  // Set default zSlice
+  // Set default slice index
   goToZSlice(Math.floor(volume.imageInfo.subregionSize.z / 2));
 }
 
@@ -1299,6 +1307,10 @@ function main() {
   d3Btn?.addEventListener("click", () => {
     view3D.setCameraMode("3D");
   });
+  const tripleBtn = document.getElementById("tripleBtn");
+  tripleBtn?.addEventListener("click", () => {
+    view3D.setCameraMode("TRIPLE");
+  });
   const rotBtn = document.getElementById("rotBtn");
   rotBtn?.addEventListener("click", () => {
     myState.isTurntable = !myState.isTurntable;
@@ -1399,14 +1411,23 @@ function main() {
       }
     }
   });
-  // only update when DONE sliding: change event
+  // Continuously load coarse previews while actively dragging the slider.
+  timeSlider?.addEventListener("input", () => {
+    setLowResPreview(true);
+    if (goToFrame(timeSlider.valueAsNumber)) {
+      if (timeInput) {
+        timeInput.value = timeSlider.value;
+      }
+    }
+  });
+  // Restore normal automatic level selection for the final frame.
   timeSlider?.addEventListener("change", () => {
-    // trigger loading new time
     if (goToFrame(timeSlider?.valueAsNumber)) {
       if (timeInput) {
         timeInput.value = timeSlider.value;
       }
     }
+    setLowResPreview(false);
   });
   timeInput?.addEventListener("change", () => {
     // trigger loading new time
@@ -1454,8 +1475,8 @@ function main() {
   });
   const counterSpan = document.getElementById("counter");
   if (counterSpan) {
-    view3D.setRenderUpdateListener((count) => {
-      counterSpan.innerHTML = "" + count;
+    view3D.addEventListener("renderIteration", ({ iteration }) => {
+      counterSpan.textContent = String(iteration);
     });
   }
 

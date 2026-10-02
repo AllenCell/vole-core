@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { constrainToAxis, formatNumber, getTimestamp } from "../utils/num_utils.js";
-import { Axis } from "../VolumeRenderSettings.js";
+import { clampSliceIndex, constrainToAxis, formatNumber, getTimestamp } from "../utils/num_utils.js";
+import { Axis } from "../types.js";
 
 describe("num_utils", () => {
   describe("formatNumber", () => {
@@ -165,6 +165,33 @@ describe("num_utils", () => {
       const src: Number3 = [1, 2, 3];
       const target: Number3 = [4, 5, 6];
       expect(constrainToAxis(src, target, Axis.NONE)).to.eql([1, 2, 3]);
+    });
+  });
+
+  describe("clampSliceIndex", () => {
+    it("passes through an in-range integer index", () => {
+      expect(clampSliceIndex(3, 10)).to.equal(3);
+      expect(clampSliceIndex(0, 10)).to.equal(0);
+    });
+
+    it("clamps below 0 to 0", () => {
+      expect(clampSliceIndex(-5, 10)).to.equal(0);
+    });
+
+    it("clamps at or above the axis size to the last voxel (size - 1)", () => {
+      expect(clampSliceIndex(10, 10)).to.equal(9);
+      expect(clampSliceIndex(999, 10)).to.equal(9);
+    });
+
+    it("floors fractional indices", () => {
+      expect(clampSliceIndex(3.7, 10)).to.equal(3);
+      expect(clampSliceIndex(9.99, 10)).to.equal(9);
+    });
+
+    it("returns 0 for a degenerate axis (size <= 1)", () => {
+      expect(clampSliceIndex(0, 1)).to.equal(0);
+      expect(clampSliceIndex(5, 1)).to.equal(0);
+      expect(clampSliceIndex(3, 0)).to.equal(0);
     });
   });
 });

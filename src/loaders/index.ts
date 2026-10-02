@@ -19,6 +19,7 @@ export const enum VolumeFileFormat {
 export type CreateLoaderOptions = {
   fileType?: VolumeFileFormat;
   cache?: VolumeCache;
+  lowResCache?: VolumeCache;
   queue?: SubscribableRequestQueue;
   scene?: number;
   fetchOptions?: ZarrLoaderFetchOptions;
@@ -49,7 +50,8 @@ export async function createVolumeLoader(
         options?.scene,
         options?.cache,
         options?.queue,
-        options?.fetchOptions
+        options?.fetchOptions,
+        options?.lowResCache
       );
     case VolumeFileFormat.JSON:
       return new JsonImageInfoLoader(path, options?.cache);

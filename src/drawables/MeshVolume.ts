@@ -20,7 +20,7 @@ import FileSaver from "../FileSaver.js";
 import NaiveSurfaceNets from "../NaiveSurfaceNets.js";
 import MarchingCubes from "../MarchingCubes.js";
 import Volume from "../Volume.js";
-import type { Bounds } from "../types.js";
+import type { Bounds, AxisName } from "../types.js";
 import type { IDrawableObject } from "./IDrawableObject.js";
 import { MESH_LAYER } from "../ThreeJsPanel.js";
 
@@ -116,7 +116,7 @@ export default class MeshVolume implements IDrawableObject {
     // no op
   }
 
-  setAxisClip(axis: "x" | "y" | "z", minval: number, maxval: number, _isOrthoAxis: boolean): void {
+  setAxisClip(axis: AxisName, minval: number, maxval: number, _isOrthoAxis: boolean): void {
     this.bounds.bmax[axis] = maxval;
     this.bounds.bmin[axis] = minval;
     this.updateClipFromBounds();

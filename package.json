@@ -1,6 +1,6 @@
 {
   "name": "@aics/vole-core",
-  "version": "4.9.2",
+  "version": "4.10.2",
   "description": "volume renderer for 3d, 4d, or 5d imaging data with OME-Zarr support",
   "main": "es/index.js",
   "type": "module",
@@ -13,14 +13,14 @@
   ],
   "scripts": {
     "prepare": "npm run build",
-    "build-docs": "node node_modules/documentation/bin/documentation.js build src/Histogram.ts src/View3d.ts src/Volume.ts src/VolumeMaker.ts src/VolumeLoader.ts -f html -o docs --shallow",
+    "build-docs": "npx typedoc src/index.ts",
     "build": "npm run transpileES && npm run build-types",
     "build-types": "tsc -p tsconfig.types.json",
     "build-demo": "vite build public/ --config vite.config.ts --outDir ./demo",
-    "checks": "npm run lint & npm run typeCheck & npx vitest run",
+    "checks": "npm run lint & npm run typeCheck & npx vitest run & npm run build-demo",
     "clean": "rimraf es/",
     "format": "prettier --write src/**/*.ts",
-    "gh-build": "vite build public/ --config vite.config.ts --outDir ./vole-core",
+    "gh-build": "vite build public/ --config vite.config.ts --base=/vole-core/ --outDir ./vole-core",
     "dev": "vite serve",
     "start": "vite serve",
     "lint": "eslint --ext .js --ext .ts ./src",
@@ -35,7 +35,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/allen-cell-animated/vole-core.git"
+    "url": "git+https://github.com/AllenCell/vole-core.git"
   },
   "peerDependencies": {
     "three": "^0.184.0"
@@ -58,34 +58,23 @@
     "@tweakpane/core": "^1.1.9",
     "@types/three": "^0.184.0",
     "acorn": "^8.7.0",
-    "babel-loader": "^8.2.2",
     "babel-plugin-inline-import": "^3.0.0",
     "babel-plugin-inline-import-data-uri": "^1.0.1",
-    "clean-webpack-plugin": "^4.0.0-alpha.0",
-    "copy-webpack-plugin": "^14.0.0",
     "cross-env": "^7.0.3",
-    "documentation": "^14.0.0",
     "eslint": "^10.2.1",
     "eslint-config-prettier": "^10.1.8",
-    "file-loader": "^6.2.0",
     "globals": "^17.5.0",
-    "html-webpack-plugin": "^5.3.2",
     "husky": "^7.0.1",
     "jsdom": "^25.0.1",
     "lil-gui": "^0.19.2",
     "lint-staged": "^13.2.1",
     "prettier": "^3.8.3",
-    "raw-loader": "^4.0.2",
     "rimraf": "^3.0.2",
     "ts-node": "^10.9.2",
+    "typedoc": "^0.28.20",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.58.2",
-    "url-loader": "^4.1.1",
     "vite": "^8.1.0",
-    "vite-plugin-glsl": "^1.3.1",
-    "vitest": "^4.1.9",
-    "webpack": "^5.69.1",
-    "webpack-cli": "^4.9.2",
-    "webpack-dev-server": "^5.2.1"
+    "vitest": "^4.1.9"
   }
 }

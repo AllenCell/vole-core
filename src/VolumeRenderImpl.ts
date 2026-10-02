@@ -1,8 +1,22 @@
-import { DepthTexture, Object3D, OrthographicCamera, PerspectiveCamera, Texture, WebGLRenderer } from "three";
+import { DepthTexture, Object3D, OrthographicCamera, PerspectiveCamera, Texture, Vector3, WebGLRenderer } from "three";
 
 import { SettingsFlags, VolumeRenderSettings } from "./VolumeRenderSettings.js";
-import type { FuseChannel } from "./types.js";
+import type { AxisName, FuseChannel, TripleViewPanes } from "./types.js";
 import Channel from "./Channel.js";
+
+/**
+ * Interface for objects that can provide triple-slice data and handle interaction.
+ * Implemented by TripleSliceVolume so ThreeJsPanel can interact with it directly
+ * without callback indirection.
+ */
+export interface TripleSliceSource {
+  getIndices(): Vector3;
+  getVolumeSize(): Vector3;
+  getPhysicalSize(): Vector3;
+  setSliceIndex(axis: AxisName, index: number): void;
+  /** Computes per-pane rectangles in CSS pixels (bottom-left origin). */
+  getTripleViewPanesCSS(canvasW: number, canvasH: number): TripleViewPanes;
+}
 
 export interface VolumeRenderImpl {
   /**

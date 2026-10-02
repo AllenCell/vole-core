@@ -1,5 +1,6 @@
 import { Euler, Group, Material, Mesh, Vector3 } from "three";
 
+import type { AxisName } from "../types.js";
 import { IDrawableObject } from "./IDrawableObject.js";
 
 /**
@@ -82,7 +83,7 @@ export default abstract class BaseDrawableMeshObject implements IDrawableObject 
     // no op
   }
 
-  setAxisClip(_axis: "x" | "y" | "z", _minval: number, _maxval: number, _isOrthoAxis: boolean): void {
+  setAxisClip(_axis: AxisName, _minval: number, _maxval: number, _isOrthoAxis: boolean): void {
     // no op
   }
 

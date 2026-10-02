@@ -10,6 +10,7 @@ import { pickLevelToLoadUnscaled } from "./loaders/VolumeLoaderUtils.js";
 import type { NumberType, TypedArray } from "./types.js";
 import { type ImageInfo, CImageInfo, defaultImageInfo } from "./ImageInfo.js";
 import type { VolumeDims } from "./VolumeDims.js";
+import EventDispatcher from "./EventDispatcher.js";
 
 interface VolumeDataObserver {
   onVolumeData: (vol: Volume, batch: number[]) => void;
@@ -18,12 +19,16 @@ interface VolumeDataObserver {
   onVolumeLoadError: (vol: Volume, error: unknown) => void;
 }
 
+export type VolumeEvent = {
+  loadStart: void;
+};
+
 /**
  * A renderable multichannel volume image with 8-bits per channel intensity values.
  * @class
  * @param {ImageInfo} imageInfo
  */
-export default class Volume {
+export default class Volume extends EventDispatcher<VolumeEvent> {
   public imageInfo: CImageInfo;
   public loadSpec: Required<LoadSpec>;
   public loader?: IVolumeLoader;
@@ -74,6 +79,7 @@ export default class Volume {
   private loaded: boolean;
 
   constructor(imageInfo: ImageInfo = defaultImageInfo(), loadSpec: LoadSpec = new LoadSpec(), loader?: IVolumeLoader) {
+    super();
     this.loaded = false;
     this.imageInfo = new CImageInfo(imageInfo);
     // TODO: use getter?
@@ -192,6 +198,12 @@ export default class Volume {
     );
   }
 
+  async getDimsZYX(): Promise<[number, number, number][] | undefined> {
+    // Loaders should cache loaded dimensions so that this call blocks no more than once per valid `LoadSpec`.
+    const dims = await this.loadScaleLevelDims();
+    return dims?.map(({ shape }): [number, number, number] => [shape[2], shape[3], shape[4]]);
+  }
+
   /** Call on any state update that may require new data to be loaded (subregion, enabled channels, time, etc.) */
   async updateRequiredData(required: Partial<LoadSpec>, onChannelLoaded?: PerChannelCallback): Promise<void> {
     this.loadSpecRequired = { ...this.loadSpecRequired, ...required };
@@ -199,10 +211,8 @@ export default class Volume {
 
     // If we're not reloading due to required data changes, check if we should load a new scale level
     if (!shouldReload && this.mayLoadNewScaleLevel()) {
-      // Loaders should cache loaded dimensions so that this call blocks no more than once per valid `LoadSpec`.
-      const dims = await this.loadScaleLevelDims();
-      if (dims) {
-        const dimsZYX = dims.map(({ shape }): [number, number, number] => [shape[2], shape[3], shape[4]]);
+      const dimsZYX = await this.getDimsZYX();
+      if (dimsZYX) {
         // Determine which scale level *would* be loaded, and see if it's different than what we have
         const levelToLoad = pickLevelToLoadUnscaled(this.loadSpecRequired, dimsZYX);
         shouldReload = this.imageInfo.multiscaleLevel !== levelToLoad;
@@ -212,6 +222,18 @@ export default class Volume {
     if (shouldReload) {
       await this.loadNewData(onChannelLoaded);
     }
+  }
+
+  /**
+   * Returns whether two scale-level biases would select different resolution levels.
+   * Returns false if dimensions cannot be loaded.
+   */
+  async biasesSelectDifferentLevels(): Promise<boolean> {
+    const dimsZYX = await this.getDimsZYX();
+    if (!dimsZYX) return false;
+    const unbiased = pickLevelToLoadUnscaled({ ...this.loadSpecRequired, scaleLevelBias: 0 }, dimsZYX);
+    const withBias = pickLevelToLoadUnscaled(this.loadSpecRequired, dimsZYX);
+    return unbiased !== withBias;
   }
 
   private async loadScaleLevelDims(): Promise<VolumeDims[] | undefined> {
@@ -230,6 +252,7 @@ export default class Volume {
   private async loadNewData(onChannelLoaded?: PerChannelCallback): Promise<void> {
     this.setUnloaded();
     this.loadSpec = cloneLoadSpec(this.loadSpecRequired);
+    this.dispatchEvent({ type: "loadStart" });
 
     try {
       await this.loader?.loadVolumeData(this, undefined, onChannelLoaded);
