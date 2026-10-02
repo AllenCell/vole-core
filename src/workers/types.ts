@@ -3,7 +3,7 @@ import type { ErrorObject } from "serialize-error";
 import type { ImageInfo } from "../ImageInfo.js";
 import type { VolumeDims } from "../VolumeDims.js";
 import type { CreateLoaderOptions, PrefetchDirection, VolumeFileFormat } from "../loaders/index.js";
-import type { LoadSpec, LoadedVolumeInfo } from "../loaders/VolumeLoader.js";
+import type { LoadSpec } from "../loaders/VolumeLoader.js";
 import type { TypedArray, NumberType } from "../types.js";
 import type { ZarrLoaderFetchOptions, ZarrLoaderMetadata } from "../loaders/OmeZarrLoader.js";
 import type { JsonImageInfo } from "../loaders/JsonImageInfoLoader.js";
@@ -18,8 +18,6 @@ export const enum WorkerMsgType {
   INIT,
   CREATE_LOADER,
   CLOSE_LOADER,
-  CREATE_VOLUME,
-  LOAD_DIMS,
   LOAD_VOLUME_DATA,
   SET_PREFETCH_PRIORITY_DIRECTIONS,
   SYNCHRONIZE_MULTICHANNEL_LOADING,
@@ -70,8 +68,6 @@ export type WorkerRequestPayload<T extends WorkerMsgType> = {
     options?: CreateLoaderOptions;
   };
   [WorkerMsgType.CLOSE_LOADER]: void;
-  [WorkerMsgType.CREATE_VOLUME]: LoadSpec;
-  [WorkerMsgType.LOAD_DIMS]: LoadSpec;
   [WorkerMsgType.LOAD_VOLUME_DATA]: {
     imageInfo: ImageInfo;
     loadSpec: LoadSpec;
@@ -87,8 +83,6 @@ export type WorkerResponsePayload<T extends WorkerMsgType> = {
   [WorkerMsgType.INIT]: void;
   [WorkerMsgType.CREATE_LOADER]: { id: number; meta: VolumeLoaderMetadata } | undefined;
   [WorkerMsgType.CLOSE_LOADER]: void;
-  [WorkerMsgType.CREATE_VOLUME]: LoadedVolumeInfo;
-  [WorkerMsgType.LOAD_DIMS]: VolumeDims[];
   [WorkerMsgType.LOAD_VOLUME_DATA]: void;
   [WorkerMsgType.SET_PREFETCH_PRIORITY_DIRECTIONS]: void;
   [WorkerMsgType.SYNCHRONIZE_MULTICHANNEL_LOADING]: void;
