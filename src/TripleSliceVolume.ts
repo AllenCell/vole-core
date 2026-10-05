@@ -1,5 +1,4 @@
 import {
-  Box3,
   BufferGeometry,
   DepthTexture,
   Float32BufferAttribute,
@@ -95,7 +94,7 @@ export default class TripleSliceVolume implements VolumeRenderImpl, TripleSliceS
     this.group.add(xzSlice.get3dObject());
 
     // Request full volume data for YZ/XZ slicing
-    volume.updateRequiredData({ subregion: new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1)) });
+    volume.updateRequiredData({ subregion: { min: [0, 0, 0], max: [1, 1, 1] } });
 
     // Create crosshair overlay lines (2 per pane, on OVERLAY_LAYER), plus a darker
     // shadow line behind each one for a subtle drop-shadow effect.

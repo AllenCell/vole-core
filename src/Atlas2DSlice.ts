@@ -1,5 +1,4 @@
 import {
-  Box3,
   BufferGeometry,
   Float32BufferAttribute,
   Group,
@@ -15,7 +14,6 @@ import {
   PlaneGeometry,
   ShaderMaterial,
   Vector2,
-  Vector3,
   WebGLRenderer,
 } from "three";
 import type Channel from "./Channel.js";
