@@ -1,12 +1,13 @@
-import type { IChunkSource, IDataSubscriber } from "../data_manager/data_manager.js";
+import type { IDataSubscriber } from "../data_manager/data_manager.js";
 import DataManager from "../data_manager/data_manager.js";
 import type { DeviceInterface } from "../data_manager/device_interface.js";
+import type { ChunkSource } from "../data_manager/sources/ChunkSource.js";
 import { type ChunkPriority, ChunkPriorityLevel } from "../data_manager/types.js";
 import type { TypedArray, NumberType } from "../types.js";
 
 const mockSource = () => {
   return {
-    getDims: vi.fn<IChunkSource["getDims"]>(() => [
+    getDims: vi.fn<ChunkSource["getDims"]>(() => [
       {
         shape: [7, 7, 7, 7, 7],
         spacing: [1, 1, 1, 1, 1],
@@ -16,13 +17,13 @@ const mockSource = () => {
         timeUnit: "second",
       },
     ]),
-    getChunk: vi.fn<IChunkSource["getChunk"]>(async ({ tczyx }) => {
+    getChunk: vi.fn<ChunkSource["getChunk"]>(async ({ tczyx }) => {
       const length = tczyx.slice(2).reduce((len, coord) => (coord >= 3 ? len : len * 2), 1);
       const data = new Uint8Array(length).fill(0);
       data.set(tczyx);
       return { data, dtype: "uint8" };
     }),
-  } satisfies IChunkSource;
+  } satisfies ChunkSource;
 };
 
 type MockTex = {
