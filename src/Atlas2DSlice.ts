@@ -1,5 +1,4 @@
 import {
-  Box3,
   BufferGeometry,
   Float32BufferAttribute,
   Group,
@@ -15,7 +14,6 @@ import {
   PlaneGeometry,
   ShaderMaterial,
   Vector2,
-  Vector3,
   WebGLRenderer,
 } from "three";
 import type Channel from "./Channel.js";
@@ -285,7 +283,7 @@ export default class Atlas2DSlice implements VolumeRenderImpl {
         if (this.viewAxisValue !== Axis.Z || this.requireFullVolume) {
           // For non-XY views (or triple-mode), we need the full volume loaded
           this.volume.updateRequiredData({
-            subregion: new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1)),
+            subregion: { min: [0, 0, 0], max: [1, 1, 1] },
           });
         } else {
           const sliceLowerBound = Math.floor(this.settings.sliceIndex) / this.volume.imageInfo.volumeSize.z;
