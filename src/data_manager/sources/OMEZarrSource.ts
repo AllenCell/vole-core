@@ -6,18 +6,18 @@ import {
   toOMEZarrMetaV4,
   validateOMEZarrMetadata,
 } from "../../loaders/zarr_utils/validation.js";
-import type { NumericZarrArray, OMEMultiscale, OmeroTransitionalMetadata } from "../../loaders/zarr_utils/types.js";
+import type { OMEMultiscale, OmeroTransitionalMetadata } from "../../loaders/zarr_utils/types.js";
 import { getScale, orderByDimension, orderByTCZYX, remapAxesToTCZYX } from "../../loaders/zarr_utils/utils.js";
 import { unitNameToSymbol } from "../../loaders/VolumeLoaderUtils.js";
 import type { Chunk, LocalChunkId } from "../types.js";
-import type { NumberType } from "../../types.js";
+import type { NumberType, TypedArray } from "../../types.js";
 
 const PLACEHOLDER_NAME = "zarr source";
 const PLACEHOLDER_SCENE_INDEX = 0;
 
 export class OMEZarrSource implements IChunkSource {
   private constructor(
-    private scaleLevels: NumericZarrArray[],
+    private scaleLevels: zarr.Array<NumberType>[],
     private multiscaleMetadata: OMEMultiscale,
     private omeroMetadata: OmeroTransitionalMetadata | undefined,
     private axesTCZYX: [number, number, number, number, number]
@@ -39,7 +39,7 @@ export class OMEZarrSource implements IChunkSource {
     const scaleLevelPromises = multiscaleMetadata.datasets.map(({ path }) =>
       zarr.open(root.resolve(path), { kind: "array" })
     );
-    const scaleLevels = (await Promise.all(scaleLevelPromises)) as NumericZarrArray[];
+    const scaleLevels = (await Promise.all(scaleLevelPromises)) as zarr.Array<NumberType>[];
     const axesTCZYX = remapAxesToTCZYX(multiscaleMetadata.axes);
     return new OMEZarrSource(scaleLevels, multiscaleMetadata, omero, axesTCZYX);
   }
@@ -76,6 +76,6 @@ export class OMEZarrSource implements IChunkSource {
     const multiscale = this.scaleLevels[chunkId.multiscale];
     const coords = orderByDimension(chunkId.tczyx, this.axesTCZYX);
     const { data } = await multiscale.getChunk(coords);
-    return { data, dtype: multiscale.dtype };
+    return { data: data as TypedArray, dtype: multiscale.dtype };
   }
 }
