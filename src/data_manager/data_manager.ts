@@ -115,7 +115,7 @@ export default class DataManager<Dev, Tex> {
 
     const canAbort = request.chunkKeys.every((key) => {
       const chunk = this.chunks.get(key);
-      return chunk === undefined || chunk.priority.level === ChunkPriorityLevel.RECENT;
+      return chunk === undefined || chunk.memoryPriority.level === ChunkPriorityLevel.RECENT;
     });
 
     if (canAbort) {
