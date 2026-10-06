@@ -1,20 +1,20 @@
-import { Box3, Vector3 } from "three";
-
 import type { ImageInfo } from "../ImageInfo.js";
 import type { LoadedVolumeInfo, LoadSpec, RawChannelDataCallback } from "../loaders/IVolumeLoader.js";
 import { ThreadableVolumeLoader } from "../loaders/IVolumeLoader.js";
 import { VolumeDims } from "../VolumeDims.js";
-import DataManager, { IDataSubscriber } from "./DataManager.js";
-import { ExtVolumeDims, VolumeMetadata } from "./sources/ChunkSource.js";
+import DataManager, { IDataSubscriber } from "./data_manager.js";
+import { ExtVolumeDims, VolumeMetadata } from "./sources/chunk_source.js";
 import type { Chunk, ChunkId } from "./types.js";
 import { pickLevelToLoad } from "../loaders/VolumeLoaderUtils.js";
 
-export default class AdapterLoader extends ThreadableVolumeLoader implements IDataSubscriber {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default class AdapterLoader extends ThreadableVolumeLoader implements IDataSubscriber<any> {
   private dims: ExtVolumeDims[];
   private meta: VolumeMetadata;
 
   constructor(
-    private manager: DataManager,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private manager: DataManager<any, any>,
     private sourceId: number
   ) {
     super();
@@ -35,11 +35,20 @@ export default class AdapterLoader extends ThreadableVolumeLoader implements IDa
     const { shape, chunkShape } = this.dims[level];
     const [, , sz, sy, sx] = shape;
     const [, , cz, cy, cx] = chunkShape;
-    const chunksPerDim = new Vector3(sx / cx, sy / cy, sz / cz);
+    const chunksX = sx / cx;
+    const chunksY = sy / cy;
+    const chunksZ = sz / cz;
 
-    const min = loadSpec.subregion.min.clone().multiply(chunksPerDim).floor().divide(chunksPerDim);
-    const max = loadSpec.subregion.max.clone().multiply(chunksPerDim).ceil().divide(chunksPerDim).min(new Vector3(1));
-    return { ...loadSpec, subregion: new Box3(min, max) };
+    const {
+      min: [minX, minY, minZ],
+      max: [maxX, maxY, maxZ],
+    } = loadSpec.subregion;
+    const roundMin = (val: number, chunks: number): number => Math.floor(val * chunks) / chunks;
+    const roundMax = (val: number, chunks: number): number => Math.min(1, Math.ceil(val * chunks) / chunks);
+    const min: [number, number, number] = [roundMin(minX, chunksX), roundMin(minY, chunksY), roundMin(minZ, chunksZ)];
+    const max: [number, number, number] = [roundMax(maxX, chunksX), roundMax(maxY, chunksY), roundMax(maxZ, chunksZ)];
+
+    return { ...loadSpec, subregion: { min, max } };
   }
 
   loadDims(loadSpec: LoadSpec): Promise<VolumeDims[]> {
