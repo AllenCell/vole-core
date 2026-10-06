@@ -22,7 +22,10 @@ export class TaskPool {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private queue: WaitingTask<any[], any>[] = [];
 
-  constructor(public maxWorkers = navigator.hardwareConcurrency ?? 4) {}
+  constructor(
+    private readonly workerPath: URL,
+    public maxWorkers = navigator.hardwareConcurrency ?? 4
+  ) {}
 
   private handleWorkerMessage(message: WorkerResponse<Task<string, unknown[], unknown>>) {
     const promise = this.promises.remove(message.id);
@@ -56,7 +59,7 @@ export class TaskPool {
   }
 
   private addWorker() {
-    const worker = new Worker(new URL("./worker", import.meta.url), { type: "module" });
+    const worker = new Worker(this.workerPath, { type: "module" });
     let ready = false;
     worker.onmessage = (message) => {
       this.idleWorkers.push(worker);
