@@ -21,7 +21,7 @@ import {
   deviceSizeLimitForPriority,
 } from "./types.js";
 import type { NumberType, TypedArray } from "../types.js";
-import PriorityQueue from "./PriorityQueue.js";
+import PriorityQueue from "./priority_queue.js";
 import { VolumeDims } from "../VolumeDims.js";
 
 const SUBSCRIBER_ID = Symbol("DataManager.subscriberId");
