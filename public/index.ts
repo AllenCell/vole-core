@@ -26,7 +26,7 @@ import { State, TestDataSpec } from "./types.js";
 import VolumeLoaderContext from "../src/workers/VolumeLoaderContext.js";
 import { DATARANGE_UINT8, ColorizeFeature, type NumberType } from "../src/types.js";
 import { RawArrayLoaderOptions } from "../src/loaders/RawArrayLoader.js";
-import DataManager, { IDataSubscriber } from "../src/data_manager/DataManager.js";
+import DataManager, { IDataSubscriber } from "../src/data_manager/data_manager.js";
 import { OMEZarrSource } from "../src/data_manager/sources/index.js";
 import { ChunkId, ChunkPriority, ChunkPriorityLevel } from "../src/data_manager/types.js";
 import { ThreeInterface } from "../src/data_manager/device_interface.js";
