@@ -1,6 +1,6 @@
 import * as zarr from "zarrita";
 
-import type { ExtVolumeDims, IChunkSource } from "../DataManager.js";
+import type { ExtVolumeDims, IChunkSource } from "../data_manager.js";
 import {
   assertMetadataHasMultiscales,
   toOMEZarrMetaV4,
