@@ -1,7 +1,8 @@
 import { serializeError } from "serialize-error";
 
-import { getBorrowed, Task, type WorkerRequest, type WorkerResponse } from "./task.js";
 import type { TypedArray, NumberType } from "../../types.js";
+import { getBorrowed } from "./borrow_guard.js";
+import type { Task, WorkerRequest, WorkerResponse } from "./types.js";
 
 /**
  * Combines a `string` task `id` and a `handler` into a `Task` that can be registered and called with a `TaskPool`.
