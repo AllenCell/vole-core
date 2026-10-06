@@ -1,5 +1,5 @@
 import { deserializeError } from "serialize-error";
-import SlotMap from "../SlotMap.js";
+import SlotMap from "../slot_map.js";
 import type { Task, TaskHandle, WorkerResponse, WorkerRequest, TaskArgs } from "./types.js";
 import { BorrowGuard, markBorrowed } from "./borrow_guard.js";
 
