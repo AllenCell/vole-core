@@ -15,7 +15,7 @@ import {
 import type { NumberType, TypedArray } from "../types.js";
 import PriorityQueue from "./priority_queue.js";
 import type { DeviceInterface } from "./device_interface.js";
-import { ChunkSource, type VolumeMetadata, type ExtVolumeDims } from "./sources/ChunkSource.js";
+import { ChunkSource, type VolumeMetadata, type ExtVolumeDims } from "./sources/chunk_source.js";
 import SlotMap from "./slot_map.js";
 
 const SUBSCRIBER_ID = Symbol("DataManager.subscriberId");

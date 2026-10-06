@@ -1,6 +1,6 @@
 import * as zarr from "zarrita";
 
-import { type ExtVolumeDims, ChunkSource, type VolumeMetadata } from "./ChunkSource.js";
+import { type ExtVolumeDims, ChunkSource, type VolumeMetadata } from "./chunk_source.js";
 import {
   assertMetadataHasMultiscales,
   toOMEZarrMetaV4,
