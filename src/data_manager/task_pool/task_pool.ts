@@ -1,7 +1,14 @@
 import { deserializeError } from "serialize-error";
 import SlotMap from "../SlotMap.js";
-import type { Task, TaskHandle, WorkerResponse, WorkerRequest, TaskArgs } from "./task.js";
-import { BorrowGuard, markBorrowed } from "./task.js";
+import type { Task, TaskHandle, WorkerResponse, WorkerRequest, TaskArgs } from "./types.js";
+import { BorrowGuard, markBorrowed } from "./borrow_guard.js";
+
+export const taskHandle = <T extends Task>(
+  id: T["taskId"],
+  transfer?: (...args: Parameters<T>) => Transferable[]
+): TaskHandle<Parameters<T>, ReturnType<T>["result"]> => {
+  return { id, transfer };
+};
 
 type StoredPromise = {
   resolve: (value: unknown) => void;

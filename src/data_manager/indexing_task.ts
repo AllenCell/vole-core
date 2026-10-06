@@ -1,7 +1,7 @@
 import type { NumberType, TypedArray } from "../types.js";
 import { copyChunk, reorderChunk, type CopyChunkParams } from "./indexing.js";
 import { registerTask, task } from "./task_pool/registry.js";
-import type { BorrowedArray } from "./task_pool/task.js";
+import type { BorrowedArray } from "./task_pool/types.js";
 
 const copyChunkTask = task(
   "copyChunk",
