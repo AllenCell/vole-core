@@ -1,5 +1,5 @@
 import { registry, UnknownCodecError } from "zarrita";
-import { registerTask, task } from "../task_pool/registry.js";
+import { task } from "../task_pool/index.js";
 
 type Codec = {
   encode: (data: Uint8Array) => Uint8Array | Promise<Uint8Array>;
@@ -35,20 +35,14 @@ const getCodec = async (descriptor: CodecDescriptor): Promise<Codec> => {
   return newCodec;
 };
 
-const encodeTask = task("zarrEncode", async (data: Uint8Array, descriptor: CodecDescriptor) => {
+export const encodeTask = task("zarrEncode", async (data: Uint8Array, descriptor: CodecDescriptor) => {
   const codec = await getCodec(descriptor);
   const result = await codec.encode(data);
   return { result, transfer: [result.buffer] };
 });
 
-const decodeTask = task("zarrDecode", async (data: Uint8Array, descriptor: CodecDescriptor) => {
+export const decodeTask = task("zarrDecode", async (data: Uint8Array, descriptor: CodecDescriptor) => {
   const codec = await getCodec(descriptor);
   const result = await codec.decode(data);
   return { result, transfer: [result.buffer] };
 });
-
-export type ZarrEncodeTask = typeof encodeTask;
-export type ZarrDecodeTask = typeof decodeTask;
-
-registerTask(encodeTask);
-registerTask(decodeTask);
