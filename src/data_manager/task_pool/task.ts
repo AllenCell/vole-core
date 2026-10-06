@@ -13,9 +13,7 @@ type BorrowGuardEvents = { restored: void };
  * A `TypedArray` guarded by this class must be accessed through the `get` method, which returns `undefined` when the
  * buffer is on a worker. The guard will trigger the `"restored"` event when it is returned to the main thread.
  */
-export class BorrowGuard<
-  T extends TypedArray<NumberType> = TypedArray<NumberType>,
-> extends EventDispatcher<BorrowGuardEvents> {
+export class BorrowGuard<T extends TypedArray = TypedArray> extends EventDispatcher<BorrowGuardEvents> {
   private [guardMarker] = true as const;
   private restored = false;
 
