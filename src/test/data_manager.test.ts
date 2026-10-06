@@ -1,5 +1,5 @@
-import type { IChunkSource, IDataSubscriber } from "../data_manager/DataManager.js";
-import DataManager from "../data_manager/DataManager.js";
+import type { IChunkSource, IDataSubscriber } from "../data_manager/data_manager.js";
+import DataManager from "../data_manager/data_manager.js";
 import type { DeviceInterface } from "../data_manager/device_interface.js";
 import { type ChunkPriority, ChunkPriorityLevel } from "../data_manager/types.js";
 import type { TypedArray, NumberType } from "../types.js";
