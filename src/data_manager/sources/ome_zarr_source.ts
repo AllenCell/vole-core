@@ -17,9 +17,8 @@ import {
 import { unitNameToSymbol } from "../../loaders/VolumeLoaderUtils.js";
 import type { Chunk, LocalChunkId } from "../types.js";
 import type { NumberType, TypedArray } from "../../types.js";
-import { taskHandle } from "../task_pool/task.js";
-import type { ZarrEncodeTask, ZarrDecodeTask } from "./zarr_codec_worker.js";
-import { TaskPool } from "../task_pool/TaskPool.js";
+import { taskHandle, TaskPool } from "../task_pool/index.js";
+import type { encodeTask as encodeTaskType, decodeTask as decodeTaskType } from "./zarr_codec_worker.js";
 
 const PLACEHOLDER_NAME = "zarr source";
 const PLACEHOLDER_SCENE_INDEX = 0;
@@ -139,8 +138,8 @@ export class OMEZarrSource extends ChunkSource {
 
 let codecCounter = 0;
 
-const encodeTask = taskHandle<ZarrEncodeTask>("zarrEncode", (data) => [data.buffer]);
-const decodeTask = taskHandle<ZarrDecodeTask>("zarrDecode", (data) => [data.buffer]);
+const encodeTask = taskHandle<typeof encodeTaskType>("zarrEncode", (data) => [data.buffer]);
+const decodeTask = taskHandle<typeof decodeTaskType>("zarrDecode", (data) => [data.buffer]);
 
 export const augmentCodec = (name: string, pool: TaskPool) => {
   const codec = zarr.registry.get(name);
@@ -161,6 +160,3 @@ export const augmentCodec = (name: string, pool: TaskPool) => {
     },
   }));
 };
-
-const pool = new TaskPool();
-augmentCodec("numcodecs.blosc", pool);
