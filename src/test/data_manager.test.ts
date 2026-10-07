@@ -58,7 +58,7 @@ describe("request priority", () => {
     const subscriber = mockSubscriber();
 
     const queue = (x: number, score: number) =>
-      manager.queueChunkRequest(
+      manager.addChunkRequest(
         subscriber,
         { source, multiscale: 0, tczyx: [0, 0, 0, 0, x] },
         { level: ChunkPriorityLevel.VISIBLE, score },
@@ -82,7 +82,7 @@ describe("request priority", () => {
     const subscriber = mockSubscriber();
 
     const queue = (x: number, priority: ChunkPriority) =>
-      manager.queueChunkRequest(subscriber, { source, multiscale: 0, tczyx: [0, 0, 0, 0, x] }, priority, false);
+      manager.addChunkRequest(subscriber, { source, multiscale: 0, tczyx: [0, 0, 0, 0, x] }, priority, false);
     queue(0, { level: ChunkPriorityLevel.PREFETCH, score: 1000 });
     queue(1, { level: ChunkPriorityLevel.VISIBLE, score: 0 });
     manager.update();
