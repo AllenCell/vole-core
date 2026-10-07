@@ -1,4 +1,4 @@
-import type { ChunkId, ChunkPriority, ChunkEntry, DataManagerLimits, LocalChunkId, Chunk } from "./types.js";
+import type { ChunkId, ChunkPriority, ChunkEntry, DataManagerLimits, Chunk } from "./types.js";
 import {
   chunkIdToString,
   ChunkState,
@@ -14,19 +14,11 @@ import {
 } from "./types.js";
 import type { NumberType, TypedArray } from "../types.js";
 import PriorityQueue from "./priority_queue.js";
-import { VolumeDims } from "../VolumeDims.js";
 import type { DeviceInterface } from "./device_interface.js";
+import { ChunkSource, type VolumeMetadata, type ExtVolumeDims } from "./sources/chunk_source.js";
+import SlotMap from "./slot_map.js";
 
 const SUBSCRIBER_ID = Symbol("DataManager.subscriberId");
-
-// TODO not modifying original `VolumeDims` for compatibility, but at some point this will either need to be
-//   incorporated into `VolumeDims` or replaced with an entirely new type
-export type ExtVolumeDims = VolumeDims & { chunkShape: [number, number, number, number, number] };
-
-export interface IChunkSource {
-  getDims(): ExtVolumeDims[];
-  getChunk(id: LocalChunkId, signal?: AbortSignal): Promise<Chunk<NumberType>>;
-}
 
 export interface IDataSubscriber<Tex> {
   [SUBSCRIBER_ID]?: number;
@@ -35,10 +27,26 @@ export interface IDataSubscriber<Tex> {
   // TODO events for when chunks are evicted?
 }
 
-// TODO move to types file? along with above interfaces...?
+// Subscriber IDs increment globally, like timeout IDs
+let subscriberCount = 0;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const getIdForSubscriber = (subscriber: IDataSubscriber<any>): number => {
+  if (subscriber[SUBSCRIBER_ID] === undefined) {
+    subscriber[SUBSCRIBER_ID] = subscriberCount;
+    subscriberCount += 1;
+  }
+  return subscriber[SUBSCRIBER_ID];
+};
+
 type SourceEntry<Tex> = {
-  source: IChunkSource;
+  source: ChunkSource;
   subscribers: IDataSubscriber<Tex>[];
+};
+
+type RequestEntry = {
+  chunkKeys: string[];
+  controller: AbortController;
 };
 
 const swapRemove = <T>(arr: T[], index: number) => {
@@ -88,15 +96,13 @@ export default class DataManager<Dev, Tex> {
    *
    * This could be stored in `chunks`, but requests don't necessarily correspond one-to-one with chunks.
    */
-  private requests = new Map<string, AbortController>();
-  /** The amount of chunk data currently cached in memory, in bytes */
+  private requests = new SlotMap<RequestEntry>();
+  /** The amount of chunk data currently cached in memory, in bytes. */
   private memorySize = 0;
-  /** The amount of GPU texture memory managed by this class, in bytes */
+  /** The amount of GPU texture memory managed by this class, in bytes. */
   private deviceSize = 0;
   /** A counter for assigning chunks a priority at the `RECENT` level. */
   private recentCounter = 0;
-  /** A counter for assigning subscriber IDs. */
-  private subscriberCount = 0;
 
   public limits: DataManagerLimits;
 
@@ -110,13 +116,23 @@ export default class DataManager<Dev, Tex> {
     });
   }
 
-  /** Gets the id of data subscriber `subscriber`, assigning it one if it doesn't have one. */
-  private getIdForSubscriber(subscriber: IDataSubscriber<Tex>): number {
-    if (subscriber[SUBSCRIBER_ID] === undefined) {
-      subscriber[SUBSCRIBER_ID] = this.subscriberCount;
-      this.subscriberCount += 1;
+  // MARK: Helpers
+
+  private tryAbortRequest(id: number): boolean {
+    const request = this.requests.get(id);
+    if (request === undefined) {
+      return false;
     }
-    return subscriber[SUBSCRIBER_ID];
+
+    const canAbort = request.chunkKeys.every((key) => {
+      const chunk = this.chunks.get(key);
+      return chunk === undefined || chunk.memoryPriority.level === ChunkPriorityLevel.RECENT;
+    });
+
+    if (canAbort) {
+      request.controller.abort();
+    }
+    return canAbort;
   }
 
   /**
@@ -124,7 +140,7 @@ export default class DataManager<Dev, Tex> {
    *
    * Assumes that the chunk is not in any queues that don't match its state.
    */
-  private updateChunkInQueue(key: string, entry: ChunkEntry<Tex>) {
+  private updateChunkInQueue(key: string, entry: ChunkEntry<Tex>, noAbort = false) {
     switch (entry.data.state) {
       case ChunkState.QUEUED:
         this.queues.load.insert(key, entry.memoryPriority);
@@ -137,8 +153,8 @@ export default class DataManager<Dev, Tex> {
         this.queues.deviceEvict.insert(key, entry.devicePriority);
         break;
       case ChunkState.LOADING:
-        if (entry.memoryPriority.level === ChunkPriorityLevel.RECENT) {
-          // TODO cancel request here
+        if (entry.memoryPriority.level === ChunkPriorityLevel.RECENT && !noAbort) {
+          this.tryAbortRequest(entry.data.requestId);
         }
         break;
       case ChunkState.WORKER:
@@ -173,6 +189,24 @@ export default class DataManager<Dev, Tex> {
     }
   }
 
+  /**
+   * Adds an entry for a chunk that has no requests.
+   *
+   * This happens when fetching a requested chunk also requires getting a chunk that no one asked for.
+   */
+  private insertChunkUnprioritized(key: string, data: ChunkEntry<Tex>["data"]): ChunkEntry<Tex> {
+    const entry = {
+      data,
+      subscriberPriorities: [],
+      memoryPriority: { level: ChunkPriorityLevel.RECENT, score: this.recentCounter },
+      devicePriority: getMinChunkPriority(),
+    };
+    this.chunks.set(key, entry);
+    this.recentCounter += 1;
+    this.updateChunkInQueue(key, entry, true);
+    return entry;
+  }
+
   private getChunkDims(chunkId: ChunkId): { x: number; y: number; z: number; dataType: NumberType } | undefined {
     const sourceEntry = this.sources[chunkId.source];
     if (sourceEntry === undefined) {
@@ -197,6 +231,7 @@ export default class DataManager<Dev, Tex> {
   }
 
   private estimateChunkSize(chunkId: ChunkId): number {
+    // TODO account for edge chunks
     const dims = this.getChunkDims(chunkId);
     if (dims === undefined) {
       return 0;
@@ -204,6 +239,8 @@ export default class DataManager<Dev, Tex> {
     const { x, y, z, dataType } = dims;
     return x * y * z * dataTypeToByteLength[dataType];
   }
+
+  // MARK: Update cycle
 
   /**
    * Resolves which chunks should be uploaded to the GPU, and which should be evicted from it.
@@ -357,7 +394,7 @@ export default class DataManager<Dev, Tex> {
           break;
         case ChunkState.LOADING:
           console.error(`chunk ${evictKey} queued for eviction while in the "loading" state`);
-          // TODO cancel request
+          this.tryAbortRequest(evictEntry.data.requestId);
           break;
         default:
           // TODO `WORKER` state may be weird to manage here
@@ -381,47 +418,63 @@ export default class DataManager<Dev, Tex> {
       return;
     }
     let [requestPriority, requestKey] = nextRequest;
-    let requestId = stringToChunkId(requestKey);
+    let chunkId = stringToChunkId(requestKey);
     const nextEvictPriority = this.queues.evict.peek()?.[0] ?? getMinChunkPriority();
 
     while (
       // keep submitting requests while concurrency is available and...
       this.requests.size < requestLimitForPriority(this.limits, requestPriority) &&
       // ...either space will be available or this chunk has higher priority than an already cached chunk
-      (this.memorySize + this.estimateChunkSize(requestId) < this.limits.size ||
+      (this.memorySize + this.estimateChunkSize(chunkId) < this.limits.size ||
         comparePriority(requestPriority, nextEvictPriority) < 0)
     ) {
-      this.queues.load.pop();
-
+      // Ignore requests at the `RECENT` level. That's supposed to be for chunks that are already loaded!
       if (requestPriority.level === ChunkPriorityLevel.RECENT) {
-        // Ignore requests at the `RECENT` level. That's supposed to be for chunks that are already loaded!
+        this.queues.load.pop();
         this.chunks.delete(requestKey);
         continue;
       }
 
-      const chunkEntry = this.chunks.get(requestKey);
-      if (chunkEntry === undefined) {
-        continue;
-      }
-      chunkEntry.data = { state: ChunkState.LOADING };
-
-      const sourceEntry = this.sources[requestId.source];
+      // Get the source that this chunk comes from
+      const sourceId = chunkId.source;
+      const sourceEntry = this.sources[sourceId];
       if (sourceEntry === undefined) {
-        console.error(`chunk ${requestKey} queued for load with invalid source id ${requestId.source}`);
+        console.error(`chunk ${requestKey} queued for load with invalid source id ${sourceId}`);
+        this.queues.load.pop();
         this.chunks.delete(requestKey);
         continue;
       }
-      const abortController = new AbortController();
-      this.requests.set(requestKey, abortController);
+      const { source } = sourceEntry;
 
-      // Make a stable by-reference copy of `requestId` for the closures below
-      const requestedId = requestId;
+      // Determine which chunks will be fetched with this request, and set up bookkeeping for the request
+      // Accounts for sources that store multiple chunks at the same storage id
+      const storageId = source.chunkIdToStorageId(chunkId);
+      const chunkIdsAtKey = source.storageIdToChunkIds(storageId);
+      const chunkKeys = chunkIdsAtKey.map((id) => chunkIdToString({ ...id, source: sourceId }));
+      const controller = new AbortController();
+      const requestId = this.requests.insert({ chunkKeys, controller });
+
+      for (const key of chunkKeys) {
+        this.queues.load.remove(key);
+        const entry = this.chunks.get(key);
+        const data = { state: ChunkState.LOADING as const, requestId };
+        if (entry === undefined) {
+          this.insertChunkUnprioritized(key, data);
+        } else if (entry.data.state === ChunkState.QUEUED) {
+          entry.data = data;
+        }
+      }
+
+      // Request the storage key
       sourceEntry.source
-        .getChunk(requestedId, abortController.signal)
-        .then((data) => this.onChunkLoad(requestedId, data))
+        .getKey(storageId, controller.signal)
+        .then((chunks) => {
+          this.requests.remove(requestId);
+          chunks.map((chunk) => this.onChunkLoad(sourceId, chunk));
+        })
         .catch(() => {
-          this.chunks.delete(requestKey);
-          this.requests.delete(requestKey);
+          this.requests.remove(requestId);
+          chunkKeys.map((key) => this.chunks.delete(key));
         });
 
       const nextRequest = this.queues.load.peek();
@@ -429,7 +482,7 @@ export default class DataManager<Dev, Tex> {
         return;
       }
       [requestPriority, requestKey] = nextRequest;
-      requestId = stringToChunkId(requestKey);
+      chunkId = stringToChunkId(requestKey);
     }
   }
 
@@ -448,32 +501,25 @@ export default class DataManager<Dev, Tex> {
     this.submitRequests();
   }
 
-  private onChunkLoad(id: ChunkId, chunk: Chunk<NumberType>) {
-    const key = chunkIdToString(id);
+  private onChunkLoad(source: number, chunk: Chunk<NumberType>) {
+    const globalId = { ...chunk.id, source };
+    const key = chunkIdToString(globalId);
     const { data: memory, dtype } = chunk;
-    this.requests.delete(key);
     if (memory.byteLength > this.limits.size) {
       console.error(`received chunk ${key} which is larger than the cache limit`);
       return;
     }
-    const sourceEntry = this.sources[id.source];
+    const sourceEntry = this.sources[source];
     if (sourceEntry === undefined) {
-      console.error(`received chunk ${key} with invalid source id ${id.source}`);
+      console.error(`received chunk ${key} with invalid source id ${source}`);
       return;
     }
     const data = { state: ChunkState.MEMORY as const, memory, dtype };
 
     let chunkEntry = this.chunks.get(key);
     if (chunkEntry === undefined) {
-      console.error(`received chunk ${key} without data manager entry`);
-      chunkEntry = {
-        data,
-        subscriberPriorities: [],
-        memoryPriority: { level: ChunkPriorityLevel.RECENT, score: this.recentCounter },
-        devicePriority: { level: ChunkPriorityLevel.RECENT, score: this.recentCounter },
-      };
-      this.chunks.set(key, chunkEntry);
-      this.recentCounter += 1;
+      console.warn(`received chunk ${key} without data manager entry`);
+      chunkEntry = this.insertChunkUnprioritized(key, data);
     } else {
       chunkEntry.data = data;
     }
@@ -482,10 +528,12 @@ export default class DataManager<Dev, Tex> {
     this.queues.evict.insert(key, chunkEntry.memoryPriority);
 
     this.memorySize += memory.byteLength;
-    sourceEntry.subscribers.forEach((s) => s.onChunkLoaded?.(id, chunk));
+    sourceEntry.subscribers.forEach((s) => s.onChunkLoaded?.(globalId, chunk));
 
     this.update();
   }
+
+  // MARK: Public interface
 
   /**
    * Declares that subscriber `subscriber` requires chunk `chunkId` at priority level `priority`.
@@ -494,7 +542,7 @@ export default class DataManager<Dev, Tex> {
    * submitted until the next call to `update`.
    */
   addChunkRequest(subscriber: IDataSubscriber<Tex>, chunkId: ChunkId, priority: ChunkPriority, device: boolean) {
-    const subscriberId = this.getIdForSubscriber(subscriber);
+    const subscriberId = getIdForSubscriber(subscriber);
     const chunkIdString = chunkIdToString(chunkId);
     const chunkEntry = this.chunks.get(chunkIdString);
 
@@ -527,7 +575,7 @@ export default class DataManager<Dev, Tex> {
    * The `DataManager` will not respond to this change until the next call to `update`.
    */
   removeChunkRequest(subscriber: IDataSubscriber<Tex>, chunkId: ChunkId) {
-    const subscriberId = this.getIdForSubscriber(subscriber);
+    const subscriberId = getIdForSubscriber(subscriber);
     const chunkKey = chunkIdToString(chunkId);
     const chunkEntry = this.chunks.get(chunkKey);
     if (chunkEntry === undefined) {
@@ -573,7 +621,7 @@ export default class DataManager<Dev, Tex> {
    *
    * Returns the ID that will be used to identify this source in chunk requests and event subscriptions.
    */
-  addSource(source: IChunkSource): number {
+  addSource(source: ChunkSource): number {
     const id = this.sources.length;
     this.sources.push({ source, subscribers: [] });
     return id;
@@ -582,6 +630,11 @@ export default class DataManager<Dev, Tex> {
   /** Returns the dimensions of the given source. */
   getSourceDims(sourceId: number): ExtVolumeDims[] | undefined {
     return this.sources[sourceId]?.source.getDims();
+  }
+
+  /** Returns the metadata of the given source. */
+  getSourceMeta(sourceId: number): VolumeMetadata | undefined {
+    return this.sources[sourceId]?.source.getMeta();
   }
 
   /** Subscribes `subscriber` to data events from the source with id `sourceId` */
