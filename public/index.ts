@@ -137,12 +137,6 @@ const myState: State = {
   timerId: 0,
   scene: 0,
 
-  loader: [
-    new JsonImageInfoLoader(
-      "https://animatedcell-test-data.s3.us-west-2.amazonaws.com/timelapse/test_parent_T49.ome_%%_atlas.json"
-    ),
-  ],
-
   density: 12.5,
   maskAlpha: 1.0,
   exposure: 0.75,
@@ -635,7 +629,7 @@ function updateTimeUI() {
 }
 
 function updateScenesUI() {
-  const maxSceneIndex = myState.loader.length - 1;
+  const maxSceneIndex = myState.loader?.length ?? 1 - 1;
   const sceneInput = document.getElementById("sceneValue") as HTMLInputElement;
   sceneInput.max = `${maxSceneIndex}`;
   sceneInput.value = `${Math.min(myState.scene, maxSceneIndex)}`;
@@ -965,7 +959,7 @@ function onVolumeCreated(name: string, volume: Volume) {
 }
 
 function setSyncMultichannelLoading(sync: boolean) {
-  myState.loader.forEach((loader) => loader.syncMultichannelLoading(sync));
+  myState.loader?.forEach((loader) => loader.syncMultichannelLoading(sync));
 }
 
 function setLowResPreview(enabled: boolean) {
@@ -1401,7 +1395,7 @@ function main() {
     }
   });
   sceneInput?.addEventListener("change", () => {
-    if (myState.loader.length > 1 && myState.scene !== sceneInput.valueAsNumber) {
+    if (myState.loader !== undefined && myState.loader.length > 1 && myState.scene !== sceneInput.valueAsNumber) {
       myState.scene = sceneInput.valueAsNumber;
       loadVolume(myState.currentImageName, new LoadSpec(), myState.loader[myState.scene]);
     }

@@ -14,7 +14,7 @@ import {
 } from "./loaders/VolumeLoader.js";
 import { pickLevelToLoadUnscaled } from "./loaders/VolumeLoaderUtils.js";
 import type { NumberType, TypedArray } from "./types.js";
-import { CImageInfo } from "./ImageInfo.js";
+import { CImageInfo, defaultImageInfo } from "./ImageInfo.js";
 import type { VolumeDims } from "./VolumeDims.js";
 import EventDispatcher from "./EventDispatcher.js";
 
@@ -37,7 +37,7 @@ export type VolumeEvents = {
 export default class Volume extends EventDispatcher<VolumeEvents> {
   public imageInfo: CImageInfo;
   public loadSpec: Required<LoadSpec>;
-  public loader: VolumeLoader;
+  public loader?: VolumeLoader;
   /** `LoadSpec` representing the minimum data required to display what's in the viewer (subregion, channels, etc.).
    * Used to intelligently issue load requests whenever required by a state change. Modify with `updateRequiredData`.
    */
@@ -83,18 +83,24 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
   private volumeDataObservers: VolumeDataObserver[];
   private loaded: boolean;
 
-  constructor(loader: VolumeLoader, loadSpec: LoadSpec = new LoadSpec()) {
+  constructor(loader?: VolumeLoader, loadSpec: LoadSpec = new LoadSpec()) {
     super();
     this.loaded = false;
-    const { imageInfo, loadSpec: adjustedSpec } = loader.createImageInfo(loadSpec);
-    this.imageInfo = new CImageInfo(imageInfo);
+    let adjustedSpec: Partial<LoadSpec> | undefined = undefined;
+    if (loader !== undefined) {
+      const loaderInfo = loader.createImageInfo(loadSpec);
+      adjustedSpec = cloneLoadSpec(loaderInfo.loadSpec);
+      this.imageInfo = new CImageInfo(loaderInfo.imageInfo);
+      this.loader = loader;
+    } else {
+      this.imageInfo = new CImageInfo(defaultImageInfo());
+    }
     this.loadSpec = {
       ...defaultLoadSpec(),
       channels: Array.from({ length: this.imageInfo.numChannels }, (_val, idx) => idx),
-      ...cloneLoadSpec(adjustedSpec),
+      ...adjustedSpec,
     };
     this.loadSpecRequired = cloneLoadSpec(this.loadSpec);
-    this.loader = loader;
     // imageMetadata to be filled in by Volume Loaders
     this.imageMetadata = {};
 
@@ -141,6 +147,14 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
 
   isLoaded(): boolean {
     return this.loaded;
+  }
+
+  setLoader(loader: VolumeLoader, onChannelLoaded?: PerChannelCallback, loadSpec = this.loadSpecRequired) {
+    this.loader = loader;
+    const loaderInfo = loader.createImageInfo(loadSpec);
+    this.imageInfo = new CImageInfo(loaderInfo.imageInfo);
+    this.loadSpecRequired = { ...this.loadSpecRequired, ...loaderInfo.loadSpec };
+    this.loadNewData(onChannelLoaded);
   }
 
   updateDimensions() {
@@ -242,7 +256,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
 
   private async loadScaleLevelDims(): Promise<VolumeDims[] | undefined> {
     try {
-      return await this.loader.loadDims(this.loadSpecRequired);
+      return this.loader?.loadDims(this.loadSpecRequired);
     } catch (e) {
       this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, e));
       return undefined;
@@ -259,7 +273,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     this.dispatchEvent({ type: "loadStart" });
 
     try {
-      await this.loader.loadVolumeData(this, undefined, onChannelLoaded);
+      await this.loader?.loadVolumeData(this, undefined, onChannelLoaded);
     } catch (e) {
       this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, e));
       throw e;
