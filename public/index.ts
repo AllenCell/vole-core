@@ -967,7 +967,7 @@ async function testDataManager() {
 
   for (const [id, priority] of shuffle(requests)) {
     console.log("request", id, priority);
-    dataManager.queueChunkRequest(mockSubscriber, id, priority, true);
+    dataManager.addChunkRequest(mockSubscriber, id, priority, true);
   }
 
   dataManager.update();
