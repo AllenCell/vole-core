@@ -499,7 +499,7 @@ export default class DataManager<Dev, Tex> {
    * If the chunk is not already in memory, this will queue the chunk to be loaded. Chunk load requests are not
    * submitted until the next call to `update`.
    */
-  queueChunkRequest(subscriber: IDataSubscriber<Tex>, chunkId: ChunkId, priority: ChunkPriority, device: boolean) {
+  addChunkRequest(subscriber: IDataSubscriber<Tex>, chunkId: ChunkId, priority: ChunkPriority, device: boolean) {
     const subscriberId = this.getIdForSubscriber(subscriber);
     const chunkIdString = chunkIdToString(chunkId);
     const chunkEntry = this.chunks.get(chunkIdString);
