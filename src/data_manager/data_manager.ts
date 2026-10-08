@@ -13,31 +13,20 @@ import {
   deviceSizeLimitForPriority,
 } from "./types.js";
 import type { NumberType, TypedArray } from "../types.js";
+import { defineGlobalId, swapRemove } from "./utils.js";
 import PriorityQueue from "./priority_queue.js";
 import type { DeviceInterface } from "./device_interface.js";
 import { ChunkSource, type VolumeMetadata, type ExtVolumeDims } from "./sources/chunk_source.js";
 import SlotMap from "./slot_map.js";
 
-const SUBSCRIBER_ID = Symbol("DataManager.subscriberId");
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const getIdForSubscriber = defineGlobalId<IDataSubscriber<any>>(Symbol("DataManager.subscriberId"));
 
 export interface IDataSubscriber<Tex> {
-  [SUBSCRIBER_ID]?: number;
   onChunkLoaded?: (id: ChunkId, chunk: Chunk<NumberType>) => void;
   onChunkOnGpu?: (id: ChunkId, texture: Tex) => void;
   // TODO events for when chunks are evicted?
 }
-
-// Subscriber IDs increment globally, like timeout IDs
-let subscriberCount = 0;
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getIdForSubscriber = (subscriber: IDataSubscriber<any>): number => {
-  if (subscriber[SUBSCRIBER_ID] === undefined) {
-    subscriber[SUBSCRIBER_ID] = subscriberCount;
-    subscriberCount += 1;
-  }
-  return subscriber[SUBSCRIBER_ID];
-};
 
 type SourceEntry<Tex> = {
   source: ChunkSource;
@@ -47,18 +36,6 @@ type SourceEntry<Tex> = {
 type RequestEntry = {
   chunkKeys: string[];
   controller: AbortController;
-};
-
-const swapRemove = <T>(arr: T[], index: number) => {
-  if (index < 0) {
-    return;
-  }
-
-  const { length } = arr;
-  const replace = arr.pop();
-  if (replace !== undefined && index < length) {
-    arr[index] = replace;
-  }
 };
 
 // TODO also used in `device_interface`; consolidate to utils module or something
