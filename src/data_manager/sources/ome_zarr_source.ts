@@ -17,6 +17,8 @@ import {
 import { unitNameToSymbol } from "../../loaders/VolumeLoaderUtils.js";
 import type { Chunk, LocalChunkId } from "../types.js";
 import type { NumberType, TypedArray } from "../../types.js";
+import { taskHandle, TaskPool } from "../task_pool/index.js";
+import type { encodeTask as encodeTaskType, decodeTask as decodeTaskType } from "./zarr_codec_worker.js";
 
 const PLACEHOLDER_NAME = "zarr source";
 const PLACEHOLDER_SCENE_INDEX = 0;
@@ -133,3 +135,28 @@ export class OMEZarrSource extends ChunkSource {
     return [{ data: data as TypedArray, dtype: multiscale.dtype, id }];
   }
 }
+
+let codecCounter = 0;
+
+const encodeTask = taskHandle<typeof encodeTaskType>("zarrEncode", (data) => [data.buffer]);
+const decodeTask = taskHandle<typeof decodeTaskType>("zarrDecode", (data) => [data.buffer]);
+
+export const augmentCodec = (name: string, pool: TaskPool) => {
+  const codec = zarr.registry.get(name);
+  if (codec === undefined) {
+    console.warn(`No such codec: ${name}`);
+    return;
+  }
+
+  zarr.registry.set(name, async () => ({
+    fromConfig: (config, meta) => {
+      const descriptor = { config, meta, name, id: codecCounter };
+      codecCounter++;
+
+      return {
+        encode: (data: Uint8Array) => pool.runTask(encodeTask, data, descriptor),
+        decode: (data: Uint8Array) => pool.runTask(decodeTask, data, descriptor),
+      };
+    },
+  }));
+};
