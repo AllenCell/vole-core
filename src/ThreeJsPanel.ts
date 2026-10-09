@@ -503,7 +503,6 @@ export class ThreeJsPanel {
       fontFamily: "-apple-system, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif",
       position: "absolute",
       left: "50%",
-      bottom: "20px",
       transform: "translateX(-50%)",
       color: "white",
       mixBlendMode: "difference",
@@ -592,7 +591,10 @@ export class ThreeJsPanel {
     const { style: centerStyle } = this.lowResIndicatorElement;
     centerStyle.removeProperty("top");
     centerStyle.removeProperty("bottom");
-    centerStyle[fromTop ? "top" : "bottom"] = marginY + "px";
+    // When fromTop is false (the default), the low res indicator should be
+    // halfway between the vertical midpoint and the top of the clipping UI pane
+    // marginY + 0.25 * (total - marginY) = 0.25 * total + 0.75 * marginY
+    centerStyle[fromTop ? "top" : "bottom"] = `calc(15% + ${0.85 * marginY}px)`;
   }
 
   setAutoRotate(rotate: boolean): void {
