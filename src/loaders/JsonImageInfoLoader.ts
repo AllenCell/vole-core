@@ -153,12 +153,12 @@ class JsonImageInfoLoader extends VolumeLoader {
     this.syncChannels = sync;
   }
 
-  loadDims(loadSpec: LoadSpec): VolumeDims[] {
+  getDims(loadSpec: LoadSpec): VolumeDims[] {
     const jsonInfo = this.jsonInfo[loadSpec.time];
     return [jsonToVolumeDims(jsonInfo)];
   }
 
-  createImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo {
+  getImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo {
     const jsonInfo = this.jsonInfo[loadSpec.time];
     return { imageInfo: jsonToImageInfo(jsonInfo), loadSpec };
   }

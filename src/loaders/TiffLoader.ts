@@ -189,7 +189,7 @@ class TiffLoader extends VolumeLoader {
     return new TiffLoader(remappedUrl, dims);
   }
 
-  loadDims(_loadSpec: LoadSpec): VolumeDims[] {
+  getDims(_loadSpec: LoadSpec): VolumeDims[] {
     const { dims } = this;
 
     const atlasDims = computePackedAtlasDims(dims.sizez, dims.sizex, dims.sizey);
@@ -214,7 +214,7 @@ class TiffLoader extends VolumeLoader {
     return [d];
   }
 
-  createImageInfo(_loadSpec: LoadSpec): LoadedVolumeInfo {
+  getImageInfo(_loadSpec: LoadSpec): LoadedVolumeInfo {
     const { dims } = this;
     // compare with sizex, sizey
     //const width = image.getWidth();

@@ -349,7 +349,7 @@ class OMEZarrLoader extends VolumeLoader {
     return result;
   }
 
-  loadDims(loadSpec: LoadSpec): VolumeDims[] {
+  getDims(loadSpec: LoadSpec): VolumeDims[] {
     return OMEZarrLoader.metadataToDims(this.createMetadata(), loadSpec);
   }
 
@@ -489,7 +489,7 @@ class OMEZarrLoader extends VolumeLoader {
     return { imageInfo: imgdata, loadSpec: fullExtentLoadSpec };
   }
 
-  createImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo {
+  getImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo {
     return OMEZarrLoader.metadataToImageInfo(this.createMetadata(), loadSpec);
   }
 

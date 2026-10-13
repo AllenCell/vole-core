@@ -108,7 +108,7 @@ class RawArrayLoader extends VolumeLoader {
     }
   }
 
-  loadDims(_loadSpec: LoadSpec): VolumeDims[] {
+  getDims(_loadSpec: LoadSpec): VolumeDims[] {
     const jsonInfo = this.jsonInfo;
 
     const d: VolumeDims = {
@@ -121,7 +121,7 @@ class RawArrayLoader extends VolumeLoader {
     return [d];
   }
 
-  createImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo {
+  getImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo {
     return { imageInfo: convertImageInfo(this.jsonInfo, this.data.dtype), loadSpec };
   }
 

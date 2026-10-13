@@ -62,12 +62,11 @@ const multiscaleTestimgdata: ImageInfo = {
 
 function createTestLoader(multiscaleLevelDims: ImageInfo["multiscaleLevelDims"]): VolumeLoader {
   return {
-    loadDims: vi.fn().mockResolvedValue(multiscaleLevelDims),
-    createVolume: vi.fn(),
+    getDims: vi.fn().mockResolvedValue(multiscaleLevelDims),
     loadVolumeData: vi.fn(),
     setPrefetchPriority: vi.fn(),
     syncMultichannelLoading: vi.fn(),
-    createImageInfo: vi.fn(),
+    getImageInfo: vi.fn(),
     loadRawChannelData: vi.fn(),
     updateFetchOptions: vi.fn(),
   };
@@ -106,7 +105,8 @@ function checkChannelDataConstruction(c: Channel, index: number, imgdata: ImageI
 
 describe("test volume", () => {
   describe("creation", () => {
-    const v = new Volume(testimgdata);
+    const loader = createTestLoader(testimgdata.multiscaleLevelDims);
+    const v = new Volume(loader);
 
     it("is created", () => {
       checkVolumeConstruction(v, testimgdata);
@@ -138,7 +138,8 @@ describe("test volume", () => {
     it("has a correct value for normalizedPhysicalSize", () => {
       // `Volume` formerly derived a `scale` property by a different means than `normPhysicalSize`, but depended
       // on `scale` and `normPhysicalSize` being equal. With `scale` gone, this test ensures the equality stays.
-      const v = new Volume(testimgdata);
+      const loader = createTestLoader(testimgdata.multiscaleLevelDims);
+      const v = new Volume(loader);
       const { originalSize, physicalPixelSize } = v.imageInfo;
       const sizemax = Math.max(
         originalSize.x * physicalPixelSize.x,
@@ -161,7 +162,7 @@ describe("test volume", () => {
     it("dispatches loadStart when changing scale levels", async () => {
       // ARRANGE
       const loader = createTestLoader(multiscaleTestimgdata.multiscaleLevelDims);
-      const v = new Volume(multiscaleTestimgdata, new LoadSpec(), loader);
+      const v = new Volume(loader, new LoadSpec());
       const loadStart = vi.fn();
       v.addEventListener("loadStart", loadStart);
 
@@ -176,7 +177,7 @@ describe("test volume", () => {
       // ARRANGE
       // loader is needed for loadStart to potentially be triggered
       const loader = createTestLoader(testimgdata.multiscaleLevelDims);
-      const v = new Volume(testimgdata, new LoadSpec(), loader);
+      const v = new Volume(loader, new LoadSpec());
       const loadStart = vi.fn();
       v.addEventListener("loadStart", loadStart);
 
@@ -195,7 +196,7 @@ describe("test volume", () => {
       const loader = createTestLoader(multiscaleTestimgdata.multiscaleLevelDims);
       const loadSpec = new LoadSpec();
       loadSpec.scaleLevelBias = 1;
-      const v = new Volume(multiscaleTestimgdata, loadSpec, loader);
+      const v = new Volume(loader, loadSpec);
 
       // ACT+ASSERT
       expect(await v.biasesSelectDifferentLevels()).toBe(true);
@@ -204,7 +205,7 @@ describe("test volume", () => {
     it("reports when the scale-level bias selects the same resolution", async () => {
       // ARRANGE
       const loader = createTestLoader(multiscaleTestimgdata.multiscaleLevelDims);
-      const v = new Volume(multiscaleTestimgdata, new LoadSpec(), loader);
+      const v = new Volume(loader, new LoadSpec());
 
       // ACT+ASSERT
       expect(await v.biasesSelectDifferentLevels()).toBe(false);

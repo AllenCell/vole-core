@@ -88,7 +88,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     this.loaded = false;
     let adjustedSpec: Partial<LoadSpec> | undefined = undefined;
     if (loader !== undefined) {
-      const loaderInfo = loader.createImageInfo(loadSpec);
+      const loaderInfo = loader.getImageInfo(loadSpec);
       adjustedSpec = cloneLoadSpec(loaderInfo.loadSpec);
       this.imageInfo = new CImageInfo(loaderInfo.imageInfo);
       this.loader = loader;
@@ -151,7 +151,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
 
   setLoader(loader: VolumeLoader, onChannelLoaded?: PerChannelCallback, loadSpec = this.loadSpecRequired) {
     this.loader = loader;
-    const loaderInfo = loader.createImageInfo(loadSpec);
+    const loaderInfo = loader.getImageInfo(loadSpec);
     this.imageInfo = new CImageInfo(loaderInfo.imageInfo);
     this.loadSpecRequired = { ...this.loadSpecRequired, ...loaderInfo.loadSpec };
     this.loadNewData(onChannelLoaded);
@@ -256,7 +256,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
 
   private async loadScaleLevelDims(): Promise<VolumeDims[] | undefined> {
     try {
-      return this.loader?.loadDims(this.loadSpecRequired);
+      return this.loader?.getDims(this.loadSpecRequired);
     } catch (e) {
       this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, e));
       return undefined;
