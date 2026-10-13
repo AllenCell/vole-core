@@ -291,7 +291,7 @@ class WorkerLoader extends VolumeLoader {
     return this.workerHandle.sendMessage(WorkerMsgType.SYNCHRONIZE_MULTICHANNEL_LOADING, sync, this.getLoaderId());
   }
 
-  loadDims(loadSpec: LoadSpec): VolumeDims[] {
+  getDims(loadSpec: LoadSpec): VolumeDims[] {
     if (this.meta.type === VolumeFileFormat.ZARR) {
       return OMEZarrLoader.metadataToDims(this.meta.meta, loadSpec);
     } else if (this.meta.type === VolumeFileFormat.JSON) {
@@ -301,7 +301,7 @@ class WorkerLoader extends VolumeLoader {
     }
   }
 
-  createImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo {
+  getImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo {
     if (this.meta.type === VolumeFileFormat.ZARR) {
       return OMEZarrLoader.metadataToImageInfo(this.meta.meta, loadSpec);
     } else if (this.meta.type === VolumeFileFormat.JSON) {

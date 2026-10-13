@@ -1102,7 +1102,7 @@ async function createLoader(data: TestDataSpec): Promise<VolumeLoader[]> {
 }
 
 async function loadVolume(name: string, loadSpec: LoadSpec, loader: VolumeLoader): Promise<void> {
-  const fullDims = loader.loadDims(loadSpec);
+  const fullDims = loader.getDims(loadSpec);
   console.log(fullDims);
 
   const volume = new Volume(loader);

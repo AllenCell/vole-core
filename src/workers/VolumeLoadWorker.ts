@@ -79,8 +79,8 @@ const messageHandlers: { [T in WorkerMsgType]: MessageHandler<T> } = {
     } else {
       meta = {
         type: undefined,
-        imageInfo: loader.createImageInfo(new LoadSpec()).imageInfo,
-        dims: loader.loadDims(new LoadSpec()),
+        imageInfo: loader.getImageInfo(new LoadSpec()).imageInfo,
+        dims: loader.getDims(new LoadSpec()),
       };
     }
     return { id, meta };
