@@ -1102,12 +1102,18 @@ async function createLoader(data: TestDataSpec): Promise<VolumeLoader[]> {
 }
 
 async function loadVolume(name: string, loadSpec: LoadSpec, loader: VolumeLoader): Promise<void> {
-  const fullDims = await loader.loadDims(loadSpec);
+  const fullDims = loader.loadDims(loadSpec);
   console.log(fullDims);
 
   const volume = new Volume(loader);
   onVolumeCreated(name, volume);
-  loader.loadVolumeData(volume);
+  const channels: number[] = [];
+  myState.channelGui.forEach(({ enabled }, idx) => {
+    if (enabled) {
+      channels.push(idx);
+    }
+  });
+  loader.loadVolumeData(volume, { ...volume.loadSpec, channels }, onChannelDataArrived);
 
   // Set default slice index
   goToZSlice(Math.floor(volume.imageInfo.subregionSize.z / 2));
