@@ -2,9 +2,9 @@ import { Box3, Vector3 } from "three";
 
 import Volume from "../Volume.js";
 import type { VolumeDims } from "../VolumeDims.js";
-import { CImageInfo, type ImageInfo } from "../ImageInfo.js";
+import { CImageInfo, createDefaultMetadata, type ImageInfo } from "../ImageInfo.js";
 import type { TypedArray, NumberType } from "../types.js";
-import { createDefaultMetadata, MAX_ATLAS_EDGE } from "./VolumeLoaderUtils.js";
+import { MAX_ATLAS_EDGE } from "./VolumeLoaderUtils.js";
 import { PrefetchDirection } from "./zarr_utils/types.js";
 import type { ZarrLoaderFetchOptions } from "./OmeZarrLoader.js";
 
