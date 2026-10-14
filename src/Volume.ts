@@ -14,7 +14,7 @@ import {
 } from "./loaders/VolumeLoader.js";
 import { pickLevelToLoadUnscaled } from "./loaders/VolumeLoaderUtils.js";
 import type { NumberType, TypedArray } from "./types.js";
-import { CImageInfo, defaultImageInfo } from "./ImageInfo.js";
+import { CImageInfo, createDefaultMetadata, defaultImageInfo } from "./ImageInfo.js";
 import type { VolumeDims } from "./VolumeDims.js";
 import EventDispatcher from "./EventDispatcher.js";
 
@@ -83,14 +83,15 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
   private volumeDataObservers: VolumeDataObserver[];
   private loaded: boolean;
 
-  constructor(loader?: VolumeLoader, loadSpec: LoadSpec = new LoadSpec()) {
+  constructor(loader?: VolumeLoader, spec: LoadSpec = new LoadSpec()) {
     super();
     this.loaded = false;
     let adjustedSpec: Partial<LoadSpec> | undefined = undefined;
     if (loader !== undefined) {
-      const loaderInfo = loader.getImageInfo(loadSpec);
-      adjustedSpec = cloneLoadSpec(loaderInfo.loadSpec);
-      this.imageInfo = new CImageInfo(loaderInfo.imageInfo);
+      const { imageInfo, loadSpec } = loader.getImageInfo(spec);
+      const infoWithMeta = { ...imageInfo, userData: { ...createDefaultMetadata(imageInfo), ...imageInfo.userData } };
+      adjustedSpec = cloneLoadSpec(loadSpec);
+      this.imageInfo = new CImageInfo(infoWithMeta);
       this.loader = loader;
     } else {
       this.imageInfo = new CImageInfo(defaultImageInfo());
