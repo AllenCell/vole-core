@@ -13,12 +13,9 @@ import {
   LoadSpec,
   type RawChannelDataCallback,
   type LoadedVolumeInfo,
-  box3ToRegion,
-  Region,
   regionToBox3,
 } from "./VolumeLoader.js";
 import {
-  composeSubregion,
   computePackedAtlasDims,
   convertSubregionToPixels,
   pickLevelToLoad,
@@ -122,10 +119,6 @@ class OMEZarrLoader extends VolumeLoader {
   private prefetchSubscriber: SubscriberId | undefined;
   /** The ID of the subscriber responsible for filling the dedicated low-resolution cache. */
   private lowResWarmSubscriber: SubscriberId | undefined;
-
-  // TODO: this property should definitely be owned by `Volume` if this loader is ever used by multiple volumes.
-  //   This may cause errors or incorrect results otherwise!
-  private maxExtent?: Region;
 
   private syncChannels = false;
 
@@ -580,18 +573,14 @@ class OMEZarrLoader extends VolumeLoader {
   }
 
   private updateImageInfoForLoad(imageInfo: ImageInfo, loadSpec: LoadSpec): ImageInfo {
-    // Apply `this.maxExtent` to subregion, if it exists
-    const maxExtent = this.maxExtent ?? { min: [0, 0, 0], max: [1, 1, 1] };
-    const subregion = box3ToRegion(composeSubregion(loadSpec.subregion, maxExtent));
-
     // Pick the level to load based on the subregion size
-    const multiscaleLevel = pickLevelToLoad({ ...loadSpec, subregion }, this.getLevelShapesZYX());
+    const multiscaleLevel = pickLevelToLoad(loadSpec, this.getLevelShapesZYX());
     const array0Shape = this.sources[0].scaleLevels[multiscaleLevel].shape;
 
     // Convert subregion to volume voxels
     const [z, y, x] = this.sources[0].axesTCZYX.slice(2);
     const regionPx = convertSubregionToPixels(
-      subregion,
+      loadSpec.subregion,
       new Vector3(array0Shape[x], array0Shape[y], z === -1 ? 1 : array0Shape[z])
     );
 
