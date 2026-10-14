@@ -27,10 +27,9 @@ import { Light, AREA_LIGHT, SKY_LIGHT } from "./Light.js";
 import Line3d from "./drawables/lines/Line3d.js";
 import VectorArrows3d from "./drawables/VectorArrows3d.js";
 import Spheres3d from "./drawables/spheres/Spheres3d.js";
-import { createDefaultMetadata } from "./loaders/VolumeLoaderUtils.js";
 import type { VolumeDims } from "./VolumeDims.js";
 
-export type { ImageInfo } from "./ImageInfo.js";
+export { createDefaultMetadata, type ImageInfo } from "./ImageInfo.js";
 export type { ControlPoint } from "./Lut.js";
 export type { CreateLoaderOptions } from "./loaders/index.js";
 // TODO export `IVolumeLoader`, `ThreadableVolumeLoader` as `VolumeLoader` aliases?
@@ -66,7 +65,6 @@ export {
   VolumeLoadErrorType,
   VolumeFileFormat,
   createVolumeLoader,
-  createDefaultMetadata,
   Channel,
   Light,
   ViewportCorner,
