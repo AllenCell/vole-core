@@ -216,19 +216,6 @@ export function convertSubregionToPixels(region: Region, size: Vector3): Box3 {
   return new Box3(min, max);
 }
 
-/**
- * Return the subset of `container` specified by `region`, assuming that `region` contains fractional values (between 0
- * and 1). i.e. if `container`'s range on the X axis is 0-4 and `region`'s is 0.25-0.5, the result will have range 1-2.
- */
-export function composeSubregion(region: Region, container: Region): Box3 {
-  const regionBox = regionToBox3(region);
-  const containerBox = regionToBox3(container);
-  const size = containerBox.getSize(new Vector3());
-  const min = regionBox.min.clone().multiply(size).add(containerBox.min);
-  const max = regionBox.max.clone().multiply(size).add(containerBox.min);
-  return new Box3(min, max);
-}
-
 function isEmpty(obj: object) {
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
