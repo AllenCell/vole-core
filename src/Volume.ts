@@ -150,14 +150,6 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     return this.loaded;
   }
 
-  setLoader(loader: VolumeLoader, onChannelLoaded?: PerChannelCallback, loadSpec = this.loadSpecRequired) {
-    this.loader = loader;
-    const loaderInfo = loader.getImageInfo(loadSpec);
-    this.imageInfo = new CImageInfo(loaderInfo.imageInfo);
-    this.loadSpecRequired = { ...this.loadSpecRequired, ...loaderInfo.loadSpec };
-    this.loadNewData(onChannelLoaded);
-  }
-
   updateDimensions() {
     const { volumeSize, subregionSize, subregionOffset } = this.imageInfo;
 
