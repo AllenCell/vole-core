@@ -291,7 +291,7 @@ describe("zarr_utils", () => {
     });
 
     it("defaults to `[1, 1, 1, 1, 1]` if no coordinate transformations are present at all", () => {
-      expect(getScale({ path: "0" }, [0, 1, 2, 3, 4])).to.deep.equal([1, 1, 1, 1, 1]);
+      expect(getScale({}, [0, 1, 2, 3, 4])).to.deep.equal([1, 1, 1, 1, 1]);
     });
   });
 
