@@ -629,7 +629,7 @@ function updateTimeUI() {
 }
 
 function updateScenesUI() {
-  const maxSceneIndex = myState.loader?.length ?? 1 - 1;
+  const maxSceneIndex = (myState.loader?.length ?? 1) - 1;
   const sceneInput = document.getElementById("sceneValue") as HTMLInputElement;
   sceneInput.max = `${maxSceneIndex}`;
   sceneInput.value = `${Math.min(myState.scene, maxSceneIndex)}`;
@@ -1113,7 +1113,8 @@ async function loadVolume(name: string, loadSpec: LoadSpec, loader: VolumeLoader
       channels.push(idx);
     }
   });
-  loader.loadVolumeData(volume, { ...volume.loadSpec, channels }, onChannelDataArrived);
+  volume.channelLoadCallback = onChannelDataArrived;
+  loader.loadVolumeData(volume, { ...volume.loadSpec, channels });
 
   // Set default slice index
   goToZSlice(Math.floor(volume.imageInfo.subregionSize.z / 2));
