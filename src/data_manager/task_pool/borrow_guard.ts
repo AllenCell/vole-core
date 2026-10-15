@@ -15,9 +15,11 @@ type BorrowGuardEvents = { restored: void };
 export class BorrowGuard<T extends TypedArray = TypedArray> extends EventDispatcher<BorrowGuardEvents> {
   private [guardMarker] = true as const;
   private restored = false;
+  public readonly byteLength: number;
 
   constructor(private array: T) {
     super();
+    this.byteLength = array.byteLength;
   }
 
   get borrowed(): boolean {

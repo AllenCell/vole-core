@@ -1,4 +1,5 @@
 import type { NumberType, TypedArray } from "../types.ts";
+import type { BorrowGuard } from "./task_pool/borrow_guard.js";
 
 /** Settings for the maximum resources a `DataManager` may use (memory, request concurrency, etc.) */
 export type DataManagerLimits = {
@@ -108,15 +109,13 @@ export const enum ChunkState {
   MEMORY = "memory",
   /** Chunk is cached in memory *and* uploaded to the GPU. */
   DEVICE = "device",
-  /** Chunk has been temporarily handed off to a worker. Unused, for now. */
-  WORKER = "worker",
 }
 
 type ChunkEntryData<Tex> =
-  | { state: ChunkState.QUEUED | ChunkState.WORKER }
+  | { state: ChunkState.QUEUED }
   | { state: ChunkState.LOADING; requestId: number }
-  | { state: ChunkState.MEMORY; memory: TypedArray; dtype: NumberType }
-  | { state: ChunkState.DEVICE; memory: TypedArray; dtype: NumberType; texture: Tex };
+  | { state: ChunkState.MEMORY; memory: BorrowGuard; dtype: NumberType }
+  | { state: ChunkState.DEVICE; memory: BorrowGuard; dtype: NumberType; texture: Tex };
 
 export type SubscriberPriority = {
   subscriberId: number;
