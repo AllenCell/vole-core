@@ -264,7 +264,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     this.dispatchEvent({ type: "loadStart" });
 
     try {
-      await this.loader?.loadVolumeData(this, undefined, onChannelLoaded);
+      await this.loader?.loadVolumeData(this, onChannelLoaded);
     } catch (e) {
       this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, e));
       throw e;

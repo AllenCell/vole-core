@@ -168,11 +168,7 @@ export abstract class VolumeLoader {
   // TODO this is not cancellable in the sense that any async requests initiated here are not stored
   // in a way that they can be interrupted.
   // TODO explicitly passing a `LoadSpec` is now rarely useful. Remove?
-  async loadVolumeData(
-    volume: Volume,
-    loadSpecOverride?: LoadSpec,
-    onChannelLoaded?: PerChannelCallback
-  ): Promise<void> {
+  async loadVolumeData(volume: Volume, onChannelLoaded?: PerChannelCallback): Promise<void> {
     const onUpdateMetadata = (imageInfo?: ImageInfo, loadSpec?: LoadSpec): void => {
       if (imageInfo) {
         volume.imageInfo = new CImageInfo(imageInfo);
@@ -180,7 +176,7 @@ export abstract class VolumeLoader {
         volume.updateDimensions();
         volume.updateChannelCount();
       }
-      volume.loadSpec = { ...loadSpec, ...spec };
+      volume.loadSpec = { ...loadSpec, ...volume.loadSpec };
     };
 
     const onChannelData: RawChannelDataCallback = (channelIndices, dtypes, dataArrays, ranges, atlasDims) => {
@@ -199,7 +195,6 @@ export abstract class VolumeLoader {
       }
     };
 
-    const spec = { ...volume.loadSpec, ...loadSpecOverride };
-    return this.loadRawChannelData(volume.imageInfo.imageInfo, spec, onUpdateMetadata, onChannelData);
+    return this.loadRawChannelData(volume.imageInfo.imageInfo, volume.loadSpec, onUpdateMetadata, onChannelData);
   }
 }

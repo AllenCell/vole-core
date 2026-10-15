@@ -1114,7 +1114,7 @@ async function loadVolume(name: string, loadSpec: LoadSpec, loader: VolumeLoader
     }
   });
   volume.channelLoadCallback = onChannelDataArrived;
-  loader.loadVolumeData(volume, { ...volume.loadSpec, channels });
+  loader.loadVolumeData(volume);
 
   // Set default slice index
   goToZSlice(Math.floor(volume.imageInfo.subregionSize.z / 2));
