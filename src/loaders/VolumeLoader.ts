@@ -103,9 +103,9 @@ export type RawChannelDataCallback = (
  * Loaders may keep state for reuse between volume creation and volume loading, and should be kept alive until volume
  * loading is complete. (See `createVolume`)
  */
-export abstract class VolumeLoader {
+export interface VolumeLoader {
   /** Use `VolumeDims` to further refine a `LoadSpec` for use in `createVolume` */
-  abstract getDims(loadSpec: LoadSpec): VolumeDims[];
+  getDims(loadSpec: LoadSpec): VolumeDims[];
 
   /**
    * Creates an `ImageInfo` object from a `LoadSpec`, which may be passed to the `Volume` constructor to create an
@@ -114,7 +114,7 @@ export abstract class VolumeLoader {
    * Also returns a new `LoadSpec` that may have been modified from the input `LoadSpec` to reflect the constraints or
    * abilities of the loader. This new `LoadSpec` should be used when constructing the `Volume`, _not_ the original.
    */
-  abstract getImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo;
+  getImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo;
 
   /**
    * Begins loading per-channel data for the volume specified by `imageInfo` and `loadSpec`.
@@ -128,7 +128,7 @@ export abstract class VolumeLoader {
    *
    * The returned promise should resolve when all data has been loaded, or reject if any error occurs while loading.
    */
-  abstract loadRawChannelData(
+  loadRawChannelData(
     imageInfo: ImageInfo,
     loadSpec: LoadSpec,
     onUpdateVolumeMetadata: (imageInfo?: ImageInfo, loadSpec?: LoadSpec) => void,
@@ -136,9 +136,7 @@ export abstract class VolumeLoader {
   ): Promise<void>;
 
   /** Change which directions to prioritize when prefetching. Currently only implemented on `OMEZarrLoader`. */
-  setPrefetchPriority(_directions: PrefetchDirection[]): void {
-    // no-op by default
-  }
+  setPrefetchPriority(directions: PrefetchDirection[]): void;
 
   /**
    * By default channel data can arrive out of order and at different times.
@@ -147,12 +145,7 @@ export abstract class VolumeLoader {
    * to see all channels update at the same time.
    * @param sync Set true to force all requested channels to load at the same time
    */
-  syncMultichannelLoading(_sync: boolean): void {
-    // default behavior is async, to update channels as they arrive, depending on each
-    // loader's implementation details.
-  }
+  syncMultichannelLoading(sync: boolean): void;
 
-  updateFetchOptions(_options: Partial<ZarrLoaderFetchOptions>): void {
-    // no-op by default
-  }
+  updateFetchOptions(options: Partial<ZarrLoaderFetchOptions>): void;
 }

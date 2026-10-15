@@ -1,4 +1,4 @@
-import { VolumeLoader, type LoadSpec, type RawChannelDataCallback, type LoadedVolumeInfo } from "./VolumeLoader.js";
+import type { VolumeLoader, LoadSpec, RawChannelDataCallback, LoadedVolumeInfo } from "./VolumeLoader.js";
 import { computeAtlasSize, type ImageInfo } from "../ImageInfo.js";
 import type { VolumeDims } from "../VolumeDims.js";
 import VolumeCache, { isChunk } from "../VolumeCache.js";
@@ -124,16 +124,14 @@ export const jsonToVolumeDims = (json: JsonImageInfo): VolumeDims => {
   };
 };
 
-class JsonImageInfoLoader extends VolumeLoader {
+class JsonImageInfoLoader implements VolumeLoader {
   syncChannels = false;
 
   private constructor(
     private urls: string[],
     public jsonInfo: JsonImageInfo[],
     private cache?: VolumeCache
-  ) {
-    super();
-  }
+  ) {}
 
   static async new(urls: string | string[], cache?: VolumeCache): Promise<JsonImageInfoLoader> {
     const urlArray = Array.isArray(urls) ? urls : [urls];
@@ -329,6 +327,14 @@ class JsonImageInfoLoader extends VolumeLoader {
     if (syncChannels) {
       onData(resultChannelIndices, resultChannelDtype, resultChannelData, resultChannelRanges);
     }
+  }
+
+  setPrefetchPriority() {
+    // noop
+  }
+
+  updateFetchOptions() {
+    // noop
   }
 }
 
