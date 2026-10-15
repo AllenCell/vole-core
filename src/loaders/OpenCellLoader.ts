@@ -1,10 +1,10 @@
-import { VolumeLoader, LoadSpec, RawChannelDataCallback, LoadedVolumeInfo } from "./VolumeLoader.js";
+import { type VolumeLoader, LoadSpec, type RawChannelDataCallback, type LoadedVolumeInfo } from "./VolumeLoader.js";
 import { computeAtlasSize, type ImageInfo } from "../ImageInfo.js";
 import type { VolumeDims } from "../VolumeDims.js";
 import { JsonImageInfoLoader } from "./JsonImageInfoLoader.js";
 import { getDataRange } from "../utils/num_utils.js";
 
-class OpenCellLoader extends VolumeLoader {
+class OpenCellLoader implements VolumeLoader {
   getDims(_: LoadSpec): VolumeDims[] {
     const d: VolumeDims = {
       shape: [1, 2, 27, 600, 600],
@@ -76,6 +76,18 @@ class OpenCellLoader extends VolumeLoader {
     return JsonImageInfoLoader.loadVolumeAtlasData(urls, (ch, dtype, data) =>
       onData(ch, dtype, data, data.map(getDataRange), [w, h])
     );
+  }
+
+  setPrefetchPriority() {
+    // noop
+  }
+
+  syncMultichannelLoading() {
+    // noop
+  }
+
+  updateFetchOptions() {
+    // noop
   }
 }
 
