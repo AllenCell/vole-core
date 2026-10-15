@@ -98,7 +98,6 @@ function createTestLoader(): VolumeLoader {
   return {
     getDims: vi.fn(() => imageInfo.multiscaleLevelDims),
     getImageInfo: vi.fn((loadSpec) => ({ imageInfo, loadSpec })),
-    loadVolumeData: vi.fn(),
     setPrefetchPriority: vi.fn(),
     syncMultichannelLoading: vi.fn(),
     loadRawChannelData: vi.fn(),
