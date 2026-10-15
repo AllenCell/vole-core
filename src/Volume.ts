@@ -89,9 +89,8 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     let adjustedSpec: Partial<LoadSpec> | undefined = undefined;
     if (loader !== undefined) {
       const { imageInfo, loadSpec } = loader.getImageInfo(spec);
-      const infoWithMeta = { ...imageInfo, userData: { ...createDefaultMetadata(imageInfo), ...imageInfo.userData } };
       adjustedSpec = cloneLoadSpec(loadSpec);
-      this.imageInfo = new CImageInfo(infoWithMeta);
+      this.imageInfo = new CImageInfo(imageInfo);
       this.loader = loader;
     } else {
       this.imageInfo = new CImageInfo(defaultImageInfo());
@@ -102,8 +101,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
       ...adjustedSpec,
     };
     this.loadSpecRequired = cloneLoadSpec(this.loadSpec);
-    // imageMetadata to be filled in by Volume Loaders
-    this.imageMetadata = {};
+    this.imageMetadata = createDefaultMetadata(this.imageInfo.imageInfo);
 
     this.normRegionSize = new Vector3(1, 1, 1);
     this.normRegionOffset = new Vector3(0, 0, 0);
