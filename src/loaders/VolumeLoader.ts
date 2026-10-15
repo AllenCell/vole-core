@@ -2,7 +2,7 @@ import { Box3, Vector3 } from "three";
 
 import Volume from "../Volume.js";
 import type { VolumeDims } from "../VolumeDims.js";
-import { CImageInfo, createDefaultMetadata, type ImageInfo } from "../ImageInfo.js";
+import type { ImageInfo } from "../ImageInfo.js";
 import type { TypedArray, NumberType } from "../types.js";
 import { MAX_ATLAS_EDGE } from "./VolumeLoaderUtils.js";
 import { PrefetchDirection } from "./zarr_utils/types.js";
@@ -154,47 +154,5 @@ export abstract class VolumeLoader {
 
   updateFetchOptions(_options: Partial<ZarrLoaderFetchOptions>): void {
     // no-op by default
-  }
-
-  /**
-   * Begin loading a volume's data, as specified in its `LoadSpec`.
-   *
-   * Pass a callback to respond when this request loads a new channel. This callback will execute after the one
-   * assigned in `createVolume`, if any.
-   *
-   * The returned `Promise` resolves once all channels load, or rejects with any error that occurs during loading.
-   */
-  // TODO make this return a promise that resolves when loading is done?
-  // TODO this is not cancellable in the sense that any async requests initiated here are not stored
-  // in a way that they can be interrupted.
-  // TODO explicitly passing a `LoadSpec` is now rarely useful. Remove?
-  async loadVolumeData(volume: Volume, onChannelLoaded?: PerChannelCallback): Promise<void> {
-    const onUpdateMetadata = (imageInfo?: ImageInfo, loadSpec?: LoadSpec): void => {
-      if (imageInfo) {
-        volume.imageInfo = new CImageInfo(imageInfo);
-        volume.imageMetadata = createDefaultMetadata(imageInfo);
-        volume.updateDimensions();
-        volume.updateChannelCount();
-      }
-      volume.loadSpec = { ...loadSpec, ...volume.loadSpec };
-    };
-
-    const onChannelData: RawChannelDataCallback = (channelIndices, dtypes, dataArrays, ranges, atlasDims) => {
-      for (let i = 0; i < channelIndices.length; i++) {
-        const channelIndex = channelIndices[i];
-        const dtype = dtypes[i];
-        const data = dataArrays[i];
-        const range = ranges[i];
-        const time = volume.loadSpec.time;
-        if (atlasDims) {
-          volume.setChannelDataFromAtlas(channelIndex, data, atlasDims[0], atlasDims[1], range, dtype, time);
-        } else {
-          volume.setChannelDataFromVolume(channelIndex, data, range, dtype, time);
-        }
-        onChannelLoaded?.(volume, channelIndex);
-      }
-    };
-
-    return this.loadRawChannelData(volume.imageInfo.imageInfo, volume.loadSpec, onUpdateMetadata, onChannelData);
   }
 }
