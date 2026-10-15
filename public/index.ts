@@ -4,11 +4,9 @@ import GUI from "lil-gui";
 import { colormaps as colorizercolormaps, features as colorizerfeatures } from "./colorizer.js";
 import {
   CreateLoaderOptions,
-  ImageInfo,
   VolumeLoader,
   LoadSpec,
   Lut,
-  JsonImageInfoLoader,
   RawArrayInfo,
   View3d,
   Volume,
@@ -1114,7 +1112,7 @@ async function loadVolume(name: string, loadSpec: LoadSpec, loader: VolumeLoader
     }
   });
   volume.channelLoadCallback = onChannelDataArrived;
-  loader.loadVolumeData(volume);
+  volume.load();
 
   // Set default slice index
   goToZSlice(Math.floor(volume.imageInfo.subregionSize.z / 2));
