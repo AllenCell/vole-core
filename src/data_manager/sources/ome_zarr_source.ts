@@ -127,6 +127,8 @@ export class OMEZarrSource implements ChunkSource {
   async getKey(id: LocalChunkId, options: GetKeyOptions): Promise<Chunk<NumberType>[]> {
     const multiscale = this.scaleLevels[id.multiscale];
     const coords = orderByDimension(id.tczyx, this.axesTCZYX);
+    const [sizeT, sizeC] = orderByTCZYX(multiscale.chunks, this.axesTCZYX, 1);
+    const chunkCount = sizeT * sizeC;
     const { data } = await multiscale.getChunk(coords, { signal: options?.signal });
     return [{ data: data as TypedArray, dtype: multiscale.dtype, id }];
   }
