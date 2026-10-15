@@ -17,6 +17,7 @@ import {
 import type { Renderer } from "three/webgpu";
 
 import type { NumberType, TypedArray } from "../types.js";
+import { dataTypeToSize } from "./utils.js";
 
 /** Abstraction over the graphics API or library used by `DataManager` to move chunks to/from the GPU. */
 export interface DeviceInterface<Dev, Tex> {
@@ -90,17 +91,6 @@ const dataTypeToFormat: { [T in Exclude<NumberType, "int32" | "uint32" | "float6
   uint8: "r8unorm",
   uint16: "r16unorm",
   float32: "r32float",
-};
-
-const dataTypeToSize: { [T in NumberType]: number } = {
-  int8: 1,
-  int16: 2,
-  int32: 4,
-  uint8: 1,
-  uint16: 2,
-  uint32: 4,
-  float32: 4,
-  float64: 8,
 };
 
 export class WebGPUInterface implements DeviceInterface<GPUDeviceHandle, GPUTexture> {
