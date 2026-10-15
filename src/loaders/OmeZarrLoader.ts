@@ -9,7 +9,7 @@ import VolumeCache from "../VolumeCache.js";
 import { getDataRange } from "../utils/num_utils.js";
 import SubscribableRequestQueue from "../utils/SubscribableRequestQueue.js";
 import {
-  VolumeLoader,
+  type VolumeLoader,
   LoadSpec,
   type RawChannelDataCallback,
   type LoadedVolumeInfo,
@@ -112,7 +112,7 @@ const DEFAULT_FETCH_OPTIONS = {
   maxPrefetchChunks: 30,
 };
 
-class OMEZarrLoader extends VolumeLoader {
+class OMEZarrLoader implements VolumeLoader {
   /** The ID of the subscriber responsible for "actual loads" (non-prefetch requests) */
   private loadSubscriber: SubscriberId | undefined;
   /** The ID of the subscriber responsible for prefetches, so that requests can be cancelled and reissued */
@@ -138,9 +138,7 @@ class OMEZarrLoader extends VolumeLoader {
     private fetchOptions: ZarrLoaderFetchOptions = DEFAULT_FETCH_OPTIONS,
     /** Direction(s) to prioritize when prefetching. Stored separate from `fetchOptions` since it may be mutated. */
     private priorityDirections: PrefetchDirection[] = []
-  ) {
-    super();
-  }
+  ) {}
 
   /**
    * Creates a new `OMEZarrLoader`.
