@@ -21,7 +21,7 @@ import type { NumberType, TypedArray } from "../../types.js";
 const PLACEHOLDER_NAME = "zarr source";
 const PLACEHOLDER_SCENE_INDEX = 0;
 
-export class OMEZarrSource extends ChunkSource {
+export class OMEZarrSource implements ChunkSource {
   // Magic number that makes `getSourceChannelMeta` (below) work.
   // TODO if/when this class becomes the primary adapter for zarrs, move that util over here and adapt it such that
   //   this property can be removed and the remaining properties can be made `private`.
@@ -32,9 +32,7 @@ export class OMEZarrSource extends ChunkSource {
     public readonly multiscaleMetadata: OMEMultiscale,
     public readonly omeroMetadata: OmeroTransitionalMetadata | undefined,
     public readonly axesTCZYX: [number, number, number, number, number]
-  ) {
-    super();
-  }
+  ) {}
 
   static async new(url: string): Promise<OMEZarrSource> {
     const store = new zarr.FetchStore(url);

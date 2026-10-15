@@ -20,7 +20,7 @@ export type VolumeMetadata = {
   userData?: Record<string, unknown>;
 };
 
-export abstract class ChunkSource {
+export interface ChunkSource {
   /**
    * Maps a chunk `id` to the *storage key* that contains it.
    *
@@ -28,18 +28,14 @@ export abstract class ChunkSource {
    * over exactly one channel and exactly one time point, and some data formats may allow multiple channels and/or time
    * points to be stored at the same storage key.
    */
-  chunkIdToStorageId(id: LocalChunkId): LocalChunkId {
-    return id;
-  }
+  chunkIdToStorageId(id: LocalChunkId): LocalChunkId;
 
   /** Maps a storage key to a list of the chunk ids it contains. */
-  storageIdToChunkIds(id: LocalChunkId): LocalChunkId[] {
-    return [id];
-  }
+  storageIdToChunkIds(id: LocalChunkId): LocalChunkId[];
 
-  abstract getMeta(): VolumeMetadata;
+  getMeta(): VolumeMetadata;
 
-  abstract getDims(): ExtVolumeDims[];
+  getDims(): ExtVolumeDims[];
 
-  abstract getKey(key: LocalChunkId, signal?: AbortSignal): Promise<Chunk<NumberType>[]>;
+  getKey(key: LocalChunkId, signal?: AbortSignal): Promise<Chunk<NumberType>[]>;
 }
