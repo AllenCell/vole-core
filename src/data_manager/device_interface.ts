@@ -17,7 +17,6 @@ import {
 import type { Renderer } from "three/webgpu";
 
 import type { NumberType, TypedArray } from "../types.js";
-import { dataTypeToSize } from "./utils.js";
 
 /** Abstraction over the graphics API or library used by `DataManager` to move chunks to/from the GPU. */
 export interface DeviceInterface<Dev, Tex> {
@@ -105,7 +104,6 @@ export class WebGPUInterface implements DeviceInterface<GPUDeviceHandle, GPUText
     { device, queue }: GPUDeviceHandle
   ): GPUTexture {
     const format = dataTypeToFormat[dtype];
-    const texelSize = dataTypeToSize[dtype];
     const texture = device.createTexture({
       format,
       size,
@@ -123,7 +121,7 @@ export class WebGPUInterface implements DeviceInterface<GPUDeviceHandle, GPUText
     };
     const layout: GPUTexelCopyBufferLayout = {
       offset: 0,
-      bytesPerRow: texelSize * texture.width,
+      bytesPerRow: texture.width * data.BYTES_PER_ELEMENT,
       rowsPerImage: texture.height,
     };
     queue.writeTexture(copyInfo, data, layout, size);
