@@ -328,9 +328,9 @@ export class View3d extends EventDispatcher<View3dEvents> {
     this.loadErrorHandler = handler;
   }
 
-  setTime(volume: Volume, time: number, onChannelLoaded?: PerChannelCallback): Promise<void> {
+  setTime(volume: Volume, time: number): Promise<void> {
     const timeClamped = Math.max(0, Math.min(time, volume.imageInfo.times - 1));
-    const loadPromise = volume.updateRequiredData({ time: timeClamped }, onChannelLoaded);
+    const loadPromise = volume.updateRequiredData({ time: timeClamped });
     this.updateTimestepIndicator(volume);
     return loadPromise;
   }
