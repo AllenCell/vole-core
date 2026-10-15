@@ -587,7 +587,8 @@ export default class DataManager<Dev, Tex> {
     this.updateChunkPriority(chunkKey, chunkEntry);
   }
 
-  private getChunkGuard(chunkId: ChunkId): BorrowGuard | undefined {
+  /** Get a chunk's data buffer wrapped in a `BorrowGuard`, if it is in memory. */
+  getChunkGuard(chunkId: ChunkId): BorrowGuard | undefined {
     const key = chunkIdToString(chunkId);
     const entry = this.chunks.get(key);
     if (entry === undefined) {
@@ -601,7 +602,11 @@ export default class DataManager<Dev, Tex> {
     return undefined;
   }
 
-  /** Get a chunk's data buffer, if it is in memory. */
+  /**
+   * Get a chunk's data buffer, if it is in memory and not in use on a worker.
+   *
+   * Shorthand for `dataManager.getChunkGuard(chunkId)?.get();`
+   */
   getChunkBuffer(chunkId: ChunkId): TypedArray | undefined {
     return this.getChunkGuard(chunkId)?.get();
   }
