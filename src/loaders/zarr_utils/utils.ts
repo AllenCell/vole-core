@@ -1,13 +1,5 @@
 import { VolumeLoadErrorType, VolumeLoadError } from "../VolumeLoadError.js";
-import type {
-  NumericZarrArray,
-  OMEAxis,
-  OMECoordinateTransformation,
-  OMEDataset,
-  OMEMultiscale,
-  TCZYX,
-  ZarrSource,
-} from "./types.js";
+import type { NumericZarrArray, OMEAxis, OMECoordinateTransformation, OMEDataset, TCZYX, ZarrSource } from "./types.js";
 
 /**
  * Attempts to parse `color` as a 24-bit (6-digit) hexadecimal color with a possible leading `#`.
@@ -127,7 +119,10 @@ export function orderByTCZYX<T>(valsDimension: T[], orderTCZYX: TCZYX<number>, d
 }
 
 /** Select the scale transform from an OME metadata object with coordinate transforms, and return it in TCZYX order */
-export function getScale(dataset: OMEDataset | OMEMultiscale, orderTCZYX: TCZYX<number>): TCZYX<number> {
+export function getScale(
+  dataset: { coordinateTransformations?: OMECoordinateTransformation[] },
+  orderTCZYX: TCZYX<number>
+): TCZYX<number> {
   const transforms = dataset.coordinateTransformations;
 
   if (transforms === undefined) {

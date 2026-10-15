@@ -12,7 +12,7 @@ interface PackedChannelsImage {
 }
 
 /* eslint-disable @typescript-eslint/naming-convention */
-type JsonImageInfo = {
+export type JsonImageInfo = {
   name: string;
   version?: string;
   images: PackedChannelsImage[];
@@ -71,7 +71,7 @@ const rescalePixelSize = (json: JsonImageInfo): [number, number, number] => {
   return [px, py, pz];
 };
 
-const convertImageInfo = (json: JsonImageInfo): ImageInfo => {
+export const jsonToImageInfo = (json: JsonImageInfo): ImageInfo => {
   const [px, py, pz] = rescalePixelSize(json);
   // translation is in pixels that are in the space of json.width, json.height.
   // We need to convert this to the space of the tile_width and tile_height.
@@ -112,63 +112,55 @@ const convertImageInfo = (json: JsonImageInfo): ImageInfo => {
   };
 };
 
+export const jsonToVolumeDims = (json: JsonImageInfo): VolumeDims => {
+  const [px, py, pz] = rescalePixelSize(json);
+
+  return {
+    shape: [json.times || 1, json.channels, json.tiles, json.tile_height, json.tile_width],
+    spacing: [1, 1, pz, py, px],
+    spaceUnit: json.pixel_size_unit ?? "μm",
+    dataType: "uint8",
+    timeUnit: json.time_unit ?? "s",
+  };
+};
+
 class JsonImageInfoLoader extends VolumeLoader {
-  urls: string[];
-  jsonInfo: (JsonImageInfo | undefined)[];
   syncChannels = false;
 
-  cache?: VolumeCache;
-
-  constructor(urls: string | string[], cache?: VolumeCache) {
+  private constructor(
+    private urls: string[],
+    public jsonInfo: JsonImageInfo[],
+    private cache?: VolumeCache
+  ) {
     super();
-
-    if (Array.isArray(urls)) {
-      this.urls = urls;
-    } else {
-      this.urls = [urls];
-    }
-
-    this.jsonInfo = new Array(this.urls.length);
-    this.cache = cache;
   }
 
-  private async getJsonImageInfo(time: number): Promise<JsonImageInfo> {
-    const cachedInfo = this.jsonInfo[time];
-    if (cachedInfo) {
-      return cachedInfo;
-    }
+  static async new(urls: string | string[], cache?: VolumeCache): Promise<JsonImageInfoLoader> {
+    const urlArray = Array.isArray(urls) ? urls : [urls];
+    const requests = urlArray.map(async (url) => {
+      const response = await fetch(remapUri(url));
+      const imageInfo = (await response.json()) as JsonImageInfo;
 
-    const response = await fetch(remapUri(this.urls[time]));
-    const imageInfo = (await response.json()) as JsonImageInfo;
-
-    imageInfo.pixel_size_unit = imageInfo.pixel_size_unit || "μm";
-    imageInfo.times = imageInfo.times || this.urls.length;
-    this.jsonInfo[time] = imageInfo;
-    return imageInfo;
+      imageInfo.pixel_size_unit = imageInfo.pixel_size_unit || "μm";
+      imageInfo.times = imageInfo.times || urlArray.length;
+      return imageInfo;
+    });
+    const info = await Promise.all(requests);
+    return new JsonImageInfoLoader(urlArray, info, cache);
   }
 
   syncMultichannelLoading(sync: boolean): void {
     this.syncChannels = sync;
   }
 
-  async loadDims(loadSpec: LoadSpec): Promise<VolumeDims[]> {
-    const jsonInfo = await this.getJsonImageInfo(loadSpec.time);
-
-    const [px, py, pz] = rescalePixelSize(jsonInfo);
-
-    const d: VolumeDims = {
-      shape: [jsonInfo.times || 1, jsonInfo.channels, jsonInfo.tiles, jsonInfo.tile_height, jsonInfo.tile_width],
-      spacing: [1, 1, pz, py, px],
-      spaceUnit: jsonInfo.pixel_size_unit ?? "μm",
-      dataType: "uint8",
-      timeUnit: jsonInfo.time_unit ?? "s",
-    };
-    return [d];
+  getDims(loadSpec: LoadSpec): VolumeDims[] {
+    const jsonInfo = this.jsonInfo[loadSpec.time];
+    return [jsonToVolumeDims(jsonInfo)];
   }
 
-  async createImageInfo(loadSpec: LoadSpec): Promise<LoadedVolumeInfo> {
-    const jsonInfo = await this.getJsonImageInfo(loadSpec.time);
-    return { imageInfo: convertImageInfo(jsonInfo), loadSpec };
+  getImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo {
+    const jsonInfo = this.jsonInfo[loadSpec.time];
+    return { imageInfo: jsonToImageInfo(jsonInfo), loadSpec };
   }
 
   async loadRawChannelData(
@@ -181,7 +173,7 @@ class JsonImageInfoLoader extends VolumeLoader {
     // now is the time to do it.
     // Try to figure out the urlPrefix from the LoadSpec.
     // For this format we assume the image data is in the same directory as the json file.
-    const jsonInfo = await this.getJsonImageInfo(loadSpec.time);
+    const jsonInfo = this.jsonInfo[loadSpec.time];
 
     let images = jsonInfo?.images;
     if (!images) {

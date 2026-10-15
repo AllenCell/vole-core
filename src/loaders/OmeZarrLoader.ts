@@ -13,11 +13,9 @@ import {
   LoadSpec,
   type RawChannelDataCallback,
   type LoadedVolumeInfo,
-  box3ToRegion,
-  Region,
+  regionToBox3,
 } from "./VolumeLoader.js";
 import {
-  composeSubregion,
   computePackedAtlasDims,
   convertSubregionToPixels,
   pickLevelToLoad,
@@ -32,12 +30,19 @@ import {
   orderByTCZYX,
   remapAxesToTCZYX,
 } from "./zarr_utils/utils.js";
-import type { PrefetchDirection, SubscriberId, TCZYX, ZarrSource, NumericZarrArray } from "./zarr_utils/types.js";
+import type {
+  PrefetchDirection,
+  SubscriberId,
+  TCZYX,
+  ZarrSource,
+  NumericZarrArray,
+  OMECoordinateTransformation,
+} from "./zarr_utils/types.js";
 import { VolumeLoadError, VolumeLoadErrorType, wrapVolumeLoadError } from "./VolumeLoadError.js";
 import { relaxedFetch, withVoleInstrumentation } from "./zarr_utils/wrappers.js";
 import { assertMetadataHasMultiscales, toOMEZarrMetaV4, validateOMEZarrMetadata } from "./zarr_utils/validation.js";
 import { remapUri } from "../utils/url_utils.js";
-import { type TypedArray } from "../types.js";
+import type { NumberType, TypedArray } from "../types.js";
 import planLowResPrefetch from "./zarr_utils/planLowResPrefetch.js";
 
 const CHUNK_REQUEST_CANCEL_REASON = "chunk request cancelled";
@@ -86,6 +91,17 @@ export type ZarrLoaderFetchOptions = {
   onlyPriorityDirections?: boolean;
 };
 
+export type ZarrLoaderMetadata = {
+  levels: { shape: number[]; dtype: NumberType; coordinateTransformations?: OMECoordinateTransformation[] }[];
+  axesTCZYX: TCZYX<number>;
+  spaceUnitSymbol: string;
+  timeUnitSymbol: string;
+  channelNames: string[];
+  channelColors: ([number, number, number] | undefined)[];
+  name: string | undefined;
+  channelsPerSource: number[];
+};
+
 type ZarrChunkFetchInfo = {
   sourceIdx: number;
   coords: number[];
@@ -103,10 +119,6 @@ class OMEZarrLoader extends VolumeLoader {
   private prefetchSubscriber: SubscriberId | undefined;
   /** The ID of the subscriber responsible for filling the dedicated low-resolution cache. */
   private lowResWarmSubscriber: SubscriberId | undefined;
-
-  // TODO: this property should definitely be owned by `Volume` if this loader is ever used by multiple volumes.
-  //   This may cause errors or incorrect results otherwise!
-  private maxExtent?: Region;
 
   private syncChannels = false;
 
@@ -145,7 +157,7 @@ class OMEZarrLoader extends VolumeLoader {
    * @param fetchOptions Options to configure (pre)fetching behavior.
    * @param lowResCache A dedicated cache for the coarsest resolution level.
    */
-  static async createLoader(
+  static async new(
     urls: string | string[],
     scenes: number | number[] = 0,
     cache?: VolumeCache,
@@ -255,10 +267,6 @@ class OMEZarrLoader extends VolumeLoader {
     return source.scaleLevels.map(({ shape }) => [z === -1 ? 1 : shape[z], shape[y], shape[x]]);
   }
 
-  private getScale(level: number): TCZYX<number> {
-    return getScale(this.sources[0].multiscaleMetadata.datasets[level], this.sources[0].axesTCZYX);
-  }
-
   /**
    * Reorder an input array [T, C, Z, Y, X] based on the dimension order of the specified source.
    * In general, the sourceIdx should be provided, since `matchSourceScaleLevels` does not guarantee
@@ -312,77 +320,66 @@ class OMEZarrLoader extends VolumeLoader {
     this.fetchOptions = { ...this.fetchOptions, ...options };
   }
 
-  loadDims(loadSpec: LoadSpec): Promise<VolumeDims[]> {
-    const [spaceUnit, timeUnit] = this.getUnitSymbols();
-    // Compute subregion size so we can factor that in
-    const maxExtent = this.maxExtent ?? { min: [0, 0, 0], max: [1, 1, 1] };
-    const subregion = composeSubregion(loadSpec.subregion, maxExtent);
-    const regionSize = subregion.getSize(new Vector3());
+  static metadataToDims(meta: ZarrLoaderMetadata, loadSpec: LoadSpec): VolumeDims[] {
+    const { spaceUnitSymbol, timeUnitSymbol, axesTCZYX } = meta;
+    const regionSize = regionToBox3(loadSpec.subregion).getSize(new Vector3());
     const regionArr = [1, 1, regionSize.z, regionSize.y, regionSize.x];
 
-    const result = this.sources[0].scaleLevels.map((level, i) => {
-      const scale = this.getScale(i);
+    const result = meta.levels.map((level) => {
+      const scale = getScale(level, axesTCZYX);
       const dims: VolumeDims = {
-        spaceUnit: spaceUnit,
-        timeUnit: timeUnit,
-        shape: this.orderByTCZYX(level.shape, 1).map((val, idx) =>
+        spaceUnit: spaceUnitSymbol,
+        timeUnit: timeUnitSymbol,
+        shape: orderByTCZYX(level.shape, axesTCZYX, 1).map((val, idx) =>
           Math.max(Math.ceil(val * regionArr[idx]), 1)
         ) as TCZYX<number>,
-        spacing: this.orderByTCZYX(scale, 1),
+        spacing: orderByTCZYX(scale, axesTCZYX, 1),
         dataType: level.dtype,
       };
       return dims;
     });
 
-    return Promise.resolve(result);
+    return result;
   }
 
-  createImageInfo(loadSpec: LoadSpec): Promise<LoadedVolumeInfo> {
-    // We ensured most info (dims, chunks, etc.) matched between sources earlier, so we can just use the first source.
+  getDims(loadSpec: LoadSpec): VolumeDims[] {
+    return OMEZarrLoader.metadataToDims(this.createMetadata(), loadSpec);
+  }
+
+  createMetadata(): ZarrLoaderMetadata {
     const source0 = this.sources[0];
-    const [t, , z, y, x] = source0.axesTCZYX;
-    const hasT = t > -1;
-    const hasZ = z > -1;
+    const { axesTCZYX } = source0;
+    const [t] = axesTCZYX;
+    const levels = source0.scaleLevels.map(({ shape, dtype }, i) => ({
+      shape,
+      dtype,
+      coordinateTransformations: source0.multiscaleMetadata.datasets[i].coordinateTransformations,
+    }));
+    const [spaceUnitSymbol, timeUnitSymbol] = this.getUnitSymbols();
 
-    const levelToLoad = pickLevelToLoad(loadSpec, this.getLevelShapesZYX());
-    const shapeLv = source0.scaleLevels[levelToLoad].shape;
-
-    const [spatialUnit, timeUnit] = this.getUnitSymbols();
-
-    const numChannelsPerSource: number[] = [];
+    const channelsPerSource: number[] = [];
     for (let i = 0; i < this.sources.length; i++) {
       const source = this.sources[i];
       const cIndex = source.axesTCZYX[1];
-      const sourceChannelCount = cIndex > -1 ? source.scaleLevels[levelToLoad].shape[cIndex] : 1;
-      numChannelsPerSource.push(sourceChannelCount);
+      // assumes all scale levels have the same channel count
+      const sourceChannelCount = cIndex > -1 ? source.scaleLevels[0].shape[cIndex] : 1;
+      channelsPerSource.push(sourceChannelCount);
     }
 
-    // we need to make sure that the corresponding matched shapes
-    // use the min size of T
-    if (hasT) {
-      let times = shapeLv[t];
-      for (let i = 0; i < this.sources.length; i++) {
-        const shape = this.sources[i].scaleLevels[levelToLoad].shape;
-        const tindex = this.sources[i].axesTCZYX[0];
-        if (shape[tindex] < times) {
-          console.warn("The number of time points is not consistent across sources: ", shape[tindex], times);
-          times = shape[tindex];
+    // we need to make sure that we use the min size of T across all sources
+    if (t > -1 && this.sources.length > 1) {
+      let times = source0.scaleLevels.reduce((sizeT, { shape }) => Math.min(shape[t], sizeT), Infinity);
+      for (let i = 1; i < this.sources.length; i++) {
+        const source = this.sources[i];
+        const tindex = source.axesTCZYX[0];
+        const sourceTimes = source.scaleLevels.reduce((sizeT, { shape }) => Math.min(shape[tindex], sizeT), Infinity);
+        if (sourceTimes < times) {
+          console.warn("The number of time points is not consistent across sources:", sourceTimes, times);
+          times = sourceTimes;
         }
       }
+      levels.forEach((level) => (level.shape[t] = times));
     }
-
-    if (!this.maxExtent) {
-      this.maxExtent = { min: [...loadSpec.subregion.min], max: [...loadSpec.subregion.max] };
-    }
-
-    // from source 0:
-    const pxDimsLv = convertSubregionToPixels(
-      loadSpec.subregion,
-      new Vector3(shapeLv[x], shapeLv[y], hasZ ? shapeLv[z] : 1)
-    );
-    const pxSizeLv = pxDimsLv.getSize(new Vector3());
-
-    const atlasTileDims = computePackedAtlasDims(pxSizeLv.z, pxSizeLv.x, pxSizeLv.y);
 
     // Channel names is the other place where we have to check every source
     // Track which channel names we've seen so far, so that we can rename them to avoid name collisions
@@ -410,25 +407,59 @@ class OMEZarrLoader extends VolumeLoader {
       channelColors.push(...colors);
     }
 
-    const alldims: VolumeDims[] = source0.scaleLevels.map((level, i) => {
+    return {
+      axesTCZYX,
+      levels,
+      spaceUnitSymbol,
+      timeUnitSymbol,
+      channelsPerSource,
+      channelNames,
+      channelColors,
+      name: source0.omeroMetadata?.name,
+    };
+  }
+
+  static metadataToImageInfo(meta: ZarrLoaderMetadata, loadSpec: LoadSpec): LoadedVolumeInfo {
+    // We ensured most info (dims, chunks, etc.) matched between sources earlier, so we can just use the first source.
+    // const source0 = meta.sources[0];
+    const [, , z, y, x] = meta.axesTCZYX;
+    const hasZ = z > -1;
+
+    const shapesZYX = meta.levels.map(
+      ({ shape }) => [z === -1 ? 1 : shape[z], shape[y], shape[x]] as [number, number, number]
+    );
+    const levelToLoad = pickLevelToLoad(loadSpec, shapesZYX);
+    const shapeLv = meta.levels[levelToLoad].shape;
+
+    // from source 0:
+    const pxDimsLv = convertSubregionToPixels(
+      loadSpec.subregion,
+      new Vector3(shapeLv[x], shapeLv[y], hasZ ? shapeLv[z] : 1)
+    );
+    const pxSizeLv = pxDimsLv.getSize(new Vector3());
+
+    const atlasTileDims = computePackedAtlasDims(pxSizeLv.z, pxSizeLv.x, pxSizeLv.y);
+
+    const alldims: VolumeDims[] = meta.levels.map((level) => {
       const dims = {
-        spaceUnit: spatialUnit,
-        timeUnit: timeUnit,
-        shape: this.orderByTCZYX(level.shape, 1),
-        spacing: this.getScale(i),
+        spaceUnit: meta.spaceUnitSymbol,
+        timeUnit: meta.timeUnitSymbol,
+        shape: orderByTCZYX(level.shape, meta.axesTCZYX, 1),
+        spacing: getScale(level, meta.axesTCZYX),
         dataType: level.dtype,
       };
       return dims;
     });
 
+    const { channelsPerSource, channelNames, channelColors } = meta;
     const imgdata: ImageInfo = {
-      name: source0.omeroMetadata?.name,
+      name: meta.name,
 
       atlasTileDims: [atlasTileDims.x, atlasTileDims.y],
       subregionSize: [pxSizeLv.x, pxSizeLv.y, pxSizeLv.z],
       subregionOffset: [0, 0, 0],
 
-      numChannelsPerSource,
+      numChannelsPerSource: channelsPerSource,
       channelNames,
       channelColors,
       multiscaleLevel: levelToLoad,
@@ -448,7 +479,11 @@ class OMEZarrLoader extends VolumeLoader {
       subregion: { min: [0, 0, 0], max: [1, 1, 1] },
     };
 
-    return Promise.resolve({ imageInfo: imgdata, loadSpec: fullExtentLoadSpec });
+    return { imageInfo: imgdata, loadSpec: fullExtentLoadSpec };
+  }
+
+  getImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo {
+    return OMEZarrLoader.metadataToImageInfo(this.createMetadata(), loadSpec);
   }
 
   private prefetchChunk(
@@ -538,18 +573,14 @@ class OMEZarrLoader extends VolumeLoader {
   }
 
   private updateImageInfoForLoad(imageInfo: ImageInfo, loadSpec: LoadSpec): ImageInfo {
-    // Apply `this.maxExtent` to subregion, if it exists
-    const maxExtent = this.maxExtent ?? { min: [0, 0, 0], max: [1, 1, 1] };
-    const subregion = box3ToRegion(composeSubregion(loadSpec.subregion, maxExtent));
-
     // Pick the level to load based on the subregion size
-    const multiscaleLevel = pickLevelToLoad({ ...loadSpec, subregion }, this.getLevelShapesZYX());
+    const multiscaleLevel = pickLevelToLoad(loadSpec, this.getLevelShapesZYX());
     const array0Shape = this.sources[0].scaleLevels[multiscaleLevel].shape;
 
     // Convert subregion to volume voxels
     const [z, y, x] = this.sources[0].axesTCZYX.slice(2);
     const regionPx = convertSubregionToPixels(
-      subregion,
+      loadSpec.subregion,
       new Vector3(array0Shape[x], array0Shape[y], z === -1 ? 1 : array0Shape[z])
     );
 

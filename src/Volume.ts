@@ -14,7 +14,7 @@ import {
 } from "./loaders/VolumeLoader.js";
 import { pickLevelToLoadUnscaled } from "./loaders/VolumeLoaderUtils.js";
 import type { NumberType, TypedArray } from "./types.js";
-import { type ImageInfo, CImageInfo, defaultImageInfo } from "./ImageInfo.js";
+import { CImageInfo, createDefaultMetadata, defaultImageInfo } from "./ImageInfo.js";
 import type { VolumeDims } from "./VolumeDims.js";
 import EventDispatcher from "./EventDispatcher.js";
 
@@ -44,7 +44,6 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
   public loadSpecRequired: Required<LoadSpec>;
   public channelLoadCallback?: PerChannelCallback;
   public imageMetadata: Record<string, unknown>;
-  public name: string | undefined;
 
   public channels: Channel[];
   public numChannels: number;
@@ -84,21 +83,25 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
   private volumeDataObservers: VolumeDataObserver[];
   private loaded: boolean;
 
-  constructor(imageInfo: ImageInfo = defaultImageInfo(), loadSpec: LoadSpec = new LoadSpec(), loader?: VolumeLoader) {
+  constructor(loader?: VolumeLoader, spec: LoadSpec = new LoadSpec()) {
     super();
     this.loaded = false;
-    this.imageInfo = new CImageInfo(imageInfo);
-    // TODO: use getter?
-    this.name = imageInfo.name;
+    let adjustedSpec: Partial<LoadSpec> | undefined = undefined;
+    if (loader !== undefined) {
+      const { imageInfo, loadSpec } = loader.getImageInfo(spec);
+      adjustedSpec = cloneLoadSpec(loadSpec);
+      this.imageInfo = new CImageInfo(imageInfo);
+      this.loader = loader;
+    } else {
+      this.imageInfo = new CImageInfo(defaultImageInfo());
+    }
     this.loadSpec = {
       ...defaultLoadSpec(),
       channels: Array.from({ length: this.imageInfo.numChannels }, (_val, idx) => idx),
-      ...cloneLoadSpec(loadSpec),
+      ...adjustedSpec,
     };
     this.loadSpecRequired = cloneLoadSpec(this.loadSpec);
-    this.loader = loader;
-    // imageMetadata to be filled in by Volume Loaders
-    this.imageMetadata = {};
+    this.imageMetadata = createDefaultMetadata(this.imageInfo.imageInfo);
 
     this.normRegionSize = new Vector3(1, 1, 1);
     this.normRegionOffset = new Vector3(0, 0, 0);
@@ -244,7 +247,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
 
   private async loadScaleLevelDims(): Promise<VolumeDims[] | undefined> {
     try {
-      return await this.loader?.loadDims(this.loadSpecRequired);
+      return this.loader?.getDims(this.loadSpecRequired);
     } catch (e) {
       this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, e));
       return undefined;

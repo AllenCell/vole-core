@@ -10,14 +10,16 @@ import { TiffLoader } from "../loaders/TiffLoader.js";
 import type {
   ChannelLoadEvent,
   MetadataUpdateEvent,
+  VolumeLoaderMetadata,
   WorkerMsgTypeGlobal,
   WorkerMsgTypeWithLoader,
   WorkerRequestPayload,
   WorkerResponse,
   WorkerResponsePayload,
 } from "./types.js";
-import type { ZarrLoaderFetchOptions } from "../loaders/OmeZarrLoader.js";
+import { OMEZarrLoader, type ZarrLoaderFetchOptions } from "../loaders/OmeZarrLoader.js";
 import { WorkerMsgType, WorkerResponseResult, WorkerEventType } from "./types.js";
+import { jsonToImageInfo, jsonToVolumeDims } from "../loaders/JsonImageInfoLoader.js";
 
 type StoredPromise<T extends WorkerMsgType> = {
   type: T;
@@ -206,7 +208,7 @@ class VolumeLoaderContext {
     if (fileType === VolumeFileFormat.TIFF) {
       // tiff loader accepts array of paths for separate channel sources
       const pathArray = Array.isArray(path) ? path : [path];
-      return new TiffLoader(pathArray);
+      return await TiffLoader.new(pathArray);
     } else if (fileType === VolumeFileFormat.DATA) {
       if (!options?.rawArrayOptions) {
         throw new Error("Failed to create loader: Must provide RawArrayOptions for RawArrayLoader");
@@ -214,13 +216,14 @@ class VolumeLoaderContext {
       return new RawArrayLoader(options.rawArrayOptions.data, options.rawArrayOptions.metadata);
     }
 
-    const loaderId = await this.workerHandle.sendMessage(WorkerMsgType.CREATE_LOADER, { path, options });
-    if (loaderId === undefined) {
+    const response = await this.workerHandle.sendMessage(WorkerMsgType.CREATE_LOADER, { path, options });
+    if (response === undefined) {
       throw new Error("Failed to create loader");
     }
+    const { id, meta } = response;
 
-    const loader = new WorkerLoader(loaderId, this.workerHandle, this);
-    this.loaders.set(loaderId, loader);
+    const loader = new WorkerLoader(id, meta, this.workerHandle, this);
+    this.loaders.set(id, loader);
     return loader;
   }
 
@@ -230,23 +233,22 @@ class VolumeLoaderContext {
 }
 
 /**
- * A handle to an instance of `IVolumeLoader` (technically, a `ThreadableVolumeLoader`) running on a WebWorker.
+ * A handle to an instance of `VolumeLoader` running on a `WebWorker`.
  *
  * Created with `VolumeLoaderContext.createLoader`. See its documentation for more.
  */
 class WorkerLoader extends VolumeLoader {
-  private loaderId: number | undefined;
-  private workerHandle: SharedLoadWorkerHandle;
-  private context: VolumeLoaderContext;
   private currentLoadId = -1;
   private currentLoadCallback: RawChannelDataCallback | undefined = undefined;
   private currentMetadataUpdateCallback: ((imageInfo?: ImageInfo, loadSpec?: LoadSpec) => void) | undefined = undefined;
 
-  constructor(loaderId: number, workerHandle: SharedLoadWorkerHandle, context: VolumeLoaderContext) {
+  constructor(
+    private loaderId: number | undefined,
+    private meta: VolumeLoaderMetadata,
+    private workerHandle: SharedLoadWorkerHandle,
+    private context: VolumeLoaderContext
+  ) {
     super();
-    this.loaderId = loaderId;
-    this.workerHandle = workerHandle;
-    this.context = context;
   }
 
   private getLoaderId(): number {
@@ -289,17 +291,24 @@ class WorkerLoader extends VolumeLoader {
     return this.workerHandle.sendMessage(WorkerMsgType.SYNCHRONIZE_MULTICHANNEL_LOADING, sync, this.getLoaderId());
   }
 
-  loadDims(loadSpec: LoadSpec): Promise<VolumeDims[]> {
-    return this.workerHandle.sendMessage(WorkerMsgType.LOAD_DIMS, loadSpec, this.getLoaderId());
+  getDims(loadSpec: LoadSpec): VolumeDims[] {
+    if (this.meta.type === VolumeFileFormat.ZARR) {
+      return OMEZarrLoader.metadataToDims(this.meta.meta, loadSpec);
+    } else if (this.meta.type === VolumeFileFormat.JSON) {
+      return [jsonToVolumeDims(this.meta.info[loadSpec.time])];
+    } else {
+      return this.meta.dims;
+    }
   }
 
-  async createImageInfo(loadSpec: LoadSpec): Promise<LoadedVolumeInfo> {
-    const { imageInfo, loadSpec: adjustedLoadSpec } = await this.workerHandle.sendMessage(
-      WorkerMsgType.CREATE_VOLUME,
-      loadSpec,
-      this.getLoaderId()
-    );
-    return { imageInfo, loadSpec: adjustedLoadSpec };
+  getImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo {
+    if (this.meta.type === VolumeFileFormat.ZARR) {
+      return OMEZarrLoader.metadataToImageInfo(this.meta.meta, loadSpec);
+    } else if (this.meta.type === VolumeFileFormat.JSON) {
+      return { imageInfo: jsonToImageInfo(this.meta.info[loadSpec.time]), loadSpec };
+    } else {
+      return { imageInfo: this.meta.imageInfo, loadSpec };
+    }
   }
 
   loadRawChannelData(

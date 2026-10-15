@@ -80,6 +80,21 @@ export class CImageInfo {
     this.imageInfo = imageInfo || defaultImageInfo();
   }
 
+  /** Human-readable name of the image */
+  get name(): string | undefined {
+    return this.imageInfo.name;
+  }
+
+  /** Dimensions of each scale level, at original size, from the first data source */
+  get multiscaleLevelDims(): VolumeDims[] {
+    return this.imageInfo.multiscaleLevelDims;
+  }
+
+  /** Arbitrary additional metadata not captured by other `ImageInfo` properties */
+  get userData(): Record<string, unknown> | undefined {
+    return this.imageInfo.userData;
+  }
+
   get currentLevelDims(): VolumeDims {
     return this.imageInfo.multiscaleLevelDims[this.imageInfo.multiscaleLevel];
   }
@@ -182,4 +197,44 @@ export function computeAtlasSize(imageInfo: ImageInfo): [number, number] {
   const volDims = imageInfo.multiscaleLevelDims[imageInfo.multiscaleLevel];
   // TCZYX: 4 = x, 3 = y
   return [atlasTileDims[0] * volDims.shape[4], atlasTileDims[1] * volDims.shape[3]];
+}
+
+function isEmpty(obj: object) {
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// currently everything needed can come from the imageInfo
+// but in the future each IVolumeLoader could have a completely separate implementation.
+export function createDefaultMetadata(rawImageInfo: ImageInfo): Record<string, unknown> {
+  // wrap
+  const imageInfo = new CImageInfo(rawImageInfo);
+  const physicalSize = imageInfo.volumeSize.clone().multiply(imageInfo.physicalPixelSize);
+  const metadata = {};
+  metadata["Dimensions"] = { ...imageInfo.subregionSize };
+  metadata["Original dimensions"] = { ...imageInfo.originalSize };
+  metadata["Physical size"] = {
+    x: physicalSize.x + imageInfo.spatialUnit,
+    y: physicalSize.y + imageInfo.spatialUnit,
+    z: physicalSize.z + imageInfo.spatialUnit,
+  };
+  metadata["Physical size per pixel"] = {
+    x: imageInfo.physicalPixelSize.x + imageInfo.spatialUnit,
+    y: imageInfo.physicalPixelSize.y + imageInfo.spatialUnit,
+    z: imageInfo.physicalPixelSize.z + imageInfo.spatialUnit,
+  };
+  metadata["Multiresolution levels"] = rawImageInfo.multiscaleLevelDims;
+  // TODO decide???? combined or not?
+  const totalChannels = imageInfo.numChannelsPerSource.reduce((a, b) => a + b, 0);
+  metadata["Channels"] = totalChannels;
+  metadata["Time series frames"] = imageInfo.times || 1;
+  // don't add User data if it's empty
+  if (rawImageInfo.userData && !isEmpty(rawImageInfo.userData)) {
+    metadata["User data"] = rawImageInfo.userData;
+  }
+  return metadata;
 }

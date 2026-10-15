@@ -24,7 +24,7 @@ import {
 import { OpenCellLoader } from "../src/loaders/OpenCellLoader.js";
 import { State, TestDataSpec } from "./types.js";
 import VolumeLoaderContext from "../src/workers/VolumeLoaderContext.js";
-import { DATARANGE_UINT8, ColorizeFeature, type NumberType } from "../src/types.js";
+import { ColorizeFeature, type NumberType } from "../src/types.js";
 import { RawArrayLoaderOptions } from "../src/loaders/RawArrayLoader.js";
 
 const CACHE_MAX_SIZE = 1_000_000_000;
@@ -136,12 +136,6 @@ const myState: State = {
   isPlaying: false,
   timerId: 0,
   scene: 0,
-
-  loader: [
-    new JsonImageInfoLoader(
-      "https://animatedcell-test-data.s3.us-west-2.amazonaws.com/timelapse/test_parent_T49.ome_%%_atlas.json"
-    ),
-  ],
 
   density: 12.5,
   maskAlpha: 1.0,
@@ -635,7 +629,7 @@ function updateTimeUI() {
 }
 
 function updateScenesUI() {
-  const maxSceneIndex = myState.loader.length - 1;
+  const maxSceneIndex = (myState.loader?.length ?? 1) - 1;
   const sceneInput = document.getElementById("sceneValue") as HTMLInputElement;
   sceneInput.max = `${maxSceneIndex}`;
   sceneInput.value = `${Math.min(myState.scene, maxSceneIndex)}`;
@@ -909,44 +903,6 @@ function showChannelUI(volume: Volume) {
   }
 }
 
-function loadImageData(jsonData: ImageInfo, volumeData: Uint8Array<ArrayBuffer>[]) {
-  const vol = new Volume(jsonData);
-  myState.volume = vol;
-
-  // tell the viewer about the image AFTER it's loaded
-  //view3D.removeAllVolumes();
-  //view3D.addVolume(vol);
-
-  // get data into the image
-  for (let i = 0; i < volumeData.length; ++i) {
-    // where each volumeData element is a flat Uint8Array of xyz data
-    // according to jsonData.tile_width*jsonData.tile_height*jsonData.tiles
-    // (first row of first plane is the first data in
-    // the layout, then second row of first plane, etc)
-    vol.setChannelDataFromVolume(i, volumeData[i], DATARANGE_UINT8);
-
-    setInitialRenderMode();
-
-    view3D.removeAllVolumes();
-    view3D.addVolume(vol);
-
-    for (let ch = 0; ch < vol.imageInfo.numChannels; ++ch) {
-      view3D.setVolumeChannelEnabled(vol, ch, myState.channelGui[ch].enabled);
-    }
-
-    const maskChannelIndex = jsonData.channelNames.indexOf("SEG_Memb");
-    view3D.setVolumeChannelAsMask(vol, maskChannelIndex);
-    view3D.updateActiveChannels(vol);
-    view3D.updateLuts(vol);
-    view3D.updateLights(myState.lights);
-    view3D.updateDensity(vol, densitySliderToView3D(myState.density));
-    view3D.updateExposure(myState.exposure);
-  }
-  showChannelUI(vol);
-
-  return vol;
-}
-
 function onChannelDataArrived(v: Volume, channelIndex: number) {
   const currentVol = v; // myState.volume;
 
@@ -959,7 +915,7 @@ function onChannelDataArrived(v: Volume, channelIndex: number) {
   view3D.updateLuts(currentVol);
 
   if (currentVol.isLoaded()) {
-    console.log("currentVol with name " + currentVol.name + " is loaded");
+    console.log("currentVol with name " + currentVol.imageInfo.name + " is loaded");
   }
   updateChannelUI(currentVol, channelIndex);
 
@@ -1003,7 +959,7 @@ function onVolumeCreated(name: string, volume: Volume) {
 }
 
 function setSyncMultichannelLoading(sync: boolean) {
-  myState.loader.forEach((loader) => loader.syncMultichannelLoading(sync));
+  myState.loader?.forEach((loader) => loader.syncMultichannelLoading(sync));
 }
 
 function setLowResPreview(enabled: boolean) {
@@ -1146,12 +1102,19 @@ async function createLoader(data: TestDataSpec): Promise<VolumeLoader[]> {
 }
 
 async function loadVolume(name: string, loadSpec: LoadSpec, loader: VolumeLoader): Promise<void> {
-  const fullDims = await loader.loadDims(loadSpec);
+  const fullDims = loader.getDims(loadSpec);
   console.log(fullDims);
 
-  const volume = await loader.createVolume(loadSpec, onChannelDataArrived);
+  const volume = new Volume(loader);
   onVolumeCreated(name, volume);
-  loader.loadVolumeData(volume);
+  const channels: number[] = [];
+  myState.channelGui.forEach(({ enabled }, idx) => {
+    if (enabled) {
+      channels.push(idx);
+    }
+  });
+  volume.channelLoadCallback = onChannelDataArrived;
+  loader.loadVolumeData(volume, { ...volume.loadSpec, channels });
 
   // Set default slice index
   goToZSlice(Math.floor(volume.imageInfo.subregionSize.z / 2));
@@ -1439,7 +1402,7 @@ function main() {
     }
   });
   sceneInput?.addEventListener("change", () => {
-    if (myState.loader.length > 1 && myState.scene !== sceneInput.valueAsNumber) {
+    if (myState.loader !== undefined && myState.loader.length > 1 && myState.scene !== sceneInput.valueAsNumber) {
       myState.scene = sceneInput.valueAsNumber;
       loadVolume(myState.currentImageName, new LoadSpec(), myState.loader[myState.scene]);
     }
