@@ -456,7 +456,7 @@ export default class DataManager<Dev, Tex> {
 
       // Request the storage key
       sourceEntry.source
-        .getKey(storageId, controller.signal)
+        .getKey(storageId, { signal: controller.signal })
         .then((chunks) => {
           this.requests.remove(requestId);
           chunks.map((chunk) => this.onChunkLoad(sourceId, chunk));

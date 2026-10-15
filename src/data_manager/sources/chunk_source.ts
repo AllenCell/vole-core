@@ -20,6 +20,10 @@ export type VolumeMetadata = {
   userData?: Record<string, unknown>;
 };
 
+export type GetKeyOptions = {
+  signal?: AbortSignal;
+};
+
 export interface ChunkSource {
   /**
    * Maps a chunk `id` to the *storage key* that contains it.
@@ -37,5 +41,5 @@ export interface ChunkSource {
 
   getDims(): ExtVolumeDims[];
 
-  getKey(key: LocalChunkId, signal?: AbortSignal): Promise<Chunk<NumberType>[]>;
+  getKey(key: LocalChunkId, options?: GetKeyOptions): Promise<Chunk<NumberType>[]>;
 }

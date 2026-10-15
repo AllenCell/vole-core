@@ -1,6 +1,6 @@
 import * as zarr from "zarrita";
 
-import { type ExtVolumeDims, ChunkSource, type VolumeMetadata } from "./chunk_source.js";
+import type { ExtVolumeDims, ChunkSource, VolumeMetadata, GetKeyOptions } from "./chunk_source.js";
 import {
   assertMetadataHasMultiscales,
   toOMEZarrMetaV4,
@@ -124,10 +124,10 @@ export class OMEZarrSource implements ChunkSource {
     });
   }
 
-  async getKey(id: LocalChunkId, signal?: AbortSignal): Promise<Chunk<NumberType>[]> {
+  async getKey(id: LocalChunkId, options: GetKeyOptions): Promise<Chunk<NumberType>[]> {
     const multiscale = this.scaleLevels[id.multiscale];
     const coords = orderByDimension(id.tczyx, this.axesTCZYX);
-    const { data } = await multiscale.getChunk(coords, { signal });
+    const { data } = await multiscale.getChunk(coords, { signal: options?.signal });
     return [{ data: data as TypedArray, dtype: multiscale.dtype, id }];
   }
 }
