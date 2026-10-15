@@ -14,7 +14,7 @@ import {
 } from "./loaders/VolumeLoader.js";
 import { pickLevelToLoadUnscaled } from "./loaders/VolumeLoaderUtils.js";
 import type { NumberType, TypedArray } from "./types.js";
-import { CImageInfo, createDefaultMetadata, defaultImageInfo } from "./ImageInfo.js";
+import { CImageInfo, createDefaultMetadata, defaultImageInfo, type ImageInfo } from "./ImageInfo.js";
 import type { VolumeDims } from "./VolumeDims.js";
 import EventDispatcher from "./EventDispatcher.js";
 
@@ -214,7 +214,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
   }
 
   /** Call on any state update that may require new data to be loaded (subregion, enabled channels, time, etc.) */
-  async updateRequiredData(required: Partial<LoadSpec>, onChannelLoaded?: PerChannelCallback): Promise<void> {
+  async updateRequiredData(required: Partial<LoadSpec>): Promise<void> {
     this.loadSpecRequired = { ...this.loadSpecRequired, ...required };
     let shouldReload = this.mustLoadNewData();
 
@@ -229,7 +229,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     }
 
     if (shouldReload) {
-      await this.loadNewData(onChannelLoaded);
+      await this.load();
     }
   }
 
@@ -254,17 +254,54 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     }
   }
 
+  private updateMetadata(imageInfo?: ImageInfo, loadSpec?: LoadSpec): void {
+    if (imageInfo) {
+      this.imageInfo = new CImageInfo(imageInfo);
+      this.imageMetadata = { ...this.imageMetadata, ...createDefaultMetadata(imageInfo) };
+      this.updateDimensions();
+      this.updateChannelCount();
+    }
+    this.loadSpec = { ...this.loadSpec, ...loadSpec };
+  }
+
+  private onChannelData(
+    channelIndexes: number[],
+    types: NumberType[],
+    arrs: TypedArray[],
+    ranges: [number, number][],
+    atlasDims?: [number, number]
+  ): void {
+    channelIndexes.forEach((channelIndex, i) => {
+      const dtype = types[i];
+      const data = arrs[i];
+      const range = ranges[i];
+      const time = this.loadSpec.time;
+      if (atlasDims !== undefined) {
+        const [width, height] = atlasDims;
+        this.setChannelDataFromAtlas(channelIndex, data, width, height, range, dtype, time);
+      } else {
+        this.setChannelDataFromVolume(channelIndex, data, range, dtype, time);
+      }
+      this.channelLoadCallback?.(this, channelIndex);
+    });
+  }
+
   /**
    * Loads new data as specified in `this.loadSpecRequired`. Clones `loadSpecRequired` into `loadSpec` to indicate
    * that the data that *must* be loaded is now the data that *has* been loaded.
    */
-  private async loadNewData(onChannelLoaded?: PerChannelCallback): Promise<void> {
+  async load(): Promise<void> {
     this.setUnloaded();
     this.loadSpec = cloneLoadSpec(this.loadSpecRequired);
     this.dispatchEvent({ type: "loadStart" });
 
     try {
-      await this.loader?.loadVolumeData(this, onChannelLoaded);
+      await this.loader?.loadRawChannelData(
+        this.imageInfo.imageInfo,
+        this.loadSpec,
+        this.updateMetadata.bind(this),
+        this.onChannelData.bind(this)
+      );
     } catch (e) {
       this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, e));
       throw e;
