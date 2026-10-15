@@ -49,7 +49,9 @@ const dataTypeToThreeTextureProperties: {
 
 export class ThreeInterface implements DeviceInterface<Renderer | WebGLRenderer, Data3DTexture> {
   isDeviceHandle(val: unknown): val is Renderer | WebGLRenderer {
-    return typeof val === "object" && typeof (val as Renderer | WebGLRenderer).initTexture === "function";
+    return (
+      typeof val === "object" && val !== null && typeof (val as Renderer | WebGLRenderer).initTexture === "function"
+    );
   }
 
   createTexture(
