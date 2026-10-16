@@ -392,7 +392,6 @@ export default class DataManager<Dev, Tex> {
           this.tryAbortRequest(evictEntry.data.requestId);
           break;
         default:
-          // TODO `WORKER` state may be weird to manage here
           console.error(
             `chunk ${evictKey} queued for eviction in an invalid state (expected "memory", found ${evictEntry.data.state})`
           );
