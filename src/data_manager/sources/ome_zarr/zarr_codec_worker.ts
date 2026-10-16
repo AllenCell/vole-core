@@ -1,5 +1,5 @@
 import { registry, UnknownCodecError } from "zarrita";
-import { task } from "../task_pool/index.js";
+import { task } from "../../task_pool/index.js";
 
 type Codec = {
   encode: (data: Uint8Array) => Uint8Array | Promise<Uint8Array>;
