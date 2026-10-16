@@ -124,12 +124,35 @@ export class OMEZarrSource implements ChunkSource {
     });
   }
 
-  async getKey(id: LocalChunkId, options: GetKeyOptions): Promise<Chunk<NumberType>[]> {
-    const multiscale = this.scaleLevels[id.multiscale];
-    const coords = orderByDimension(id.tczyx, this.axesTCZYX);
-    const [sizeT, sizeC] = orderByTCZYX(multiscale.chunks, this.axesTCZYX, 1);
-    const chunkCount = sizeT * sizeC;
+  async getKey(key: LocalChunkId, options: GetKeyOptions): Promise<Chunk[]> {
+    const multiscale = this.scaleLevels[key.multiscale];
+    const coords = orderByDimension(key.tczyx, this.axesTCZYX);
+
+    const [shapeT, shapeC] = orderByTCZYX(multiscale.chunks, this.axesTCZYX, 1);
+    const [orderT, orderC] = this.axesTCZYX;
+    const [keyT, keyC, idZ, idY, idX] = key.tczyx;
+
+    const chunkCount = shapeT * shapeC;
+    const cMinor = shapeT > 1 && shapeC > 1 && orderT > -1 && orderC > -1 && orderC < orderT;
+    const majorLength = cMinor ? shapeT : shapeC;
+    const tMin = keyT * shapeT;
+    const cMin = keyC * shapeC;
+
     const { data } = await multiscale.getChunk(coords, { signal: options?.signal });
-    return [{ data: data as TypedArray, dtype: multiscale.dtype, id }];
+
+    const chunkLength = data.length / chunkCount;
+    const result: Chunk[] = [];
+
+    for (let i = 0; i < chunkCount; i++) {
+      const chunkStart = i * chunkLength;
+      const subarray = (data as TypedArray).slice(chunkStart, chunkStart + chunkLength);
+      const offsetMinor = Math.floor(i / majorLength);
+      const offsetMajor = i % majorLength;
+      const [idT, idC] = cMinor ? [tMin + offsetMajor, cMin + offsetMinor] : [tMin + offsetMinor, cMin + offsetMajor];
+      const id: LocalChunkId = { multiscale: key.multiscale, tczyx: [idT, idC, idZ, idY, idX] };
+      result.push({ data: subarray, dtype: multiscale.dtype, id });
+    }
+
+    return result;
   }
 }
