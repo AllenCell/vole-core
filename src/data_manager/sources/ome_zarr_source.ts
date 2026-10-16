@@ -126,18 +126,25 @@ export class OMEZarrSource implements ChunkSource {
 
   async getKey(key: LocalChunkId, options: GetKeyOptions): Promise<Chunk[]> {
     const multiscale = this.scaleLevels[key.multiscale];
-    const coords = orderByDimension(key.tczyx, this.axesTCZYX);
-
-    const [shapeT, shapeC] = orderByTCZYX(multiscale.chunks, this.axesTCZYX, 1);
-    const [orderT, orderC] = this.axesTCZYX;
     const [keyT, keyC, idZ, idY, idX] = key.tczyx;
 
-    const chunkCount = shapeT * shapeC;
+    // If this chunk contains more than one timepoint and/or channel, we need to know how to separate them
+    const [shapeT, shapeC] = orderByTCZYX(multiscale.chunks, this.axesTCZYX, 1);
+    const [sizeT, sizeC] = orderByTCZYX(multiscale.shape, this.axesTCZYX, 1);
+    // Does C come before T in the dimension order?
+    const [orderT, orderC] = this.axesTCZYX;
     const cMinor = shapeT > 1 && shapeC > 1 && orderT > -1 && orderC > -1 && orderC < orderT;
-    const majorLength = cMinor ? shapeT : shapeC;
+
     const tMin = keyT * shapeT;
     const cMin = keyC * shapeC;
+    // Account for max-edge chunks
+    // (e.g. if each chunk has 2 channels and there are 5 channels total, the last chunk has one channel)
+    const chunksT = Math.min(shapeT, sizeT - tMin);
+    const chunksC = Math.min(shapeC, sizeC - cMin);
+    const chunkCount = chunksT * chunksC;
+    const majorLength = cMinor ? chunksT : chunksC;
 
+    const coords = orderByDimension(key.tczyx, this.axesTCZYX);
     const { data } = await multiscale.getChunk(coords, { signal: options?.signal });
 
     const chunkLength = data.length / chunkCount;
