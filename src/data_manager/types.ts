@@ -112,8 +112,9 @@ export const enum ChunkState {
   WORKER = "worker",
 }
 
-export type ChunkData<Tex> =
-  | { state: ChunkState.QUEUED | ChunkState.WORKER | ChunkState.LOADING }
+type ChunkEntryData<Tex> =
+  | { state: ChunkState.QUEUED | ChunkState.WORKER }
+  | { state: ChunkState.LOADING; requestId: number }
   | { state: ChunkState.MEMORY; memory: TypedArray; dtype: NumberType }
   | { state: ChunkState.DEVICE; memory: TypedArray; dtype: NumberType; texture: Tex };
 
@@ -126,7 +127,7 @@ export type SubscriberPriority = {
 /** `DataManager`-internal type containing full state of a single chunk. */
 export type ChunkEntry<Tex> = {
   /** The current lifecycle state of a chunk, and the data associated with it. */
-  data: ChunkData<Tex>;
+  data: ChunkEntryData<Tex>;
   /** A record of every request for this chunk. */
   subscriberPriorities: SubscriberPriority[];
   /** Priority at which the chunk is required in memory. Derived from `subscriberPriorities` on request add/remove. */
@@ -158,7 +159,8 @@ export const stringToChunkId = (id: string): ChunkId => {
   };
 };
 
-export type Chunk<T extends NumberType> = {
+export type Chunk<T extends NumberType = NumberType> = {
+  id: LocalChunkId;
   data: TypedArray<T>;
   dtype: T;
 };

@@ -1,13 +1,19 @@
 import * as zarr from "zarrita";
 
-import type { ExtVolumeDims, IChunkSource } from "../data_manager.js";
+import type { ExtVolumeDims, ChunkSource, VolumeMetadata, GetKeyOptions } from "./chunk_source.js";
 import {
   assertMetadataHasMultiscales,
   toOMEZarrMetaV4,
   validateOMEZarrMetadata,
 } from "../../loaders/zarr_utils/validation.js";
 import type { OMEMultiscale, OmeroTransitionalMetadata } from "../../loaders/zarr_utils/types.js";
-import { getScale, orderByDimension, orderByTCZYX, remapAxesToTCZYX } from "../../loaders/zarr_utils/utils.js";
+import {
+  getScale,
+  getSourceChannelMeta,
+  orderByDimension,
+  orderByTCZYX,
+  remapAxesToTCZYX,
+} from "../../loaders/zarr_utils/utils.js";
 import { unitNameToSymbol } from "../../loaders/VolumeLoaderUtils.js";
 import type { Chunk, LocalChunkId } from "../types.js";
 import type { NumberType, TypedArray } from "../../types.js";
@@ -15,12 +21,17 @@ import type { NumberType, TypedArray } from "../../types.js";
 const PLACEHOLDER_NAME = "zarr source";
 const PLACEHOLDER_SCENE_INDEX = 0;
 
-export class OMEZarrSource implements IChunkSource {
+export class OMEZarrSource implements ChunkSource {
+  // Magic number that makes `getSourceChannelMeta` (below) work.
+  // TODO if/when this class becomes the primary adapter for zarrs, move that util over here and adapt it such that
+  //   this property can be removed and the remaining properties can be made `private`.
+  public readonly channelOffset = 0;
+
   private constructor(
-    private scaleLevels: zarr.Array<NumberType>[],
-    private multiscaleMetadata: OMEMultiscale,
-    private omeroMetadata: OmeroTransitionalMetadata | undefined,
-    private axesTCZYX: [number, number, number, number, number]
+    public readonly scaleLevels: zarr.Array<NumberType>[],
+    public readonly multiscaleMetadata: OMEMultiscale,
+    public readonly omeroMetadata: OmeroTransitionalMetadata | undefined,
+    public readonly axesTCZYX: [number, number, number, number, number]
   ) {}
 
   static async new(url: string): Promise<OMEZarrSource> {
@@ -57,6 +68,47 @@ export class OMEZarrSource implements IChunkSource {
     return [spaceUnitSymbol, timeUnitSymbol];
   }
 
+  chunkIdToStorageId({ multiscale, tczyx: [t, c, z, y, x] }: LocalChunkId): LocalChunkId {
+    const level = this.scaleLevels[multiscale];
+    const [shapeT, shapeC] = orderByTCZYX(level.chunks, this.axesTCZYX, 1);
+    const keyT = Math.floor(t / shapeT);
+    const keyC = Math.floor(c / shapeC);
+    return { multiscale, tczyx: [keyT, keyC, z, y, x] };
+  }
+
+  storageIdToChunkIds({ multiscale, tczyx: [t, c, z, y, x] }: LocalChunkId): LocalChunkId[] {
+    const level = this.scaleLevels[multiscale];
+    const [shapeT, shapeC] = orderByTCZYX(level.chunks, this.axesTCZYX, 1);
+
+    const minT = t * shapeT;
+    const maxT = minT + shapeT;
+    const minC = c * shapeC;
+    const maxC = minC + shapeC;
+
+    const chunksInKey: LocalChunkId[] = [];
+    for (let chunkT = minT; chunkT < maxT; chunkT++) {
+      for (let chunkC = minC; chunkC < maxC; chunkC++) {
+        chunksInKey.push({ multiscale, tczyx: [chunkT, chunkC, z, y, x] });
+      }
+    }
+    return chunksInKey;
+  }
+
+  getMeta(): VolumeMetadata {
+    const { names: channelNames, colors: channelColors } = getSourceChannelMeta(this);
+
+    return {
+      name: this.omeroMetadata?.name ?? PLACEHOLDER_NAME,
+      channelNames,
+      channelColors,
+      transform: {
+        translation: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+      },
+    };
+  }
+
   getDims(): ExtVolumeDims[] {
     const [spaceUnit, timeUnit] = this.getUnitSymbols();
     return this.scaleLevels.map((level, i) => {
@@ -72,10 +124,42 @@ export class OMEZarrSource implements IChunkSource {
     });
   }
 
-  async getChunk(chunkId: LocalChunkId): Promise<Chunk<NumberType>> {
-    const multiscale = this.scaleLevels[chunkId.multiscale];
-    const coords = orderByDimension(chunkId.tczyx, this.axesTCZYX);
-    const { data } = await multiscale.getChunk(coords);
-    return { data: data as TypedArray, dtype: multiscale.dtype };
+  async getKey(key: LocalChunkId, options: GetKeyOptions): Promise<Chunk[]> {
+    const multiscale = this.scaleLevels[key.multiscale];
+    const [keyT, keyC, idZ, idY, idX] = key.tczyx;
+
+    // If this chunk contains more than one timepoint and/or channel, we need to know how to separate them
+    const [shapeT, shapeC] = orderByTCZYX(multiscale.chunks, this.axesTCZYX, 1);
+    const [sizeT, sizeC] = orderByTCZYX(multiscale.shape, this.axesTCZYX, 1);
+    // Does C come before T in the dimension order?
+    const [orderT, orderC] = this.axesTCZYX;
+    const cMinor = shapeT > 1 && shapeC > 1 && orderT > -1 && orderC > -1 && orderC < orderT;
+
+    const tMin = keyT * shapeT;
+    const cMin = keyC * shapeC;
+    // Account for max-edge chunks
+    // (e.g. if each chunk has 2 channels and there are 5 channels total, the last chunk has one channel)
+    const chunksT = Math.min(shapeT, sizeT - tMin);
+    const chunksC = Math.min(shapeC, sizeC - cMin);
+    const chunkCount = chunksT * chunksC;
+    const majorLength = cMinor ? chunksT : chunksC;
+
+    const coords = orderByDimension(key.tczyx, this.axesTCZYX);
+    const { data } = await multiscale.getChunk(coords, { signal: options?.signal });
+
+    const chunkLength = data.length / chunkCount;
+    const result: Chunk[] = [];
+
+    for (let i = 0; i < chunkCount; i++) {
+      const chunkStart = i * chunkLength;
+      const subarray = (data as TypedArray).slice(chunkStart, chunkStart + chunkLength);
+      const offsetMinor = Math.floor(i / majorLength);
+      const offsetMajor = i % majorLength;
+      const [idT, idC] = cMinor ? [tMin + offsetMajor, cMin + offsetMinor] : [tMin + offsetMinor, cMin + offsetMajor];
+      const id: LocalChunkId = { multiscale: key.multiscale, tczyx: [idT, idC, idZ, idY, idX] };
+      result.push({ data: subarray, dtype: multiscale.dtype, id });
+    }
+
+    return result;
   }
 }
