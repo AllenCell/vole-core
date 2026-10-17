@@ -1,4 +1,4 @@
-import { registry, UnknownCodecError } from "zarrita";
+import { registry, UnknownCodecError, type CodecMetadata } from "zarrita";
 import { task } from "../../task_pool/index.js";
 
 type Codec = {
@@ -12,12 +12,32 @@ type ChunkMetadata = Parameters<CodecEntry["fromConfig"]>[1];
 
 type CodecDescriptor = {
   id: number;
-  name: string;
-  config: unknown;
+  codecs: CodecMetadata[];
   meta: ChunkMetadata;
 };
 
 const codecs = new Map<number, Codec>();
+
+const joinCodecs = (codecs: Codec[]): Codec => {
+  // TODO
+};
+
+const loadCodec = async (descriptor: CodecDescriptor): Promise<Codec> => {
+  const codecPromises = descriptor.codecs.map(async ({ name, configuration }): Promise<Codec> => {
+    const entry = await registry.get(name)?.();
+    if (entry === undefined) {
+      throw new UnknownCodecError(name);
+    }
+    return entry.fromConfig(configuration, descriptor.meta);
+  });
+
+  const codecs = await Promise.all(codecPromises);
+
+  if (codecs.length === 1) {
+    return codecs[0];
+  }
+  return joinCodecs(codecs);
+};
 
 const getCodec = async (descriptor: CodecDescriptor): Promise<Codec> => {
   const savedCodec = codecs.get(descriptor.id);
@@ -25,12 +45,7 @@ const getCodec = async (descriptor: CodecDescriptor): Promise<Codec> => {
     return savedCodec;
   }
 
-  const entry = await registry.get(descriptor.name)?.();
-  if (entry === undefined) {
-    throw new UnknownCodecError(descriptor.name);
-  }
-
-  const newCodec = entry.fromConfig(descriptor.config, descriptor.meta);
+  const newCodec = await loadCodec(descriptor);
   codecs.set(descriptor.id, newCodec);
   return newCodec;
 };
