@@ -1,36 +1,53 @@
 import * as zarr from "zarrita";
 
 import { taskHandle, TaskPool } from "../../task_pool/index.js";
+import { defineGlobalId } from "../../utils.js";
 import type { encodeTask as encodeTaskType, decodeTask as decodeTaskType } from "./zarr_codec_worker.js";
-
-let codecCounter = 0;
 
 type CodecKind = "array_to_array" | "array_to_bytes" | "bytes_to_bytes";
 
-// MARK: Codec interface
+// MARK: Codec wrapper
 
 const encodeTask = taskHandle<typeof encodeTaskType>("zarrEncode", (data) => [data.buffer]);
 const decodeTask = taskHandle<typeof decodeTaskType>("zarrDecode", (data) => [data.buffer]);
 
 type WorkerConfig = {
-  pool: TaskPool;
   kind: CodecKind;
   codecs: zarr.CodecMetadata[];
 };
 
-zarr.registry.set("vole-worker", async () => ({
-  fromConfig: (config, meta) => {
-    const { pool, codecs, kind } = config as WorkerConfig;
-    const descriptor = { codecs, meta, id: codecCounter };
-    codecCounter++;
+const getPoolId = defineGlobalId<TaskPool>(Symbol("OMEZarrSource.codecPoolId"));
 
-    return {
-      encode: (data: Uint8Array) => pool.runTask(encodeTask, data, descriptor),
-      decode: (data: Uint8Array) => pool.runTask(decodeTask, data, descriptor),
-      kind,
-    };
-  },
-}));
+/**
+ * Returns the name of the `zarrita` wrapper codec that runs codec pipelines in the given `pool`.
+ *
+ * If no such codec exists, this function creates one and registers it with `zarrita`.
+ */
+const getPoolCodecName = (pool: TaskPool): string => {
+  const id = getPoolId(pool);
+  const name = `vole-worker-${id}`;
+
+  if (zarr.registry.get(name) === undefined) {
+    // Assign every codec pipeline created in this pool a serial number for easy lookup worker-side
+    let codecCounter = 0;
+
+    zarr.registry.set(name, async () => ({
+      fromConfig: (config, meta) => {
+        const { codecs, kind } = config as WorkerConfig;
+        const descriptor = { codecs, meta, id: codecCounter };
+        codecCounter++;
+
+        return {
+          encode: (data: Uint8Array) => pool.runTask(encodeTask, data, descriptor),
+          decode: (data: Uint8Array) => pool.runTask(decodeTask, data, descriptor),
+          kind,
+        };
+      },
+    }));
+  }
+
+  return name;
+};
 
 // MARK: Metadata parsing
 
@@ -43,6 +60,7 @@ export const withWorkerCodec = zarr.defineStoreExtension((store, opts: { pool?: 
     return {};
   }
   const { pool } = opts;
+  const name = getPoolCodecName(pool);
 
   return {
     get: async (key: zarr.AbsolutePath, options?: zarr.GetOptions): Promise<Uint8Array | undefined> => {
