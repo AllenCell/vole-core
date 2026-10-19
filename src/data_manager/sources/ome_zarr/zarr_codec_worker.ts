@@ -27,18 +27,19 @@ const joinCodecs = (codecs: { codec: Codec; name: string }[]): Codec => {
       throw new CodecPipelineError({ direction, codec, cause });
     }
   };
-  const codecsReversed = codecs.toReversed();
+  // Put codecs in bytes -> array order to prioritize decoding over encoding
+  codecs.reverse();
 
   return {
-    encode: async (data: Uint8Array): Promise<Uint8Array> => {
+    decode: async (data: Uint8Array): Promise<Uint8Array> => {
       for (const { name, codec } of codecs) {
-        data = await runStep("encode", name, () => codec.encode(data));
+        data = await runStep("decode", name, () => codec.decode(data));
       }
       return data;
     },
-    decode: async (data: Uint8Array): Promise<Uint8Array> => {
-      for (const { name, codec } of codecsReversed) {
-        data = await runStep("decode", name, () => codec.decode(data));
+    encode: async (data: Uint8Array): Promise<Uint8Array> => {
+      for (const { name, codec } of codecs.toReversed()) {
+        data = await runStep("encode", name, () => codec.encode(data));
       }
       return data;
     },
