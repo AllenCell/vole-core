@@ -1,4 +1,4 @@
-import { registry, UnknownCodecError, type CodecMetadata } from "zarrita";
+import { CodecPipelineError, registry, UnknownCodecError, type CodecMetadata } from "zarrita";
 import { task } from "../../task_pool/index.js";
 
 type Codec = {
@@ -18,23 +18,47 @@ type CodecDescriptor = {
 
 const codecs = new Map<number, Codec>();
 
-const joinCodecs = (codecs: Codec[]): Codec => {
-  // TODO
+const joinCodecs = (codecs: { codec: Codec; name: string }[]): Codec => {
+  // Simplified version of zarrita's `createCodecPipeline`
+  const runStep = async <T>(direction: "encode" | "decode", codec: string, fn: () => Promise<T> | T): Promise<T> => {
+    try {
+      return await fn();
+    } catch (cause) {
+      throw new CodecPipelineError({ direction, codec, cause });
+    }
+  };
+  const codecsReversed = codecs.toReversed();
+
+  return {
+    encode: async (data: Uint8Array): Promise<Uint8Array> => {
+      for (const { name, codec } of codecs) {
+        data = await runStep("encode", name, () => codec.encode(data));
+      }
+      return data;
+    },
+    decode: async (data: Uint8Array): Promise<Uint8Array> => {
+      for (const { name, codec } of codecsReversed) {
+        data = await runStep("decode", name, () => codec.decode(data));
+      }
+      return data;
+    },
+  };
 };
 
 const loadCodec = async (descriptor: CodecDescriptor): Promise<Codec> => {
-  const codecPromises = descriptor.codecs.map(async ({ name, configuration }): Promise<Codec> => {
+  const codecPromises = descriptor.codecs.map(async ({ name, configuration }) => {
     const entry = await registry.get(name)?.();
     if (entry === undefined) {
       throw new UnknownCodecError(name);
     }
-    return entry.fromConfig(configuration, descriptor.meta);
+    const codec = entry.fromConfig(configuration, descriptor.meta);
+    return { codec, name };
   });
 
   const codecs = await Promise.all(codecPromises);
 
   if (codecs.length === 1) {
-    return codecs[0];
+    return codecs[0].codec;
   }
   return joinCodecs(codecs);
 };
