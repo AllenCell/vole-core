@@ -232,7 +232,11 @@ vec4 integrateVolume(
       col.xyz *= BRIGHTNESS;
       C = max(col, C);
     } else {
-      col = luma2Alpha(col, GAMMA_MIN, GAMMA_MAX, GAMMA_SCALE);
+      // Note: Regular volume channels have an alpha of 0, and use luminance to
+      // vary 
+      if (col.a < 0.000001) {
+        col = luma2Alpha(col, GAMMA_MIN, GAMMA_MAX, GAMMA_SCALE);
+      }
       col.xyz *= BRIGHTNESS;
       // for practical use the density only matters for regular volume integration
       col.w *= DENSITY;
