@@ -30,6 +30,7 @@ import DataManager, { IDataSubscriber } from "../src/data_manager/data_manager.j
 import { OMEZarrSource } from "../src/data_manager/sources/index.js";
 import { ChunkId, ChunkPriority, ChunkPriorityLevel } from "../src/data_manager/types.js";
 import { ThreeInterface } from "../src/data_manager/device_interface.js";
+import { TaskPool } from "../src/data_manager/task_pool/task_pool.js";
 
 const CACHE_MAX_SIZE = 1_000_000_000;
 const CONCURRENCY_LIMIT = 8;
@@ -925,10 +926,12 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 async function testDataManager() {
+  const pool = new TaskPool(new URL("./test_worker.js", import.meta.url));
   const dataManager = new DataManager(new ThreeInterface());
   const zarrSource = await OMEZarrSource.new(
     // "https://animatedcell-test-data.s3.us-west-2.amazonaws.com/variance/1.zarr"
-    "https://uk1s3.embassy.ebi.ac.uk/idr/zarr/v0.4/idr0048A/9846152.zarr/"
+    "https://vast-files.int.allencell.org/users/alex.khang/repos/bioio_conversion/H2B_640_CAAX_488_20250904_flat_colony_1.ome.zarr/",
+    { pool }
   );
   const sourceId = dataManager.addSource(zarrSource);
   const mockSubscriber: IDataSubscriber<Data3DTexture> = {
