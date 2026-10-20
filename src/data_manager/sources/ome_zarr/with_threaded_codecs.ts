@@ -3,12 +3,13 @@ import * as zarr from "zarrita";
 import { taskHandle, TaskPool } from "../../task_pool/index.js";
 import { defineGlobalId } from "../../utils.js";
 import type { encodeTask as encodeTaskType, decodeTask as decodeTaskType } from "./zarr_codec_worker.js";
+import type { NumberType } from "../../../types.js";
 
 type CodecKind = "array_to_array" | "array_to_bytes" | "bytes_to_bytes";
 
 // MARK: Codec wrapper
 
-const encodeTask = taskHandle<typeof encodeTaskType>("zarrEncode", (data) => [data.buffer]);
+const encodeTask = taskHandle<typeof encodeTaskType>("zarrEncode", (chunk) => [chunk.data.buffer]);
 const decodeTask = taskHandle<typeof decodeTaskType>("zarrDecode", (data) => [data.buffer]);
 
 type WorkerConfig = {
@@ -38,7 +39,7 @@ const getPoolCodecName = (pool: TaskPool): string => {
         codecCounter++;
 
         return {
-          encode: (data: Uint8Array) => pool.runTask(encodeTask, data, descriptor),
+          encode: (data: zarr.Chunk<NumberType>) => pool.runTask(encodeTask, data, descriptor),
           decode: (data: Uint8Array) => pool.runTask(decodeTask, data, descriptor),
           kind,
         };
@@ -53,12 +54,12 @@ const getPoolCodecName = (pool: TaskPool): string => {
 
 const wrapCodecMetadata = (name: string, meta: zarr.CodecMetadata[]): zarr.CodecMetadata[] => {
   const shardIndex = meta.findIndex(({ name }) => name === "sharding_indexed");
-  if (shardIndex !== undefined) {
+  if (shardIndex > -1) {
     const codecs = meta[shardIndex].configuration.codecs as zarr.CodecMetadata[];
     meta[shardIndex].configuration.codecs = wrapCodecMetadata(name, codecs);
     return meta;
   }
-  return [{ name, configuration: { kind: "array_to_array", codecs: meta } satisfies WorkerConfig }];
+  return [{ name, configuration: { kind: "array_to_bytes", codecs: meta } satisfies WorkerConfig }];
 };
 
 /** zarrita `Store` extension that intercepts metadata to replace as many codecs as possible with workerized variants. */
@@ -87,21 +88,10 @@ export const withWorkerCodec = zarr.defineStoreExtension((store, opts: { pool?: 
       }
 
       if (meta.zarr_format === 3 && Array.isArray(meta.codecs)) {
-        meta = wrapCodecMetadata(name, meta);
+        meta.codecs = wrapCodecMetadata(name, meta.codecs);
       }
 
-      const result = JSON.stringify(
-        meta,
-        (_, value) => {
-          if (typeof value === "number") {
-            if (Number.isNaN(value)) return "NaN";
-            if (value === Infinity) return "Infinity";
-            if (value === -Infinity) return "-Infinity";
-          }
-          return value;
-        },
-        2
-      );
+      const result = JSON.stringify(meta);
       return new TextEncoder().encode(result);
     },
   };
