@@ -51,8 +51,15 @@ const getPoolCodecName = (pool: TaskPool): string => {
 
 // MARK: Metadata parsing
 
-const isMetaKey = (key: string): boolean =>
-  key.endsWith(".zarray") || key.endsWith(".zgroup") || key.endsWith(".zattrs") || key.endsWith("zarr.json");
+const wrapCodecMetadata = (name: string, meta: zarr.CodecMetadata[]): zarr.CodecMetadata[] => {
+  const shardIndex = meta.findIndex(({ name }) => name === "sharding_indexed");
+  if (shardIndex !== undefined) {
+    const codecs = meta[shardIndex].configuration.codecs as zarr.CodecMetadata[];
+    meta[shardIndex].configuration.codecs = wrapCodecMetadata(name, codecs);
+    return meta;
+  }
+  return [{ name, configuration: { kind: "array_to_array", codecs: meta } satisfies WorkerConfig }];
+};
 
 /** zarrita `Store` extension that intercepts metadata to replace as many codecs as possible with workerized variants. */
 export const withWorkerCodec = zarr.defineStoreExtension((store, opts: { pool?: TaskPool }) => {
@@ -66,16 +73,36 @@ export const withWorkerCodec = zarr.defineStoreExtension((store, opts: { pool?: 
     get: async (key: zarr.AbsolutePath, options?: zarr.GetOptions): Promise<Uint8Array | undefined> => {
       const bytes = await store.get(key, options);
 
-      if (!isMetaKey(key)) {
+      if (!key.endsWith("zarr.json")) {
         return bytes;
       }
 
       const str = new TextDecoder().decode(bytes);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let meta: any;
       try {
-        JSON.parse(str);
+        meta = JSON.parse(str);
       } catch (cause) {
         throw new zarr.InvalidMetadataError("Failed to decode JSON", { cause });
       }
+
+      if (meta.zarr_format === 3 && Array.isArray(meta.codecs)) {
+        meta = wrapCodecMetadata(name, meta);
+      }
+
+      const result = JSON.stringify(
+        meta,
+        (_, value) => {
+          if (typeof value === "number") {
+            if (Number.isNaN(value)) return "NaN";
+            if (value === Infinity) return "Infinity";
+            if (value === -Infinity) return "-Infinity";
+          }
+          return value;
+        },
+        2
+      );
+      return new TextEncoder().encode(result);
     },
   };
 });
