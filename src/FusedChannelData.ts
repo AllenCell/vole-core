@@ -187,6 +187,7 @@ export default class FusedChannelData {
         hideOutOfRange: { value: false },
         segIdToGlobalId: { value: initialSegIdToGlobalId },
         segIdOffset: { value: 0 },
+        objectOpacity: { value: 1.0 },
       },
       fragmentShader: fragShaderSrc,
       ...this.fuseMaterialProps,
@@ -295,6 +296,7 @@ export default class FusedChannelData {
         mat.uniforms.outlierDrawMode.value = feature.outlierDrawMode;
         mat.uniforms.outOfRangeDrawMode.value = feature.outOfRangeDrawMode;
         mat.uniforms.hideOutOfRange.value = feature.hideOutOfRange;
+        mat.uniforms.objectOpacity.value = feature.opacity ?? 1;
 
         let globalIdLookupInfo = feature.frameToGlobalIdLookup.get(snap.frame);
         if (!globalIdLookupInfo) {

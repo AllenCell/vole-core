@@ -136,6 +136,7 @@ export interface ColorizeFeature {
   outlierDrawMode: number;
   outOfRangeDrawMode: number;
   hideOutOfRange: boolean;
+  opacity?: number;
 }
 
 export interface FuseChannel {
