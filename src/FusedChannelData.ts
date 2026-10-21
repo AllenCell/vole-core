@@ -296,7 +296,7 @@ export default class FusedChannelData {
         mat.uniforms.outlierDrawMode.value = feature.outlierDrawMode;
         mat.uniforms.outOfRangeDrawMode.value = feature.outOfRangeDrawMode;
         mat.uniforms.hideOutOfRange.value = feature.hideOutOfRange;
-        mat.uniforms.objectOpacity.value = feature.opacity ?? 1;
+        mat.uniforms.objectOpacity.value = combination[i].opacity;
 
         let globalIdLookupInfo = feature.frameToGlobalIdLookup.get(snap.frame);
         if (!globalIdLookupInfo) {
