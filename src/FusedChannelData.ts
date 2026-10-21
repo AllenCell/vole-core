@@ -233,7 +233,7 @@ export default class FusedChannelData {
       if (channels[idx].loaded) {
         // set the lut in this fuse combination.
         // can optimize by calling combineLuts more lazily
-        c.lut = channels[idx].combineLuts(c.rgbColor, c.lut);
+        c.lut = channels[idx].combineLuts(c.rgbColor, c.opacity, c.lut);
         if (c.rgbColor) {
           readyToFuse.push({
             ...c,

@@ -17,5 +17,5 @@ void main() {
     float ilookup = float(float(intensity) - lutMinMax.x) / float(lutMinMax.y - lutMinMax.x);
     // apply lut to intensity:
     vec4 pix = texture(lutSampler, vec2(ilookup, 0.5));
-    gl_FragColor = vec4(pix.xyz * pix.w, pix.w);
+    gl_FragColor = vec4(pix.xyz, pix.w);
 }

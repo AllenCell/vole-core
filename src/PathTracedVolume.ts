@@ -484,7 +484,10 @@ export default class PathTracedVolume implements VolumeRenderImpl {
   updateLuts(channelColors: FuseChannel[], channelData: Channel[]): void {
     for (let i = 0; i < this.pathTracingUniforms.gNChannels.value; ++i) {
       const channel = this.viewChannels[i];
-      const combinedLut = channelData[channel].combineLuts(channelColors[channel].rgbColor);
+      const combinedLut = channelData[channel].combineLuts(
+        channelColors[channel].rgbColor,
+        channelColors[channel].opacity
+      );
 
       const { image } = this.pathTracingUniforms.gLutTexture.value;
       if (image.data === null) {
@@ -515,7 +518,7 @@ export default class PathTracedVolume implements VolumeRenderImpl {
       if (i > -1) {
         // diffuse color is actually blended into the LUT now.
         const channelData = this.volume.getChannel(i);
-        const combinedLut = channelData.combineLuts(this.settings.diffuse[i]);
+        const combinedLut = channelData.combineLuts(this.settings.diffuse[i], 1);
 
         const { image } = this.pathTracingUniforms.gLutTexture.value;
         if (image.data === null) {

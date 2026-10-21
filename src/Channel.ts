@@ -79,7 +79,7 @@ export default class Channel {
   }
 
   // rgbColor is [0..255, 0..255, 0..255]
-  public combineLuts(rgbColor: [number, number, number] | number, out?: Uint8Array): Uint8Array {
+  public combineLuts(rgbColor: [number, number, number] | number, opacity: number, out?: Uint8Array): Uint8Array {
     const ret = out ? out : new Uint8Array(LUT_ARRAY_LENGTH);
     if (!rgbColor) {
       return ret;
@@ -112,6 +112,16 @@ export default class Channel {
           this.lut.lut[i * 4 + 3] * (1.0 - this.colorPaletteAlpha);
       }
     }
+
+    // Weight colors by opacity
+    for (let i = 0; i < LUT_ARRAY_LENGTH / 4; ++i) {
+      const baseAlpha = (ret[i * 4 + 3] / 255) * opacity;
+      ret[i * 4 + 0] *= baseAlpha;
+      ret[i * 4 + 1] *= baseAlpha;
+      ret[i * 4 + 2] *= baseAlpha;
+      ret[i * 4 + 3] *= opacity;
+    }
+    console.log("combined LUT:", ret, "opacity:", opacity);
 
     this.lutTexture.image.data?.set(ret);
     this.lutTexture.needsUpdate = true;
