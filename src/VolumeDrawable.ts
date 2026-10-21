@@ -52,8 +52,6 @@ export const colorObjectToArray = ({ r, g, b }: ColorObject): ColorArray => [r, 
 export default class VolumeDrawable {
   public volume: Volume;
   private settings: VolumeRenderSettings;
-  // TODO remove!!
-  private onChannelDataReadyCallback?: () => void;
   private viewMode: Axis;
   private channelColors: [number, number, number][];
   private channelOptions: VolumeChannelDisplayOptions[];
@@ -98,8 +96,6 @@ export default class VolumeDrawable {
     // THE VOLUME DATA
     this.volume = volume;
     this.settings = new VolumeRenderSettings(volume);
-
-    this.onChannelDataReadyCallback = undefined;
 
     this.viewMode = Axis.NONE; // 3D mode
 
@@ -618,9 +614,6 @@ export default class VolumeDrawable {
       const { isovalue, isosurfaceOpacity } = channelOptions;
       this.meshVolume.createIsosurface(idx, this.channelColors[idx], isovalue, isosurfaceOpacity);
     }
-
-    // let the outside world have a chance
-    this.onChannelDataReadyCallback?.();
   }
 
   onChannelAdded(newChannelIndex: number): void {
