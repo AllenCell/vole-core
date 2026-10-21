@@ -302,9 +302,9 @@ export class View3d extends EventDispatcher<View3dEvents> {
   }
 
   // channels is an array of channel indices for which new data just arrived.
-  onVolumeData(volume: Volume, channels: number[]): void {
+  onVolumeData(volume: Volume, channel: number): void {
     this.image?.updateScale();
-    this.image?.onChannelLoaded(channels);
+    this.image?.onChannelLoaded(channel);
     if (volume.isLoaded() && this.tweakpane) {
       const tp = this.tweakpane;
       wrapTweakpaneCall(() => tp.refresh());
