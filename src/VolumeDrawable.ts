@@ -52,6 +52,7 @@ export const colorObjectToArray = ({ r, g, b }: ColorObject): ColorArray => [r, 
 export default class VolumeDrawable {
   public volume: Volume;
   private settings: VolumeRenderSettings;
+  // TODO remove!!
   private onChannelDataReadyCallback?: () => void;
   private viewMode: Axis;
   private channelColors: [number, number, number][];
@@ -607,18 +608,15 @@ export default class VolumeDrawable {
     return this.volume.getChannel(channelIndex);
   }
 
-  onChannelLoaded(batch: number[]): void {
-    for (let j = 0; j < batch.length; ++j) {
-      const idx = batch[j];
-      const channelOptions = this.channelOptions[idx];
-      // TODO: this is a relatively crude way to ensure that channel settings are synced up when volume data is loaded.
-      //    Can we instead audit which settings updated by `setChannelOptions` actually need to be reset on load?
-      this.setChannelOptions(idx, channelOptions);
-      if (channelOptions.isosurfaceEnabled) {
-        this.meshVolume.destroyIsosurface(idx);
-        const { isovalue, isosurfaceOpacity } = channelOptions;
-        this.meshVolume.createIsosurface(idx, this.channelColors[idx], isovalue, isosurfaceOpacity);
-      }
+  onChannelLoaded(idx: number): void {
+    const channelOptions = this.channelOptions[idx];
+    // TODO: this is a relatively crude way to ensure that channel settings are synced up when volume data is loaded.
+    //    Can we instead audit which settings updated by `setChannelOptions` actually need to be reset on load?
+    this.setChannelOptions(idx, channelOptions);
+    if (channelOptions.isosurfaceEnabled) {
+      this.meshVolume.destroyIsosurface(idx);
+      const { isovalue, isosurfaceOpacity } = channelOptions;
+      this.meshVolume.createIsosurface(idx, this.channelColors[idx], isovalue, isosurfaceOpacity);
     }
 
     // let the outside world have a chance
