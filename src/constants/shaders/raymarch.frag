@@ -49,17 +49,6 @@ float rand(vec2 co) {
   return fract(sin(dot(co, smallVal)) * bigVal);
 }
 
-vec4 luma2Alpha(vec4 color, float vmin, float vmax, float C) {
-  float x = dot(color.rgb, vec3(0.2125, 0.7154, 0.0721));
-  // float x = max(color[2], max(color[0],color[1]));
-  float xi = (x - vmin) / (vmax - vmin);
-  xi = clamp(xi, 0.0, 1.0);
-  float y = pow(xi, C);
-  y = clamp(y, 0.0, 1.0);
-  color[3] = y;
-  return color;
-}
-
 vec2 offsetFrontBack(float t) {
   int a = int(t);
   int ax = int(ATLAS_DIMS.x);
@@ -232,11 +221,6 @@ vec4 integrateVolume(
       col.xyz *= BRIGHTNESS;
       C = max(col, C);
     } else {
-      // Note: Regular volume channels have an alpha of 0, and use luminance to
-      // vary 
-      if (col.a < 0.000001) {
-        col = luma2Alpha(col, GAMMA_MIN, GAMMA_MAX, GAMMA_SCALE);
-      }
       col.xyz *= BRIGHTNESS;
       // for practical use the density only matters for regular volume integration
       col.w *= DENSITY;
