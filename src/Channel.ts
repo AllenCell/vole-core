@@ -113,15 +113,14 @@ export default class Channel {
       }
     }
 
-    // Weight colors by opacity
     for (let i = 0; i < LUT_ARRAY_LENGTH / 4; ++i) {
-      const baseAlpha = (ret[i * 4 + 3] / 255) * opacity;
-      ret[i * 4 + 0] *= baseAlpha;
-      ret[i * 4 + 1] *= baseAlpha;
-      ret[i * 4 + 2] *= baseAlpha;
+      // Darken RGB colors with alpha and apply opacity multiplier here.
+      const alphaMult = (ret[i * 4 + 3] / 255) * opacity;
+      ret[i * 4 + 0] *= alphaMult;
+      ret[i * 4 + 1] *= alphaMult;
+      ret[i * 4 + 2] *= alphaMult;
       ret[i * 4 + 3] *= opacity;
     }
-    console.log("combined LUT:", ret, "opacity:", opacity);
 
     this.lutTexture.image.data?.set(ret);
     this.lutTexture.needsUpdate = true;
