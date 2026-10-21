@@ -19,7 +19,7 @@ import type { VolumeDims } from "./VolumeDims.js";
 import EventDispatcher from "./EventDispatcher.js";
 
 interface VolumeDataObserver {
-  onVolumeData: (vol: Volume, batch: number[]) => void;
+  onVolumeData: (vol: Volume, channel: number) => void;
   onVolumeChannelAdded: (vol: Volume, idx: number) => void;
   onVolumeChannelRemoved: (vol: Volume, idx: number) => void;
   onVolumeLoadError: (vol: Volume, error: unknown) => void;
@@ -27,6 +27,8 @@ interface VolumeDataObserver {
 
 export type VolumeEvents = {
   loadStart: void;
+  loadChannel: { channelIndex: number };
+  loadEnd: void;
 };
 
 /**
@@ -42,7 +44,6 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
    * Used to intelligently issue load requests whenever required by a state change. Modify with `updateRequiredData`.
    */
   public loadSpecRequired: Required<LoadSpec>;
-  public channelLoadCallback?: PerChannelCallback;
   public imageMetadata: Record<string, unknown>;
 
   public channels: Channel[];
@@ -282,7 +283,6 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
       } else {
         this.setChannelDataFromVolume(channelIndex, data, range, dtype, time);
       }
-      this.channelLoadCallback?.(this, channelIndex);
     });
   }
 
@@ -351,13 +351,14 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     return this.channels[channelIndex];
   }
 
-  onChannelLoaded(batch: number[]): void {
-    // check to see if all channels are now loaded, and fire an event(?)
+  onChannelLoaded(channelIndex: number): void {
+    this.dispatchEvent({ type: "loadChannel", channelIndex });
+    // check to see if all channels are now loaded, and fire an event
     if (this.loadSpec.channels.every((channelIndex) => this.channels[channelIndex].loaded)) {
       this.loaded = true;
+      this.dispatchEvent({ type: "loadEnd" });
     }
-    batch.forEach((channelIndex) => this.channelLoadCallback?.(this, channelIndex));
-    this.volumeDataObservers.forEach((observer) => observer.onVolumeData(this, batch));
+    this.volumeDataObservers.forEach((observer) => observer.onVolumeData(this, channelIndex));
   }
 
   /**
@@ -386,7 +387,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
       this.imageInfo.subregionSize,
       time
     );
-    this.onChannelLoaded([channelIndex]);
+    this.onChannelLoaded(channelIndex);
   }
 
   // ASSUMES that this.channelData.options is already set and incoming data is consistent with it
@@ -415,7 +416,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
       dtype,
       time
     );
-    this.onChannelLoaded([channelIndex]);
+    this.onChannelLoaded(channelIndex);
   }
 
   // TODO: decide if this should update imageInfo or not. For now, leave imageInfo alone as the "original" data

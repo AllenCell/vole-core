@@ -906,7 +906,7 @@ function onChannelDataArrived(v: Volume, channelIndex: number) {
 
   // optionally can set the LUT here (for example if this is first time loading)
 
-  view3D.onVolumeData(currentVol, [channelIndex]);
+  view3D.onVolumeData(currentVol, channelIndex);
   view3D.setVolumeChannelEnabled(currentVol, channelIndex, myState.channelGui[channelIndex].enabled);
 
   view3D.updateActiveChannels(currentVol);
@@ -1111,7 +1111,7 @@ async function loadVolume(name: string, loadSpec: LoadSpec, loader: VolumeLoader
       channels.push(idx);
     }
   });
-  volume.channelLoadCallback = onChannelDataArrived;
+  volume.addEventListener("loadChannel", ({ channelIndex }) => onChannelDataArrived(volume, channelIndex));
   volume.load();
 
   // Set default slice index
