@@ -969,29 +969,36 @@ function setLowResPreview(enabled: boolean) {
 }
 
 function playTimeSeries(onNewFrameCallback: () => void) {
+  if (myState.isPlaying) {
+    return;
+  }
+  if (myState.currentFrame >= getNumberOfTimesteps() - 1) {
+    myState.currentFrame = -1;
+  }
   window.clearTimeout(myState.timerId);
   setSyncMultichannelLoading(true);
   myState.isPlaying = true;
+  myState.lastFrameTime = Date.now();
 
-  const loadNextFrame = () => {
-    myState.lastFrameTime = Date.now();
-    const nextFrame = (myState.currentFrame + 1) % getNumberOfTimesteps();
-
-    // TODO would be real nice if this were an `await`-able promise instead...
-    view3D.setTime(myState.volume, nextFrame, (vol) => {
-      if (vol.isLoaded()) {
+  const advanceTime = () => {
+    console.log("advanceTime");
+    if (myState.isPlaying) {
+      onNewFrameCallback();
+      const nextFrame = (myState.currentFrame + 1) % getNumberOfTimesteps();
+      const now = Date.now();
+      const timeLoading = now - myState.lastFrameTime;
+      myState.lastFrameTime = now;
+      const timeout = Math.max(PLAYBACK_INTERVAL - timeLoading, 0);
+      window.setTimeout(() => {
+        view3D.setTime(myState.volume, nextFrame);
         myState.currentFrame = nextFrame;
-        onNewFrameCallback();
-
-        if (myState.isPlaying) {
-          const timeLoading = Date.now() - myState.lastFrameTime;
-          myState.timerId = window.setTimeout(loadNextFrame, PLAYBACK_INTERVAL - timeLoading);
-        }
-      }
-    });
+      }, timeout);
+    } else {
+      myState.volume.removeEventListener("loadEnd", advanceTime);
+    }
   };
-
-  loadNextFrame();
+  myState.volume.addEventListener("loadEnd", advanceTime);
+  advanceTime();
 }
 
 function getCurrentFrame() {
@@ -1328,9 +1335,6 @@ function main() {
   });
   const playBtn = document.getElementById("playBtn");
   playBtn?.addEventListener("click", () => {
-    if (myState.currentFrame >= getNumberOfTimesteps() - 1) {
-      myState.currentFrame = -1;
-    }
     playTimeSeries(() => {
       if (timeInput) {
         timeInput.value = "" + getCurrentFrame();
