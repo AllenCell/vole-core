@@ -49,6 +49,16 @@ float rand(vec2 co) {
   return fract(sin(dot(co, smallVal)) * bigVal);
 }
 
+vec4 applyGamma(vec4 color, float gammaMin, float gammaMax, float gammaScale) {
+  float x = color.a;
+  float xi = (x - gammaMin) / (gammaMax - gammaMin);
+  xi = clamp(xi, 0.0, 1.0);
+  float y = pow(xi, gammaScale);
+  y = clamp(y, 0.0, 1.0);
+  color.a = y;
+  return color;
+}
+
 vec2 offsetFrontBack(float t) {
   int a = int(t);
   int ax = int(ATLAS_DIMS.x);
@@ -221,6 +231,7 @@ vec4 integrateVolume(
       col.xyz *= BRIGHTNESS;
       C = max(col, C);
     } else {
+      col = applyGamma(col, GAMMA_MIN, GAMMA_MAX, GAMMA_SCALE);
       col.xyz *= BRIGHTNESS;
       // for practical use the density only matters for regular volume integration
       col.w *= DENSITY;
