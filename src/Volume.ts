@@ -286,6 +286,23 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     });
   }
 
+  setLoader(loader: VolumeLoader, spec?: Partial<LoadSpec>): void {
+    const infoSpec = { ...this.loadSpecRequired, ...spec };
+    this.loader = loader;
+    // TODO pass in load specs here?
+    const { loadSpec, imageInfo } = loader.getImageInfo(infoSpec);
+    this.imageInfo.imageInfo = imageInfo;
+    this.imageMetadata = createDefaultMetadata(imageInfo);
+    const maxTime = imageInfo.multiscaleLevelDims[imageInfo.multiscaleLevel].shape[0] - 1;
+    const adjustedSpec = {
+      ...loadSpec,
+      channels: loadSpec.channels?.filter((i) => i < imageInfo.channelNames.length) ?? [],
+      time: Math.min(loadSpec.time, maxTime),
+    };
+    this.loadSpecRequired = { ...this.loadSpecRequired, ...adjustedSpec };
+    this.loadSpec = cloneLoadSpec(this.loadSpecRequired);
+  }
+
   /**
    * Loads new data as specified in `this.loadSpecRequired`. Clones `loadSpecRequired` into `loadSpec` to indicate
    * that the data that *must* be loaded is now the data that *has* been loaded.
