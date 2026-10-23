@@ -18,13 +18,15 @@ interface VolumeDataObserver {
   onVolumeLoadError: (vol: Volume, error: unknown) => void;
 }
 
+type VolumeEvent<T = void> = T & { volume: Volume };
+
 export type VolumeEvents = {
-  loadStart: void;
-  loadChannel: { channelIndex: number };
-  loadEnd: void;
-  loadError: { error: unknown };
-  channelAdded: { channelIndex: number };
-  channelRemoved: { channelIndex: number };
+  loadStart: VolumeEvent;
+  loadChannel: VolumeEvent<{ channelIndex: number }>;
+  loadEnd: VolumeEvent;
+  loadError: VolumeEvent<{ error: unknown }>;
+  channelAdded: VolumeEvent<{ channelIndex: number }>;
+  channelRemoved: VolumeEvent<{ channelIndex: number }>;
 };
 
 /**
@@ -160,7 +162,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
       const removedChannel = this.channels.pop();
       removedChannel?.dispose();
       this.volumeDataObservers.forEach((observer) => observer.onVolumeChannelRemoved(this, channelIndex));
-      this.dispatchEvent({ type: "channelRemoved", channelIndex });
+      this.dispatchEvent({ type: "channelRemoved", volume: this, channelIndex });
     }
 
     while (this.channels.length < this.imageInfo.numChannels) {
@@ -248,7 +250,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
       return this.loader?.getDims(this.loadSpecRequired);
     } catch (error) {
       this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, error));
-      this.dispatchEvent({ type: "loadError", error });
+      this.dispatchEvent({ type: "loadError", volume: this, error });
       return undefined;
     }
   }
@@ -319,7 +321,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
       );
     } catch (error) {
       this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, error));
-      this.dispatchEvent({ type: "loadError", error });
+      this.dispatchEvent({ type: "loadError", volume: this, error });
       throw error;
     }
   }
@@ -368,7 +370,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
   }
 
   onChannelLoaded(channelIndex: number): void {
-    this.dispatchEvent({ type: "loadChannel", channelIndex });
+    this.dispatchEvent({ type: "loadChannel", volume: this, channelIndex });
     // check to see if all channels are now loaded, and fire an event
     if (this.loadSpec.channels.every((channelIndex) => this.channels[channelIndex].loaded)) {
       this.loaded = true;
@@ -453,7 +455,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     this.channels.push(new Channel(chname));
 
     this.volumeDataObservers.forEach((observer) => observer.onVolumeChannelAdded(this, channelIndex));
-    this.dispatchEvent({ type: "channelAdded", channelIndex });
+    this.dispatchEvent({ type: "channelAdded", volume: this, channelIndex });
 
     return channelIndex;
   }
