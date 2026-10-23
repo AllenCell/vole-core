@@ -906,7 +906,6 @@ function onChannelDataArrived(v: Volume, channelIndex: number) {
 
   // optionally can set the LUT here (for example if this is first time loading)
 
-  view3D.onVolumeData(currentVol, channelIndex);
   view3D.setVolumeChannelEnabled(currentVol, channelIndex, myState.channelGui[channelIndex].enabled);
 
   view3D.updateActiveChannels(currentVol);
