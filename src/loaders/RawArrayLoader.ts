@@ -124,7 +124,7 @@ class RawArrayLoader implements VolumeLoader {
     return { imageInfo: convertImageInfo(this.jsonInfo, this.data.dtype), loadSpec };
   }
 
-  loadRawChannelData(
+  loadData(
     imageInfo: ImageInfo,
     loadSpec: LoadSpec,
     onUpdateMetadata: (imageInfo: undefined, loadSpec: LoadSpec) => void,

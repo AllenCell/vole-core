@@ -618,7 +618,7 @@ class OMEZarrLoader implements VolumeLoader {
     }
   }
 
-  async loadRawChannelData(
+  async loadData(
     imageInfo: ImageInfo,
     loadSpec: LoadSpec,
     onUpdateMetadata: (imageInfo: ImageInfo) => void,

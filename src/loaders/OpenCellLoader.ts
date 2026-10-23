@@ -52,7 +52,7 @@ class OpenCellLoader implements VolumeLoader {
     return { imageInfo: imgdata, loadSpec: new LoadSpec() };
   }
 
-  loadRawChannelData(
+  loadData(
     imageInfo: ImageInfo,
     _loadSpec: LoadSpec,
     _onUpdateMetadata: () => void,

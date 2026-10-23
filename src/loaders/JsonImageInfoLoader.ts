@@ -161,7 +161,7 @@ class JsonImageInfoLoader implements VolumeLoader {
     return { imageInfo: jsonToImageInfo(jsonInfo), loadSpec };
   }
 
-  async loadRawChannelData(
+  async loadData(
     imageInfo: ImageInfo,
     loadSpec: LoadSpec,
     onUpdateMetadata: (imageInfo: undefined, loadSpec?: LoadSpec) => void,

@@ -66,7 +66,7 @@ function createTestLoader(imageInfo: ImageInfo): VolumeLoader {
     getImageInfo: vi.fn((loadSpec) => ({ imageInfo, loadSpec })),
     setPrefetchPriority: vi.fn(),
     syncMultichannelLoading: vi.fn(),
-    loadRawChannelData: vi.fn(),
+    loadData: vi.fn(),
     updateFetchOptions: vi.fn(),
   };
 }

@@ -128,7 +128,7 @@ export interface VolumeLoader {
    *
    * The returned promise should resolve when all data has been loaded, or reject if any error occurs while loading.
    */
-  loadRawChannelData(
+  loadData(
     imageInfo: ImageInfo,
     loadSpec: LoadSpec,
     onUpdateVolumeMetadata: (imageInfo?: ImageInfo, loadSpec?: LoadSpec) => void,
