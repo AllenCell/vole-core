@@ -119,6 +119,7 @@ export default class VolumeDrawable {
         chIndex: index,
         lut: new Uint8Array(LUT_ARRAY_LENGTH),
         rgbColor: rgbColor,
+        opacity: options.channels?.[index]?.opacity ?? 1,
       };
     });
 
@@ -255,6 +256,9 @@ export default class VolumeDrawable {
     }
     if (options.color !== undefined) {
       this.updateChannelColor(channelIndex, options.color);
+    }
+    if (options.opacity !== undefined) {
+      this.updateChannelOpacity(channelIndex, options.opacity);
     }
     if (options.isosurfaceEnabled !== undefined) {
       const hasIso = this.hasIsosurface(channelIndex);
@@ -637,6 +641,7 @@ export default class VolumeDrawable {
         this.channelColors[newChannelIndex][1],
         this.channelColors[newChannelIndex][2],
       ],
+      opacity: this.channelOptions[newChannelIndex].opacity ?? 1,
     };
 
     this.settings.diffuse[newChannelIndex] = [
@@ -681,6 +686,13 @@ export default class VolumeDrawable {
   isVolumeChannelEnabled(channelIndex: number): boolean {
     // the zero value for the fusion rgbColor is the indicator that a channel is hidden.
     return this.fusion[channelIndex].rgbColor !== 0;
+  }
+
+  updateChannelOpacity(channelIndex: number, opacity: number): void {
+    this.channelOptions[channelIndex].opacity = opacity;
+    this.fusion[channelIndex].opacity = opacity;
+    // Request fusion to apply opacity
+    this.fuse();
   }
 
   // Set the color for a channel
