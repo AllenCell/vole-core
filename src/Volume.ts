@@ -22,6 +22,9 @@ export type VolumeEvents = {
   loadStart: void;
   loadChannel: { channelIndex: number };
   loadEnd: void;
+  loadError: { error: unknown };
+  channelAdded: { channelIndex: number };
+  channelRemoved: { channelIndex: number };
 };
 
 /**
@@ -153,10 +156,11 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
 
   updateChannelCount() {
     while (this.channels.length > this.imageInfo.numChannels) {
-      const removedIndex = this.channels.length - 1;
+      const channelIndex = this.channels.length - 1;
       const removedChannel = this.channels.pop();
       removedChannel?.dispose();
-      this.volumeDataObservers.forEach((observer) => observer.onVolumeChannelRemoved(this, removedIndex));
+      this.volumeDataObservers.forEach((observer) => observer.onVolumeChannelRemoved(this, channelIndex));
+      this.dispatchEvent({ type: "channelRemoved", channelIndex });
     }
 
     while (this.channels.length < this.imageInfo.numChannels) {
@@ -242,8 +246,9 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
   private async loadScaleLevelDims(): Promise<VolumeDims[] | undefined> {
     try {
       return this.loader?.getDims(this.loadSpecRequired);
-    } catch (e) {
-      this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, e));
+    } catch (error) {
+      this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, error));
+      this.dispatchEvent({ type: "loadError", error });
       return undefined;
     }
   }
@@ -312,9 +317,10 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
         this.updateMetadata.bind(this),
         this.onChannelData.bind(this)
       );
-    } catch (e) {
-      this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, e));
-      throw e;
+    } catch (error) {
+      this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, error));
+      this.dispatchEvent({ type: "loadError", error });
+      throw error;
     }
   }
 
@@ -437,18 +443,19 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
    * @param {Array.<number>} color [r,g,b]
    */
   appendEmptyChannel(name: string, color?: [number, number, number]): number {
-    const idx = this.channels.length;
-    const chname = name || "channel_" + idx;
-    const chcolor = color || getColorByChannelIndex(idx);
+    const channelIndex = this.channels.length;
+    const chname = name || "channel_" + channelIndex;
+    const chcolor = color || getColorByChannelIndex(channelIndex);
     this.numChannels += 1;
     this.channelNames.push(chname);
     this.channelColorsDefault.push(chcolor);
 
     this.channels.push(new Channel(chname));
 
-    this.volumeDataObservers.forEach((observer) => observer.onVolumeChannelAdded(this, idx));
+    this.volumeDataObservers.forEach((observer) => observer.onVolumeChannelAdded(this, channelIndex));
+    this.dispatchEvent({ type: "channelAdded", channelIndex });
 
-    return idx;
+    return channelIndex;
   }
 
   /**
