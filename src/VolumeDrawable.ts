@@ -119,7 +119,7 @@ export default class VolumeDrawable {
         chIndex: index,
         lut: new Uint8Array(LUT_ARRAY_LENGTH),
         rgbColor: rgbColor,
-        opacity: options.channels?.[index].opacity ?? 1,
+        opacity: options.channels?.[index]?.opacity ?? 1,
       };
     });
 

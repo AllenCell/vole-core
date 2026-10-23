@@ -7,6 +7,7 @@ precision highp sampler3D;
 uniform sampler2D lutSampler;
 
 uniform vec2 lutMinMax;
+uniform float opacity;
 
 // src texture is the raw volume intensity data
 uniform usampler2D srcTexture;
@@ -17,5 +18,6 @@ void main() {
     float ilookup = float(float(intensity) - lutMinMax.x) / float(lutMinMax.y - lutMinMax.x);
     // apply lut to intensity:
     vec4 pix = texture(lutSampler, vec2(ilookup, 0.5));
-    gl_FragColor = pix;
+    pix.a = pix.a * opacity;
+    gl_FragColor = vec4(pix.rgb * pix.a, pix.a);
 }

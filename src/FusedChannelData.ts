@@ -134,6 +134,7 @@ export default class FusedChannelData {
           value: null,
         },
         lutMinMax: { value: new Vector2(0, 255) },
+        opacity: { value: 1.0 },
         srcTexture: {
           value: null,
         },
@@ -233,7 +234,7 @@ export default class FusedChannelData {
       if (channels[idx].loaded) {
         // set the lut in this fuse combination.
         // can optimize by calling combineLuts more lazily
-        c.lut = channels[idx].combineLuts(c.rgbColor, c.opacity, c.lut);
+        c.lut = channels[idx].combineLuts(c.rgbColor, c.lut);
         if (c.rgbColor) {
           readyToFuse.push({
             ...c,
@@ -313,6 +314,7 @@ export default class FusedChannelData {
         // the lut texture is spanning only the data range of the channel, not the datatype range
         mat.uniforms.lutMinMax.value = new Vector2(snap.rawMin, snap.rawMax);
         mat.uniforms.lutSampler.value = snap.lutTexture;
+        mat.uniforms.opacity.value = combination[i].opacity;
       }
       this.fuseScene.add(new Mesh(this.fuseGeometry, mat));
     }
