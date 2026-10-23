@@ -4,7 +4,7 @@ import { throttledQueue } from "throttled-queue";
 import { ImageInfo } from "../ImageInfo.js";
 import { VolumeDims } from "../VolumeDims.js";
 import { CreateLoaderOptions, PrefetchDirection, VolumeFileFormat, pathToFileType } from "../loaders/index.js";
-import { VolumeLoader, LoadSpec, RawChannelDataCallback, LoadedVolumeInfo } from "../loaders/VolumeLoader.js";
+import type { VolumeLoader, LoadSpec, RawChannelDataCallback, LoadedVolumeInfo } from "../loaders/VolumeLoader.js";
 import { RawArrayLoader } from "../loaders/RawArrayLoader.js";
 import { TiffLoader } from "../loaders/TiffLoader.js";
 import type {
@@ -237,7 +237,7 @@ class VolumeLoaderContext {
  *
  * Created with `VolumeLoaderContext.createLoader`. See its documentation for more.
  */
-class WorkerLoader extends VolumeLoader {
+class WorkerLoader implements VolumeLoader {
   private currentLoadId = -1;
   private currentLoadCallback: RawChannelDataCallback | undefined = undefined;
   private currentMetadataUpdateCallback: ((imageInfo?: ImageInfo, loadSpec?: LoadSpec) => void) | undefined = undefined;
@@ -247,9 +247,7 @@ class WorkerLoader extends VolumeLoader {
     private meta: VolumeLoaderMetadata,
     private workerHandle: SharedLoadWorkerHandle,
     private context: VolumeLoaderContext
-  ) {
-    super();
-  }
+  ) {}
 
   private getLoaderId(): number {
     if (this.loaderId === undefined || !this.workerHandle.isOpen) {
@@ -311,7 +309,7 @@ class WorkerLoader extends VolumeLoader {
     }
   }
 
-  loadRawChannelData(
+  loadData(
     imageInfo: ImageInfo,
     loadSpec: LoadSpec,
     onUpdateMetadata: (imageInfo?: ImageInfo, loadSpec?: LoadSpec) => void,

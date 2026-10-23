@@ -94,7 +94,7 @@ const messageHandlers: { [T in WorkerMsgType]: MessageHandler<T> } = {
   [WorkerMsgType.LOAD_VOLUME_DATA]: ({ imageInfo, loadSpec, loadId }, loaderId) => {
     const { loader, copyOnLoad } = getLoader(loaderId);
 
-    return loader.loadRawChannelData(
+    return loader.loadData(
       imageInfo,
       loadSpec,
       (imageInfo, loadSpec) => {

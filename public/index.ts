@@ -4,11 +4,9 @@ import GUI from "lil-gui";
 import { colormaps as colorizercolormaps, features as colorizerfeatures } from "./colorizer.js";
 import {
   CreateLoaderOptions,
-  ImageInfo,
   VolumeLoader,
   LoadSpec,
   Lut,
-  JsonImageInfoLoader,
   RawArrayInfo,
   View3d,
   Volume,
@@ -908,7 +906,6 @@ function onChannelDataArrived(v: Volume, channelIndex: number) {
 
   // optionally can set the LUT here (for example if this is first time loading)
 
-  view3D.onVolumeData(currentVol, [channelIndex]);
   view3D.setVolumeChannelEnabled(currentVol, channelIndex, myState.channelGui[channelIndex].enabled);
 
   view3D.updateActiveChannels(currentVol);
@@ -971,29 +968,36 @@ function setLowResPreview(enabled: boolean) {
 }
 
 function playTimeSeries(onNewFrameCallback: () => void) {
+  if (myState.isPlaying) {
+    return;
+  }
+  if (myState.currentFrame >= getNumberOfTimesteps() - 1) {
+    myState.currentFrame = -1;
+  }
   window.clearTimeout(myState.timerId);
   setSyncMultichannelLoading(true);
   myState.isPlaying = true;
+  myState.lastFrameTime = Date.now();
 
-  const loadNextFrame = () => {
-    myState.lastFrameTime = Date.now();
-    const nextFrame = (myState.currentFrame + 1) % getNumberOfTimesteps();
-
-    // TODO would be real nice if this were an `await`-able promise instead...
-    view3D.setTime(myState.volume, nextFrame, (vol) => {
-      if (vol.isLoaded()) {
+  const advanceTime = () => {
+    console.log("advanceTime");
+    if (myState.isPlaying) {
+      onNewFrameCallback();
+      const nextFrame = (myState.currentFrame + 1) % getNumberOfTimesteps();
+      const now = Date.now();
+      const timeLoading = now - myState.lastFrameTime;
+      myState.lastFrameTime = now;
+      const timeout = Math.max(PLAYBACK_INTERVAL - timeLoading, 0);
+      window.setTimeout(() => {
+        view3D.setTime(myState.volume, nextFrame);
         myState.currentFrame = nextFrame;
-        onNewFrameCallback();
-
-        if (myState.isPlaying) {
-          const timeLoading = Date.now() - myState.lastFrameTime;
-          myState.timerId = window.setTimeout(loadNextFrame, PLAYBACK_INTERVAL - timeLoading);
-        }
-      }
-    });
+      }, timeout);
+    } else {
+      myState.volume.removeEventListener("loadEnd", advanceTime);
+    }
   };
-
-  loadNextFrame();
+  myState.volume.addEventListener("loadEnd", advanceTime);
+  advanceTime();
 }
 
 function getCurrentFrame() {
@@ -1113,8 +1117,8 @@ async function loadVolume(name: string, loadSpec: LoadSpec, loader: VolumeLoader
       channels.push(idx);
     }
   });
-  volume.channelLoadCallback = onChannelDataArrived;
-  loader.loadVolumeData(volume, { ...volume.loadSpec, channels });
+  volume.addEventListener("loadChannel", ({ channelIndex }) => onChannelDataArrived(volume, channelIndex));
+  volume.load();
 
   // Set default slice index
   goToZSlice(Math.floor(volume.imageInfo.subregionSize.z / 2));
@@ -1330,9 +1334,6 @@ function main() {
   });
   const playBtn = document.getElementById("playBtn");
   playBtn?.addEventListener("click", () => {
-    if (myState.currentFrame >= getNumberOfTimesteps() - 1) {
-      myState.currentFrame = -1;
-    }
     playTimeSeries(() => {
       if (timeInput) {
         timeInput.value = "" + getCurrentFrame();

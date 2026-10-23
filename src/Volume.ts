@@ -4,29 +4,22 @@ import Channel from "./Channel.js";
 import Histogram from "./Histogram.js";
 import { Lut } from "./Lut.js";
 import { getColorByChannelIndex } from "./constants/colors.js";
-import {
-  cloneLoadSpec,
-  defaultLoadSpec,
-  LoadSpec,
-  regionToBox3,
-  type PerChannelCallback,
-  type VolumeLoader,
-} from "./loaders/VolumeLoader.js";
+import { cloneLoadSpec, defaultLoadSpec, LoadSpec, regionToBox3, type VolumeLoader } from "./loaders/VolumeLoader.js";
 import { pickLevelToLoadUnscaled } from "./loaders/VolumeLoaderUtils.js";
 import type { NumberType, TypedArray } from "./types.js";
-import { CImageInfo, createDefaultMetadata, defaultImageInfo } from "./ImageInfo.js";
+import { CImageInfo, createDefaultMetadata, defaultImageInfo, type ImageInfo } from "./ImageInfo.js";
 import type { VolumeDims } from "./VolumeDims.js";
 import EventDispatcher from "./EventDispatcher.js";
 
-interface VolumeDataObserver {
-  onVolumeData: (vol: Volume, batch: number[]) => void;
-  onVolumeChannelAdded: (vol: Volume, idx: number) => void;
-  onVolumeChannelRemoved: (vol: Volume, idx: number) => void;
-  onVolumeLoadError: (vol: Volume, error: unknown) => void;
-}
+type VolumeEvent<T = void> = T & { volume: Volume };
 
 export type VolumeEvents = {
-  loadStart: void;
+  loadStart: VolumeEvent;
+  loadChannel: VolumeEvent<{ channelIndex: number }>;
+  loadEnd: VolumeEvent;
+  loadError: VolumeEvent<{ error: unknown }>;
+  channelAdded: VolumeEvent<{ channelIndex: number }>;
+  channelRemoved: VolumeEvent<{ channelIndex: number }>;
 };
 
 /**
@@ -42,7 +35,6 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
    * Used to intelligently issue load requests whenever required by a state change. Modify with `updateRequiredData`.
    */
   public loadSpecRequired: Required<LoadSpec>;
-  public channelLoadCallback?: PerChannelCallback;
   public imageMetadata: Record<string, unknown>;
 
   public channels: Channel[];
@@ -80,7 +72,6 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
   public physicalUnitSymbol: string;
   public tickMarkPhysicalLength: number;
 
-  private volumeDataObservers: VolumeDataObserver[];
   private loaded: boolean;
 
   constructor(loader?: VolumeLoader, spec: LoadSpec = new LoadSpec()) {
@@ -133,8 +124,6 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     }
 
     this.physicalUnitSymbol = this.imageInfo.spatialUnit;
-
-    this.volumeDataObservers = [];
   }
 
   private setUnloaded() {
@@ -159,10 +148,10 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
 
   updateChannelCount() {
     while (this.channels.length > this.imageInfo.numChannels) {
-      const removedIndex = this.channels.length - 1;
+      const channelIndex = this.channels.length - 1;
       const removedChannel = this.channels.pop();
       removedChannel?.dispose();
-      this.volumeDataObservers.forEach((observer) => observer.onVolumeChannelRemoved(this, removedIndex));
+      this.dispatchEvent({ type: "channelRemoved", volume: this, channelIndex });
     }
 
     while (this.channels.length < this.imageInfo.numChannels) {
@@ -214,7 +203,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
   }
 
   /** Call on any state update that may require new data to be loaded (subregion, enabled channels, time, etc.) */
-  async updateRequiredData(required: Partial<LoadSpec>, onChannelLoaded?: PerChannelCallback): Promise<void> {
+  async updateRequiredData(required: Partial<LoadSpec>): Promise<void> {
     this.loadSpecRequired = { ...this.loadSpecRequired, ...required };
     let shouldReload = this.mustLoadNewData();
 
@@ -229,7 +218,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     }
 
     if (shouldReload) {
-      await this.loadNewData(onChannelLoaded);
+      await this.load();
     }
   }
 
@@ -248,26 +237,79 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
   private async loadScaleLevelDims(): Promise<VolumeDims[] | undefined> {
     try {
       return this.loader?.getDims(this.loadSpecRequired);
-    } catch (e) {
-      this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, e));
+    } catch (error) {
+      this.dispatchEvent({ type: "loadError", volume: this, error });
       return undefined;
     }
+  }
+
+  private updateMetadata(imageInfo?: ImageInfo, loadSpec?: LoadSpec): void {
+    if (imageInfo) {
+      this.imageInfo = new CImageInfo(imageInfo);
+      this.imageMetadata = { ...this.imageMetadata, ...createDefaultMetadata(imageInfo) };
+      this.updateDimensions();
+      this.updateChannelCount();
+    }
+    this.loadSpec = { ...this.loadSpec, ...loadSpec };
+  }
+
+  private onChannelData(
+    channelIndexes: number[],
+    types: NumberType[],
+    arrs: TypedArray[],
+    ranges: [number, number][],
+    atlasDims?: [number, number]
+  ): void {
+    channelIndexes.forEach((channelIndex, i) => {
+      const dtype = types[i];
+      const data = arrs[i];
+      const range = ranges[i];
+      const time = this.loadSpec.time;
+      if (atlasDims !== undefined) {
+        const [width, height] = atlasDims;
+        this.setChannelDataFromAtlas(channelIndex, data, width, height, range, dtype, time);
+      } else {
+        this.setChannelDataFromVolume(channelIndex, data, range, dtype, time);
+      }
+    });
+  }
+
+  setLoader(loader: VolumeLoader, spec?: Partial<LoadSpec>): void {
+    const infoSpec = { ...this.loadSpecRequired, ...spec };
+    this.loader = loader;
+    // TODO pass in load specs here?
+    const { loadSpec, imageInfo } = loader.getImageInfo(infoSpec);
+    this.imageInfo.imageInfo = imageInfo;
+    this.imageMetadata = createDefaultMetadata(imageInfo);
+    const maxTime = imageInfo.multiscaleLevelDims[imageInfo.multiscaleLevel].shape[0] - 1;
+    const adjustedSpec = {
+      ...loadSpec,
+      channels: loadSpec.channels?.filter((i) => i < imageInfo.channelNames.length) ?? [],
+      time: Math.min(loadSpec.time, maxTime),
+    };
+    this.loadSpecRequired = { ...this.loadSpecRequired, ...adjustedSpec };
+    this.loadSpec = cloneLoadSpec(this.loadSpecRequired);
   }
 
   /**
    * Loads new data as specified in `this.loadSpecRequired`. Clones `loadSpecRequired` into `loadSpec` to indicate
    * that the data that *must* be loaded is now the data that *has* been loaded.
    */
-  private async loadNewData(onChannelLoaded?: PerChannelCallback): Promise<void> {
+  async load(): Promise<void> {
     this.setUnloaded();
     this.loadSpec = cloneLoadSpec(this.loadSpecRequired);
     this.dispatchEvent({ type: "loadStart" });
 
     try {
-      await this.loader?.loadVolumeData(this, undefined, onChannelLoaded);
-    } catch (e) {
-      this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, e));
-      throw e;
+      await this.loader?.loadData(
+        this.imageInfo.imageInfo,
+        this.loadSpec,
+        this.updateMetadata.bind(this),
+        this.onChannelData.bind(this)
+      );
+    } catch (error) {
+      this.dispatchEvent({ type: "loadError", volume: this, error });
+      throw error;
     }
   }
 
@@ -314,13 +356,13 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     return this.channels[channelIndex];
   }
 
-  onChannelLoaded(batch: number[]): void {
-    // check to see if all channels are now loaded, and fire an event(?)
+  onChannelLoaded(channelIndex: number): void {
+    this.dispatchEvent({ type: "loadChannel", volume: this, channelIndex });
+    // check to see if all channels are now loaded, and fire an event
     if (this.loadSpec.channels.every((channelIndex) => this.channels[channelIndex].loaded)) {
       this.loaded = true;
+      this.dispatchEvent({ type: "loadEnd" });
     }
-    batch.forEach((channelIndex) => this.channelLoadCallback?.(this, channelIndex));
-    this.volumeDataObservers.forEach((observer) => observer.onVolumeData(this, batch));
   }
 
   /**
@@ -349,7 +391,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
       this.imageInfo.subregionSize,
       time
     );
-    this.onChannelLoaded([channelIndex]);
+    this.onChannelLoaded(channelIndex);
   }
 
   // ASSUMES that this.channelData.options is already set and incoming data is consistent with it
@@ -378,7 +420,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
       dtype,
       time
     );
-    this.onChannelLoaded([channelIndex]);
+    this.onChannelLoaded(channelIndex);
   }
 
   // TODO: decide if this should update imageInfo or not. For now, leave imageInfo alone as the "original" data
@@ -389,18 +431,18 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
    * @param {Array.<number>} color [r,g,b]
    */
   appendEmptyChannel(name: string, color?: [number, number, number]): number {
-    const idx = this.channels.length;
-    const chname = name || "channel_" + idx;
-    const chcolor = color || getColorByChannelIndex(idx);
+    const channelIndex = this.channels.length;
+    const chname = name || "channel_" + channelIndex;
+    const chcolor = color || getColorByChannelIndex(channelIndex);
     this.numChannels += 1;
     this.channelNames.push(chname);
     this.channelColorsDefault.push(chcolor);
 
     this.channels.push(new Channel(chname));
 
-    this.volumeDataObservers.forEach((observer) => observer.onVolumeChannelAdded(this, idx));
+    this.dispatchEvent({ type: "channelAdded", volume: this, channelIndex });
 
-    return idx;
+    return channelIndex;
   }
 
   /**
@@ -478,22 +520,5 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     // account for pixel_size and normalized scaling in the threejs volume representation we're using
     const m = 1.0 / Math.max(this.physicalSize.x, Math.max(this.physicalSize.y, this.physicalSize.z));
     return new Vector3().fromArray(xyz).multiply(this.physicalPixelSize).multiplyScalar(m).toArray();
-  }
-
-  addVolumeDataObserver(o: VolumeDataObserver): void {
-    this.volumeDataObservers.push(o);
-  }
-
-  removeVolumeDataObserver(o: VolumeDataObserver): void {
-    if (o) {
-      const i = this.volumeDataObservers.indexOf(o);
-      if (i !== -1) {
-        this.volumeDataObservers.splice(i, 1);
-      }
-    }
-  }
-
-  removeAllVolumeDataObservers(): void {
-    this.volumeDataObservers = [];
   }
 }

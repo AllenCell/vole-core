@@ -1,7 +1,7 @@
 import { fromUrl, type GeoTIFF, type GeoTIFFImage } from "geotiff";
 import { ErrorObject, deserializeError } from "serialize-error";
 
-import { VolumeLoader, LoadSpec, type RawChannelDataCallback, type LoadedVolumeInfo } from "./VolumeLoader.js";
+import { type VolumeLoader, LoadSpec, type RawChannelDataCallback, type LoadedVolumeInfo } from "./VolumeLoader.js";
 import { computePackedAtlasDims, MAX_ATLAS_EDGE } from "./VolumeLoaderUtils.js";
 import { VolumeLoadError, VolumeLoadErrorType, wrapVolumeLoadError } from "./VolumeLoadError.js";
 import { type ImageInfo, CImageInfo } from "../ImageInfo.js";
@@ -123,13 +123,11 @@ const getPixelType = (pxSize: number): string => (pxSize === 1 ? "uint8" : pxSiz
 
 // Despite the class `TiffLoader` extends, this loader is not threadable, since geotiff internally uses features that
 // aren't available on workers. It uses its own specialized workers anyways.
-class TiffLoader extends VolumeLoader {
+class TiffLoader implements VolumeLoader {
   private constructor(
     private url: string[],
     private dims: OMEDims
-  ) {
-    super();
-  }
+  ) {}
 
   static async new(url: string[]): Promise<TiffLoader> {
     const remappedUrl = url.map(remapUri);
@@ -267,7 +265,7 @@ class TiffLoader extends VolumeLoader {
     return { imageInfo: imgdata, loadSpec: new LoadSpec() };
   }
 
-  async loadRawChannelData(
+  async loadData(
     imageInfo: ImageInfo,
     _loadSpec: LoadSpec,
     _onUpdateMetadata: () => void,
@@ -319,6 +317,18 @@ class TiffLoader extends VolumeLoader {
 
     // waiting for all channels to load allows errors to propagate to the caller via this promise
     await Promise.all(channelProms);
+  }
+
+  setPrefetchPriority() {
+    // noop
+  }
+
+  syncMultichannelLoading() {
+    // noop
+  }
+
+  updateFetchOptions() {
+    // noop
   }
 }
 
