@@ -301,7 +301,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     this.dispatchEvent({ type: "loadStart" });
 
     try {
-      await this.loader?.loadRawChannelData(
+      await this.loader?.loadData(
         this.imageInfo.imageInfo,
         this.loadSpec,
         this.updateMetadata.bind(this),
