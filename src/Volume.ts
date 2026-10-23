@@ -11,13 +11,6 @@ import { CImageInfo, createDefaultMetadata, defaultImageInfo, type ImageInfo } f
 import type { VolumeDims } from "./VolumeDims.js";
 import EventDispatcher from "./EventDispatcher.js";
 
-interface VolumeDataObserver {
-  onVolumeData: (vol: Volume, channel: number) => void;
-  onVolumeChannelAdded: (vol: Volume, idx: number) => void;
-  onVolumeChannelRemoved: (vol: Volume, idx: number) => void;
-  onVolumeLoadError: (vol: Volume, error: unknown) => void;
-}
-
 type VolumeEvent<T = void> = T & { volume: Volume };
 
 export type VolumeEvents = {
@@ -79,7 +72,6 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
   public physicalUnitSymbol: string;
   public tickMarkPhysicalLength: number;
 
-  private volumeDataObservers: VolumeDataObserver[];
   private loaded: boolean;
 
   constructor(loader?: VolumeLoader, spec: LoadSpec = new LoadSpec()) {
@@ -132,8 +124,6 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     }
 
     this.physicalUnitSymbol = this.imageInfo.spatialUnit;
-
-    this.volumeDataObservers = [];
   }
 
   private setUnloaded() {
@@ -161,7 +151,6 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
       const channelIndex = this.channels.length - 1;
       const removedChannel = this.channels.pop();
       removedChannel?.dispose();
-      this.volumeDataObservers.forEach((observer) => observer.onVolumeChannelRemoved(this, channelIndex));
       this.dispatchEvent({ type: "channelRemoved", volume: this, channelIndex });
     }
 
@@ -249,7 +238,6 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     try {
       return this.loader?.getDims(this.loadSpecRequired);
     } catch (error) {
-      this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, error));
       this.dispatchEvent({ type: "loadError", volume: this, error });
       return undefined;
     }
@@ -320,7 +308,6 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
         this.onChannelData.bind(this)
       );
     } catch (error) {
-      this.volumeDataObservers.forEach((observer) => observer.onVolumeLoadError(this, error));
       this.dispatchEvent({ type: "loadError", volume: this, error });
       throw error;
     }
@@ -376,7 +363,6 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
       this.loaded = true;
       this.dispatchEvent({ type: "loadEnd" });
     }
-    this.volumeDataObservers.forEach((observer) => observer.onVolumeData(this, channelIndex));
   }
 
   /**
@@ -454,7 +440,6 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
 
     this.channels.push(new Channel(chname));
 
-    this.volumeDataObservers.forEach((observer) => observer.onVolumeChannelAdded(this, channelIndex));
     this.dispatchEvent({ type: "channelAdded", volume: this, channelIndex });
 
     return channelIndex;
@@ -535,22 +520,5 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     // account for pixel_size and normalized scaling in the threejs volume representation we're using
     const m = 1.0 / Math.max(this.physicalSize.x, Math.max(this.physicalSize.y, this.physicalSize.z));
     return new Vector3().fromArray(xyz).multiply(this.physicalPixelSize).multiplyScalar(m).toArray();
-  }
-
-  addVolumeDataObserver(o: VolumeDataObserver): void {
-    this.volumeDataObservers.push(o);
-  }
-
-  removeVolumeDataObserver(o: VolumeDataObserver): void {
-    if (o) {
-      const i = this.volumeDataObservers.indexOf(o);
-      if (i !== -1) {
-        this.volumeDataObservers.splice(i, 1);
-      }
-    }
-  }
-
-  removeAllVolumeDataObservers(): void {
-    this.volumeDataObservers = [];
   }
 }
