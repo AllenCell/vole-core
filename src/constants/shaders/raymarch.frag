@@ -110,8 +110,8 @@ vec4 sampleAtlasLinear(sampler2D tex, vec4 pos) {
   // take mask from 0..1 to alpha..1
   maskVal = mix(maskVal, 1.0, maskAlpha);
   vec4 retval = mix(slice0Color, slice1Color, t);
-  // only mask the rgb, not the alpha(?)
-  retval.rgb *= maskVal;
+  // darken RGB + mask alpha
+  retval *= maskVal;
   return bounds * retval;
 }
 
@@ -141,7 +141,7 @@ vec4 sampleAtlasNearest(sampler2D tex, vec4 pos) {
   // Apply mask
   float voxelMask = texture2D(textureAtlasMask, o).x;
   voxelMask = mix(voxelMask, 1.0, maskAlpha);
-  voxelColor.rgb *= voxelMask;
+  voxelColor *= voxelMask;
 
   return bounds * voxelColor;
 }
