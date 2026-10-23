@@ -691,6 +691,8 @@ export default class VolumeDrawable {
   updateChannelOpacity(channelIndex: number, opacity: number): void {
     this.channelOptions[channelIndex].opacity = opacity;
     this.fusion[channelIndex].opacity = opacity;
+    // Request fusion to apply opacity
+    this.fuse();
   }
 
   // Set the color for a channel
