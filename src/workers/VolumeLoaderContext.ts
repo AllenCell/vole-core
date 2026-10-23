@@ -309,7 +309,7 @@ class WorkerLoader implements VolumeLoader {
     }
   }
 
-  loadRawChannelData(
+  loadData(
     imageInfo: ImageInfo,
     loadSpec: LoadSpec,
     onUpdateMetadata: (imageInfo?: ImageInfo, loadSpec?: LoadSpec) => void,

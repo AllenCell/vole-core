@@ -265,7 +265,7 @@ class TiffLoader implements VolumeLoader {
     return { imageInfo: imgdata, loadSpec: new LoadSpec() };
   }
 
-  async loadRawChannelData(
+  async loadData(
     imageInfo: ImageInfo,
     _loadSpec: LoadSpec,
     _onUpdateMetadata: () => void,
