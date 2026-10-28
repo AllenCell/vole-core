@@ -501,6 +501,7 @@ export default class PathTracedVolume implements VolumeRenderImpl {
         i,
         this.volume.channels[channel].histogram.getMin() / 255.0
       );
+      this.pathTracingUniforms.gOpacity.value[i] = channelColors[channel].opacity;
     }
     this.pathTracingUniforms.gLutTexture.value.needsUpdate = true;
 
