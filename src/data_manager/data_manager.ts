@@ -26,7 +26,7 @@ const getIdForSubscriber = defineGlobalId<IDataSubscriber<any>>(Symbol("DataMana
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface IDataSubscriber<Tex = any> {
-  onChunkLoaded?: (id: ChunkId, chunk: Chunk<NumberType>) => void;
+  onChunkLoaded?: (id: ChunkId, chunk: BorrowGuard<TypedArray>) => void;
   onChunkOnGpu?: (id: ChunkId, texture: Tex) => void;
   // TODO events for when chunks are evicted?
 }
@@ -489,7 +489,7 @@ export default class DataManager<Dev = any, Tex = any> {
     this.queues.evict.insert(key, chunkEntry.memoryPriority);
 
     this.memorySize += memory.byteLength;
-    sourceEntry.subscribers.forEach((s) => s.onChunkLoaded?.(globalId, chunk));
+    sourceEntry.subscribers.forEach((s) => s.onChunkLoaded?.(globalId, memory));
 
     this.update();
   }
