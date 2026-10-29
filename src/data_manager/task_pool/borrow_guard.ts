@@ -26,11 +26,9 @@ export class BorrowGuard<T extends TypedArray = TypedArray> extends EventDispatc
     return this.array.buffer.detached;
   }
 
+  /** Attempts to get the `TypedArray` this guard contains. Returns `undefined` if the guard is borrowed by a task. */
   get(): T | undefined {
-    if (this.borrowed) {
-      return undefined;
-    }
-    return this.array;
+    return this.borrowed ? undefined : this.array;
   }
 
   getAsync(): Promise<T> {
