@@ -13,7 +13,7 @@ import {
   deviceSizeLimitForPriority,
 } from "./types.js";
 import type { NumberType, TypedArray } from "../types.js";
-import { defineGlobalId, swapRemove } from "./utils.js";
+import { defineGlobalId, getChunkDims, swapRemove } from "./utils.js";
 import PriorityQueue from "./priority_queue.js";
 import type { DeviceInterface } from "./device_interface.js";
 import { dataTypeToSize } from "./utils.js";
@@ -24,7 +24,8 @@ import { BorrowGuard } from "./task_pool/borrow_guard.js";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getIdForSubscriber = defineGlobalId<IDataSubscriber<any>>(Symbol("DataManager.subscriberId"));
 
-export interface IDataSubscriber<Tex> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface IDataSubscriber<Tex = any> {
   onChunkLoaded?: (id: ChunkId, chunk: Chunk<NumberType>) => void;
   onChunkOnGpu?: (id: ChunkId, texture: Tex) => void;
   // TODO events for when chunks are evicted?
@@ -53,7 +54,8 @@ class ChunkQueues {
   deviceEvict: ChunkQueue = new PriorityQueue(reverseComparePriority);
 }
 
-export default class DataManager<Dev, Tex> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default class DataManager<Dev = any, Tex = any> {
   /** Data and current state for every chunk of data tracked and managed by this class. */
   private chunks = new Map<string, ChunkEntry<Tex>>();
   private queues = new ChunkQueues();
@@ -179,21 +181,8 @@ export default class DataManager<Dev, Tex> {
       return undefined;
     }
 
-    const multiscale = sourceEntry.source.getDims()[chunkId.multiscale];
-    if (multiscale === undefined) {
-      return undefined;
-    }
-
-    const { shape, chunkShape, dataType } = multiscale;
-    const [, , iz, iy, ix] = chunkId.tczyx;
-    const [, , cz, cy, cx] = chunkShape;
-    const [, , sz, sy, sx] = shape;
-    // Chunks that abut the max edge of the volume in any dimension may be smaller in that dimension.
-    // e.g. for a volume with chunk size 10 & volume size 35 in x, chunks at x = 3 have size 5 in x.
-    const z = Math.min(cz, sz - cz * iz);
-    const y = Math.min(cy, sy - cy * iy);
-    const x = Math.min(cx, sx - cx * ix);
-    return { x, y, z, dataType };
+    const dims = sourceEntry.source.getDims();
+    return getChunkDims(chunkId, dims[chunkId.multiscale]);
   }
 
   private estimateChunkSize(chunkId: ChunkId): number {
