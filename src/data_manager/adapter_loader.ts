@@ -4,14 +4,14 @@ import { ThreadableVolumeLoader } from "../loaders/IVolumeLoader.js";
 import { VolumeDims } from "../VolumeDims.js";
 import DataManager, { IDataSubscriber } from "./data_manager.js";
 import { ExtVolumeDims, VolumeMetadata } from "./sources/chunk_source.js";
-import { ChunkPriorityLevel, LocalChunkId, type Chunk, type ChunkId } from "./types.js";
+import { ChunkPriorityLevel, LocalChunkId, type ChunkId } from "./types.js";
 import { computePackedAtlasDims, MAX_ATLAS_EDGE } from "../loaders/VolumeLoaderUtils.js";
 import { BorrowGuard } from "./task_pool/borrow_guard.js";
 import { ARRAY_CONSTRUCTORS, type TypedArray } from "../types.js";
 import { TaskPool } from "./task_pool/task_pool.js";
 import { getDataRange } from "../utils/num_utils.js";
 import { copyChunkTask } from "./index.js";
-import { copyChunk, CopyChunkParams } from "./indexing.js";
+import type { CopyChunkParams } from "./indexing.js";
 import { getChunkDims } from "./utils.js";
 
 // MARK: Utils
@@ -85,7 +85,7 @@ class ChannelAssembler {
     private dims: ExtVolumeDims,
     private chunks: Region,
     private onComplete: (data: TypedArray) => void,
-    private pool?: TaskPool
+    private pool: TaskPool
   ) {
     const [x, y, z] = subtract(chunks.max, chunks.min);
     const chunkCount = x * y * z;
@@ -120,15 +120,7 @@ class ChannelAssembler {
     this.chunksReceived[receivedIndex] = true;
 
     const params = this.getParams(id);
-
-    if (this.pool !== undefined) {
-      await this.pool.runTask(copyChunkTask, chunk, this.data, params);
-    } else {
-      // TODO this is not maximally robust
-      const channelData = await this.data.getAsync();
-      const chunkData = await chunk.getAsync();
-      copyChunk(chunkData, channelData, params);
-    }
+    await this.pool.runTask(copyChunkTask, chunk, this.data, params);
 
     if (this.chunksReceived.every((value) => value)) {
       const data = await this.data.getAsync();
@@ -158,7 +150,7 @@ export default class AdapterLoader extends ThreadableVolumeLoader implements IDa
   constructor(
     private manager: DataManager,
     private sourceId: number,
-    private pool?: TaskPool
+    private pool: TaskPool
   ) {
     super();
     const dims = manager.getSourceDims(sourceId);
@@ -358,7 +350,7 @@ export default class AdapterLoader extends ThreadableVolumeLoader implements IDa
     await Promise.all(channelPromises);
   }
 
-  onChunkLoaded(id: ChunkId, chunk: Chunk) {
+  onChunkLoaded(id: ChunkId, chunk: BorrowGuard<TypedArray>) {
     const [t, c] = id.tczyx;
     if (t !== this.currentExtent.t) {
       return;
@@ -369,7 +361,7 @@ export default class AdapterLoader extends ThreadableVolumeLoader implements IDa
       return;
     }
 
-    channel.set(id, chunk.data);
+    channel.set(id, chunk);
   }
 
   destroy() {
