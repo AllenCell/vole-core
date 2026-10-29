@@ -4,8 +4,17 @@ import { ThreadableVolumeLoader } from "../loaders/IVolumeLoader.js";
 import { VolumeDims } from "../VolumeDims.js";
 import DataManager, { IDataSubscriber } from "./data_manager.js";
 import { ExtVolumeDims, VolumeMetadata } from "./sources/chunk_source.js";
-import type { Chunk, ChunkId } from "./types.js";
+import { ChunkPriorityLevel, LocalChunkId, type Chunk, type ChunkId } from "./types.js";
 import { computePackedAtlasDims, MAX_ATLAS_EDGE } from "../loaders/VolumeLoaderUtils.js";
+import { BorrowGuard } from "./task_pool/borrow_guard.js";
+import { ARRAY_CONSTRUCTORS, type TypedArray } from "../types.js";
+import { TaskPool } from "./task_pool/task_pool.js";
+import { getDataRange } from "../utils/num_utils.js";
+import { copyChunkTask } from "./index.js";
+import { copyChunk, CopyChunkParams } from "./indexing.js";
+import { getChunkDims } from "./utils.js";
+
+// MARK: Utils
 
 type XYZ<T = number> = [T, T, T];
 type TCZYX<T = number> = [T, T, T, T, T];
@@ -22,6 +31,7 @@ const zipTCZYX = <T, U, V>([x1, y1, z1]: XYZ<T>, [, , z2, y2, x2]: TCZYX<U>, f: 
   f(z1, z2),
 ];
 const subtract = (a: XYZ, b: XYZ): XYZ => zipXYZ(a, b, (l, r) => l - r);
+const equals = ([x1, y1, z1]: XYZ, [x2, y2, z2]: XYZ): boolean => x1 === x2 && y1 === y2 && z1 === z2;
 
 const normalizedPointToVoxel = (point: XYZ, { shape }: ExtVolumeDims): XYZ => zipTCZYX(point, shape, (p, s) => p * s);
 const voxelToNormalizedPoint = (voxel: XYZ, { shape }: ExtVolumeDims): XYZ => zipTCZYX(voxel, shape, (v, s) => v / s);
@@ -41,15 +51,114 @@ const subregionToChunks = ({ min, max }: Region, dims: ExtVolumeDims): Region =>
   max: mapXYZ(normalizedPointToChunk(max, dims), (n) => n + 1),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default class AdapterLoader extends ThreadableVolumeLoader implements IDataSubscriber<any> {
-  private dims: ExtVolumeDims[];
-  private meta: VolumeMetadata;
+const contains = ({ min, max }: Region, [x, y, z]: XYZ): boolean => {
+  const [minX, minY, minZ] = min;
+  const [maxX, maxY, maxZ] = max;
+  return minX <= x && minY <= y && minZ <= z && x < maxX && y < maxY && z < maxZ;
+};
+
+function* iterRegion({ min, max }: Region): Generator<XYZ> {
+  const [minX, minY, minZ] = min;
+  const [maxX, maxY, maxZ] = max;
+  for (let z = minZ; z < maxZ; z++) {
+    for (let y = minY; y < maxY; y++) {
+      for (let x = minX; x < maxX; x++) {
+        yield [x, y, z];
+      }
+    }
+  }
+}
+
+const chunkReceivedIndex = ([x, y, z]: XYZ, { min, max }: Region): number => {
+  const [, sizeY, sizeZ] = subtract(max, min);
+  return sizeY * sizeZ * z + sizeY * y + x;
+};
+
+// MARK: Channel assembler
+
+class ChannelAssembler {
+  private chunksReceived: boolean[];
+  private shape: XYZ;
 
   constructor(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private manager: DataManager<any, any>,
-    private sourceId: number
+    public data: BorrowGuard<TypedArray>,
+    private dims: ExtVolumeDims,
+    private chunks: Region,
+    private onComplete: (data: TypedArray) => void,
+    private pool?: TaskPool
+  ) {
+    const [x, y, z] = subtract(chunks.max, chunks.min);
+    const chunkCount = x * y * z;
+    this.chunksReceived = new Array(chunkCount).fill(false);
+    const voxelMin = chunkToVoxel(chunks.min, dims);
+    const voxelMax = chunkToVoxel(chunks.max, dims);
+    this.shape = subtract(voxelMax, voxelMin);
+  }
+
+  private getParams(id: LocalChunkId): CopyChunkParams {
+    const chunkDims = getChunkDims(id, this.dims);
+    const [, , z, y, x] = id.tczyx;
+    const offset = chunkToVoxel([x, y, z], this.dims);
+    return {
+      srcShape: [chunkDims.x, chunkDims.y, chunkDims.z],
+      destShape: this.shape,
+      offset,
+    };
+  }
+
+  async set(id: LocalChunkId, chunk: BorrowGuard<TypedArray>): Promise<void> {
+    const [, , z, y, x] = id.tczyx;
+    const xyz: XYZ = [x, y, z];
+    if (!contains(this.chunks, xyz)) {
+      return;
+    }
+
+    const receivedIndex = chunkReceivedIndex(xyz, this.chunks);
+    if (this.chunksReceived[receivedIndex]) {
+      return;
+    }
+    this.chunksReceived[receivedIndex] = true;
+
+    const params = this.getParams(id);
+
+    if (this.pool !== undefined) {
+      await this.pool.runTask(copyChunkTask, chunk, this.data, params);
+    } else {
+      // TODO this is not maximally robust
+      const channelData = await this.data.getAsync();
+      const chunkData = await chunk.getAsync();
+      copyChunk(chunkData, channelData, params);
+    }
+
+    if (this.chunksReceived.every((value) => value)) {
+      const data = await this.data.getAsync();
+      this.onComplete(data);
+    }
+  }
+}
+
+// MARK: Class definition
+
+export default class AdapterLoader extends ThreadableVolumeLoader implements IDataSubscriber {
+  private dims: ExtVolumeDims[];
+  private meta: VolumeMetadata;
+  private channels: Map<number, ChannelAssembler> = new Map();
+  private currentExtent: {
+    t: number;
+    c: number[];
+    multiscale: number;
+    chunks: Region;
+  } = {
+    t: 0,
+    c: [],
+    multiscale: 0,
+    chunks: { min: [0, 0, 0], max: [0, 0, 0] },
+  };
+
+  constructor(
+    private manager: DataManager,
+    private sourceId: number,
+    private pool?: TaskPool
   ) {
     super();
     const dims = manager.getSourceDims(sourceId);
@@ -64,8 +173,6 @@ export default class AdapterLoader extends ThreadableVolumeLoader implements IDa
 
     manager.subscribeToSource(this, sourceId);
   }
-
-  // MARK: Helpers
 
   private pickMultiscaleIndex(loadSpec: LoadSpec): number {
     if (loadSpec.useExplicitLevel && loadSpec.multiscaleLevel !== undefined) {
@@ -98,6 +205,63 @@ export default class AdapterLoader extends ThreadableVolumeLoader implements IDa
 
     const adjustedLevel = Math.max(i + (loadSpec.scaleLevelBias ?? 0), loadSpec.multiscaleLevel ?? 0);
     return Math.max(0, Math.min(this.dims.length - 1, adjustedLevel));
+  }
+
+  private *iterChunks(c: number): Generator<ChunkId> {
+    const source = this.sourceId;
+    const { t, multiscale, chunks } = this.currentExtent;
+    for (const [x, y, z] of iterRegion(chunks)) {
+      const tczyx: TCZYX = [t, c, z, y, x];
+      yield { source, multiscale, tczyx };
+    }
+  }
+
+  private removeChannelRequests(c: number): void {
+    for (const id of this.iterChunks(c)) {
+      this.manager.removeChunkRequest(this, id);
+    }
+  }
+
+  private updateExtent(loadSpec: LoadSpec): void {
+    const levelToLoad = this.pickMultiscaleIndex(loadSpec);
+    const dims = this.dims[levelToLoad];
+    const nextChunks = subregionToChunks(loadSpec.subregion, dims);
+    const { t, multiscale, chunks } = this.currentExtent;
+
+    if (
+      loadSpec.time === t &&
+      levelToLoad === multiscale &&
+      equals(nextChunks.min, chunks.min) &&
+      equals(nextChunks.max, chunks.max)
+    ) {
+      // We can keep some channel arrays around. Let's see which ones.
+      const nextChannels = new Map<number, ChannelAssembler>();
+      for (const index of loadSpec.channels ?? []) {
+        const channel = this.channels.get(index);
+        if (channel !== undefined) {
+          this.channels.delete(index);
+          nextChannels.set(index, channel);
+        }
+      }
+
+      for (const index of this.channels.keys()) {
+        this.removeChannelRequests(index);
+      }
+
+      this.channels = nextChannels;
+    }
+
+    // We have to completely replace all channels.
+    for (const channel of this.channels.keys()) {
+      this.removeChannelRequests(channel);
+    }
+    this.currentExtent = {
+      t,
+      c: loadSpec.channels ?? [],
+      chunks: nextChunks,
+      multiscale: levelToLoad,
+    };
+    this.channels = new Map();
   }
 
   // MARK: Loader interface
@@ -136,18 +300,82 @@ export default class AdapterLoader extends ThreadableVolumeLoader implements IDa
     return Promise.resolve({ imageInfo, loadSpec: { ...loadSpec, subregion } });
   }
 
-  loadRawChannelData(
+  async loadRawChannelData(
     imageInfo: ImageInfo,
     loadSpec: LoadSpec,
     onUpdateVolumeMetadata: (imageInfo?: ImageInfo, loadSpec?: LoadSpec) => void,
     onData: RawChannelDataCallback
   ): Promise<void> {
-    throw new Error("Method not implemented.");
+    // TODO update `ImageInfo`? See `OMEZarrLoader`
+    this.updateExtent(loadSpec);
+    const channels = loadSpec.channels ?? [];
+    const { multiscale, chunks } = this.currentExtent;
+    const dims = this.dims[multiscale];
+
+    const dtype = this.dims[multiscale].dataType;
+    const arrayConstructor = ARRAY_CONSTRUCTORS[dtype];
+
+    const voxelMin = chunkToVoxel(chunks.min, dims);
+    const voxelMax = chunkToVoxel(chunks.max, dims);
+    const [sizeX, sizeY, sizeZ] = subtract(voxelMax, voxelMin);
+    const bufferSize = sizeX * sizeY * sizeZ;
+
+    const channelPromises: Promise<void>[] = [];
+
+    for (const channelIndex of channels) {
+      const preservedChannel = this.channels.get(channelIndex);
+
+      // We've already got this channel. Just return it.
+      if (preservedChannel !== undefined) {
+        const promise = preservedChannel.data
+          .getAsync()
+          .then((data) => onData([channelIndex], [dtype], [data], [getDataRange(data)]));
+        channelPromises.push(promise);
+        continue;
+      }
+
+      // Build a new channel
+      const data = new BorrowGuard(new arrayConstructor(bufferSize));
+      let resolve: () => void;
+      channelPromises.push(new Promise((r) => (resolve = r)));
+      const onComplete = (data: TypedArray): void => {
+        onData([channelIndex], [dtype], [data], [getDataRange(data)]);
+        resolve();
+      };
+      const channel = new ChannelAssembler(data, dims, chunks, onComplete, this.pool);
+      this.channels.set(channelIndex, channel);
+
+      // Request the chunks in this channel
+      for (const chunkId of this.iterChunks(channelIndex)) {
+        this.manager.addChunkRequest(this, chunkId, { level: ChunkPriorityLevel.VISIBLE, score: 1000 }, false);
+        const chunk = this.manager.getChunkGuard(chunkId);
+        if (chunk !== undefined) {
+          channel.set(chunkId, chunk);
+        }
+      }
+    }
+
+    await Promise.all(channelPromises);
   }
 
-  onChunkLoaded(id: ChunkId, chunk: Chunk) {}
+  onChunkLoaded(id: ChunkId, chunk: Chunk) {
+    const [t, c] = id.tczyx;
+    if (t !== this.currentExtent.t) {
+      return;
+    }
+
+    const channel = this.channels.get(c);
+    if (channel === undefined) {
+      return;
+    }
+
+    channel.set(id, chunk.data);
+  }
 
   destroy() {
+    for (const channelIndex of this.channels.keys()) {
+      this.removeChannelRequests(channelIndex);
+    }
     this.manager.unsubscribeFromSource(this, this.sourceId);
   }
 }
