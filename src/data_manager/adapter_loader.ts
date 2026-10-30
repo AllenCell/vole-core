@@ -33,7 +33,8 @@ const zipTCZYX = <T, U, V>([x1, y1, z1]: XYZ<T>, [, , z2, y2, x2]: TCZYX<U>, f: 
 const subtract = (a: XYZ, b: XYZ): XYZ => zipXYZ(a, b, (l, r) => l - r);
 const equals = ([x1, y1, z1]: XYZ, [x2, y2, z2]: XYZ): boolean => x1 === x2 && y1 === y2 && z1 === z2;
 
-const normalizedPointToVoxel = (point: XYZ, { shape }: ExtVolumeDims): XYZ => zipTCZYX(point, shape, (p, s) => p * s);
+const normalizedPointToVoxel = (point: XYZ, { shape }: ExtVolumeDims): XYZ =>
+  zipTCZYX(point, shape, (p, s) => Math.min(p * s, s - 1));
 const voxelToNormalizedPoint = (voxel: XYZ, { shape }: ExtVolumeDims): XYZ => zipTCZYX(voxel, shape, (v, s) => v / s);
 
 const chunkToVoxel = (chunk: XYZ, { chunkShape, shape }: ExtVolumeDims): XYZ => {
@@ -282,7 +283,7 @@ export default class AdapterLoader extends ThreadableVolumeLoader implements IDa
       subregionSize,
       subregionOffset: voxelMin,
       // no multi-source support, yet
-      numChannelsPerSource: [this.dims[multiscaleLevel].chunkShape[1]],
+      numChannelsPerSource: [this.dims[multiscaleLevel].shape[1]],
     };
 
     const subregion = {
@@ -347,6 +348,7 @@ export default class AdapterLoader extends ThreadableVolumeLoader implements IDa
       }
     }
 
+    this.manager.update();
     await Promise.all(channelPromises);
   }
 
