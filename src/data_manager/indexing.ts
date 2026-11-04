@@ -20,17 +20,23 @@ export class ChunkIndexError extends Error {
 const last = <T>(arr: T[]): T => arr[arr.length - 1];
 
 const validateCopyChunkParams = ({ srcShape, destShape, offset, dimensionOrder }: CopyChunkParams): void => {
-  const srcRank = srcShape.length;
-  const destRank = destShape.length;
-  if (destRank !== srcRank) {
-    throw new ChunkIndexError(`destination array rank (${destRank}) does not match source chunk rank (${srcRank})`);
+  const srcDims = srcShape.length;
+  const destDims = destShape.length;
+  if (destDims !== srcDims) {
+    throw new ChunkIndexError(
+      `destination array dimensionality (${destDims}) does not match source chunk dimensionality (${srcDims})`
+    );
   }
-  if (offset.length !== srcRank) {
-    throw new ChunkIndexError(`offset rank ${offset.length} does not match source chunk rank ${srcRank}`);
+  if (offset.length !== srcDims) {
+    throw new ChunkIndexError(
+      `offset dimensionality ${offset.length} does not match source chunk dimensionality ${srcDims}`
+    );
   }
-  if (dimensionOrder !== undefined && dimensionOrder.length !== srcRank) {
+  if (dimensionOrder !== undefined && dimensionOrder.length !== srcDims) {
     const { length } = dimensionOrder;
-    throw new ChunkIndexError(`dimension order rank (${length}) does not match source chunk rank (${srcRank})`);
+    throw new ChunkIndexError(
+      `dimension order dimensionality (${length}) does not match source chunk dimensionality (${srcDims})`
+    );
   }
   destShape.forEach((destDim, idx) => {
     const srcDim = srcShape[idx];
