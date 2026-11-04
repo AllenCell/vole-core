@@ -63,11 +63,17 @@ export class View3d extends EventDispatcher<View3dEvents> {
   private pixelSamplingRate: number;
   private exposure: number;
   private volumeRenderMode: RenderMode.PATHTRACE | RenderMode.RAYMARCH;
-  /** @deprecated Should be removed in the next major version. */
+  /**
+   * @deprecated Will be removed in the next major version.
+   * Use `View3d.addEventListener("render", (event) => { ... }) instead.
+   */
   private renderListener?: () => void;
-  /** @deprecated Should be removed in the next major version. */
+  /**
+   * @deprecated Will be removed in the next major version.
+   * Use `View3d.addEventListener("renderIteration", (event) => { ... }) instead.
+   */
   private renderUpdateListener?: (iteration: number) => void;
-  /** @deprecated Should be removed in the next major version. */
+  /** @deprecated Will be removed in the next major version. */
   private loadErrorHandler?: (volume: Volume, error: unknown) => void;
   private image?: VolumeDrawable;
 
