@@ -228,7 +228,6 @@ export function createDefaultMetadata(rawImageInfo: ImageInfo): Record<string, u
     z: imageInfo.physicalPixelSize.z + imageInfo.spatialUnit,
   };
   metadata["Multiresolution levels"] = rawImageInfo.multiscaleLevelDims;
-  // TODO decide???? combined or not?
   const totalChannels = imageInfo.numChannelsPerSource.reduce((a, b) => a + b, 0);
   metadata["Channels"] = totalChannels;
   metadata["Time series frames"] = imageInfo.times || 1;
