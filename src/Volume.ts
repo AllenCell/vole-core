@@ -284,7 +284,7 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
     const adjustedSpec = {
       ...loadSpec,
       channels: loadSpec.channels?.filter((i) => i < imageInfo.channelNames.length) ?? [],
-      time: Math.min(loadSpec.time, maxTime),
+      time: Math.max(0, Math.min(maxTime, loadSpec.time)),
     };
     this.loadSpecRequired = { ...this.loadSpecRequired, ...adjustedSpec };
     this.loadSpec = cloneLoadSpec(this.loadSpecRequired);
