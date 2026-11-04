@@ -73,7 +73,10 @@ export class View3d extends EventDispatcher<View3dEvents> {
    * Use `View3d.addEventListener("renderIteration", (event) => { ... }) instead.
    */
   private renderUpdateListener?: (iteration: number) => void;
-  /** @deprecated Will be removed in the next major version. */
+  /**
+   * @deprecated Will be removed in the next major version.
+   * Use `Volume.addEventListener("loadError", (event) => { ... }) instead.
+   */
   private loadErrorHandler?: (volume: Volume, error: unknown) => void;
   private image?: VolumeDrawable;
 
