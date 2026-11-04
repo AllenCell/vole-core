@@ -9,9 +9,13 @@ import type { ZarrLoaderFetchOptions, ZarrLoaderMetadata } from "../loaders/OmeZ
 import type { JsonImageInfo } from "../loaders/JsonImageInfoLoader.js";
 
 export type VolumeLoaderMetadata =
-  | { type: undefined; imageInfo: ImageInfo; dims: VolumeDims[] }
   | { type: VolumeFileFormat.JSON; info: JsonImageInfo[] }
-  | { type: VolumeFileFormat.ZARR; meta: ZarrLoaderMetadata };
+  | { type: VolumeFileFormat.ZARR; meta: ZarrLoaderMetadata }
+  | {
+      type: undefined | Exclude<VolumeFileFormat, VolumeFileFormat.ZARR | VolumeFileFormat.JSON>;
+      imageInfo: ImageInfo;
+      dims: VolumeDims[];
+    };
 
 /** The types of requests that can be made to the worker. Mostly corresponds to methods on `IVolumeLoader`. */
 export const enum WorkerMsgType {

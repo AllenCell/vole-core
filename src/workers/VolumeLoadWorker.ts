@@ -78,7 +78,7 @@ const messageHandlers: { [T in WorkerMsgType]: MessageHandler<T> } = {
       meta = { type: VolumeFileFormat.JSON, info: (loader as JsonImageInfoLoader).jsonInfo };
     } else {
       meta = {
-        type: undefined,
+        type: options?.fileType as Exclude<VolumeFileFormat, VolumeFileFormat.ZARR | VolumeFileFormat.JSON>,
         imageInfo: loader.getImageInfo(new LoadSpec()).imageInfo,
         dims: loader.getDims(new LoadSpec()),
       };
