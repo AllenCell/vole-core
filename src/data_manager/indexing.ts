@@ -43,11 +43,13 @@ const validateCopyChunkParams = ({ srcShape, destShape, offset, dimensionOrder }
   });
 };
 
-const shapeToStrides = (shape: number[], length: number): number[] => {
+const shapeToStrides = (shape: number[], length: number, name: string): number[] => {
   const strides = shape.reduceRight<number[]>((strides, dim) => [dim * strides[0], ...strides], [1]);
   const expectedLength = strides.shift();
   if (expectedLength !== length) {
-    throw new ChunkIndexError(`buffer length does not match dimensions (expected ${expectedLength}, found ${length})`);
+    throw new ChunkIndexError(
+      `${name} buffer length does not match dimensions (expected ${expectedLength}, found ${length})`
+    );
   }
   return strides;
 };
@@ -98,8 +100,8 @@ function* indexes(start: number[], step: number[], count: number[]) {
 export const copyChunk = (src: TypedArray, dest: TypedArray, params: CopyChunkParams): void => {
   validateCopyChunkParams(params);
 
-  const srcStrides = shapeToStrides(params.srcShape, src.length);
-  let destStrides = shapeToStrides(params.destShape, dest.length);
+  const srcStrides = shapeToStrides(params.srcShape, src.length, "source");
+  let destStrides = shapeToStrides(params.destShape, dest.length, "destination");
   let destStart = destStrides.map((stride, i) => stride * params.offset[i]);
   let counts = [...params.srcShape];
 
