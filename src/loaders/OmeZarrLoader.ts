@@ -420,8 +420,6 @@ class OMEZarrLoader extends VolumeLoader {
   }
 
   static metadataToImageInfo(meta: ZarrLoaderMetadata, loadSpec: LoadSpec): LoadedVolumeInfo {
-    // We ensured most info (dims, chunks, etc.) matched between sources earlier, so we can just use the first source.
-    // const source0 = meta.sources[0];
     const [, , z, y, x] = meta.axesTCZYX;
     const hasZ = z > -1;
 
