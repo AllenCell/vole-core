@@ -980,7 +980,6 @@ function playTimeSeries(onNewFrameCallback: () => void) {
   myState.lastFrameTime = Date.now();
 
   const advanceTime = () => {
-    console.log("advanceTime");
     if (myState.isPlaying) {
       onNewFrameCallback();
       const nextFrame = (myState.currentFrame + 1) % getNumberOfTimesteps();
