@@ -16,7 +16,7 @@ import { CameraState, MESH_LAYER, ThreeJsPanel } from "./ThreeJsPanel.js";
 import lightSettings from "./constants/lights.js";
 import VolumeDrawable from "./VolumeDrawable.js";
 import { Light, AREA_LIGHT, SKY_LIGHT } from "./Light.js";
-import Volume from "./Volume.js";
+import Volume, { type VolumeEvents } from "./Volume.js";
 import {
   type AxisName,
   type ColorizeFeature,
@@ -28,7 +28,6 @@ import {
 } from "./types.js";
 import { IDrawableObject } from "./drawables/IDrawableObject.js";
 import { Axis } from "./types.js";
-import { PerChannelCallback } from "./loaders/VolumeLoader.js";
 import { WorkerLoader } from "./workers/VolumeLoaderContext.js";
 import Line3d from "./drawables/lines/Line3d.js";
 import EventDispatcher from "./EventDispatcher.js";
@@ -64,10 +63,20 @@ export class View3d extends EventDispatcher<View3dEvents> {
   private pixelSamplingRate: number;
   private exposure: number;
   private volumeRenderMode: RenderMode.PATHTRACE | RenderMode.RAYMARCH;
-  /** @deprecated Should be removed in the next major version. */
+  /**
+   * @deprecated Will be removed in the next major version.
+   * Use `View3d.addEventListener("render", (event) => { ... }) instead.
+   */
   private renderListener?: () => void;
-  /** @deprecated Should be removed in the next major version. */
+  /**
+   * @deprecated Will be removed in the next major version.
+   * Use `View3d.addEventListener("renderIteration", (event) => { ... }) instead.
+   */
   private renderUpdateListener?: (iteration: number) => void;
+  /**
+   * @deprecated Will be removed in the next major version.
+   * Use `Volume.addEventListener("loadError", (event) => { ... }) instead.
+   */
   private loadErrorHandler?: (volume: Volume, error: unknown) => void;
   private image?: VolumeDrawable;
 
@@ -233,7 +242,10 @@ export class View3d extends EventDispatcher<View3dEvents> {
    * @param {VolumeDisplayOptions} options
    */
   addVolume(volume: Volume, options?: VolumeDisplayOptions): void {
-    volume.addVolumeDataObserver(this);
+    volume.addEventListener("loadChannel", this.onVolumeData);
+    volume.addEventListener("loadError", this.onVolumeLoadError);
+    volume.addEventListener("channelAdded", this.onVolumeChannelAdded);
+    volume.addEventListener("channelRemoved", this.onVolumeChannelRemoved);
     options = options || {};
     options.renderMode = this.volumeRenderMode;
     if (this.canvas3d.getViewMode() === Axis.XYZ || this.canvas3d.getViewMode() === Axis.NONE) {
@@ -278,7 +290,10 @@ export class View3d extends EventDispatcher<View3dEvents> {
     }
     if (volume) {
       // assert oldImage.volume === volume!
-      volume.removeVolumeDataObserver(this);
+      volume.removeEventListener("loadChannel", this.onVolumeData);
+      volume.removeEventListener("loadError", this.onVolumeLoadError);
+      volume.removeEventListener("channelAdded", this.onVolumeChannelAdded);
+      volume.removeEventListener("channelRemoved", this.onVolumeChannelRemoved);
     }
   }
 
@@ -302,9 +317,9 @@ export class View3d extends EventDispatcher<View3dEvents> {
   }
 
   // channels is an array of channel indices for which new data just arrived.
-  onVolumeData(volume: Volume, channels: number[]): void {
+  onVolumeData({ volume, channelIndex }: VolumeEvents["loadChannel"]): void {
     this.image?.updateScale();
-    this.image?.onChannelLoaded(channels);
+    this.image?.onChannelLoaded(channelIndex);
     if (volume.isLoaded() && this.tweakpane) {
       const tp = this.tweakpane;
       wrapTweakpaneCall(() => tp.refresh());
@@ -312,25 +327,27 @@ export class View3d extends EventDispatcher<View3dEvents> {
   }
 
   // do fixups for when the volume has had a new empty channel added.
-  onVolumeChannelAdded(_volume: Volume, newChannelIndex: number): void {
-    this.image?.onChannelAdded(newChannelIndex);
+  onVolumeChannelAdded({ channelIndex }: VolumeEvents["channelAdded"]): void {
+    this.image?.onChannelAdded(channelIndex);
   }
 
-  onVolumeChannelRemoved(_volume: Volume, removedIndex: number): void {
-    this.image?.onChannelRemoved(removedIndex);
+  onVolumeChannelRemoved({ channelIndex }: VolumeEvents["channelRemoved"]): void {
+    this.image?.onChannelRemoved(channelIndex);
   }
 
-  onVolumeLoadError(volume: Volume, error: unknown): void {
+  /** @deprecated use `Volume.addEventListener("loadError", ...)` instead */
+  onVolumeLoadError({ volume, error }: VolumeEvents["loadError"]): void {
     this.loadErrorHandler?.(volume, error);
   }
 
+  /** @deprecated use `Volume.addEventListener("loadError", ...)` instead */
   setLoadErrorHandler(handler: ((volume: Volume, error: unknown) => void) | undefined): void {
     this.loadErrorHandler = handler;
   }
 
-  setTime(volume: Volume, time: number, onChannelLoaded?: PerChannelCallback): Promise<void> {
+  setTime(volume: Volume, time: number): Promise<void> {
     const timeClamped = Math.max(0, Math.min(time, volume.imageInfo.times - 1));
-    const loadPromise = volume.updateRequiredData({ time: timeClamped }, onChannelLoaded);
+    const loadPromise = volume.updateRequiredData({ time: timeClamped });
     this.updateTimestepIndicator(volume);
     return loadPromise;
   }

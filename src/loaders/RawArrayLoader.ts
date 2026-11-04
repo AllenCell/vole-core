@@ -89,12 +89,11 @@ const convertImageInfo = (json: RawArrayInfo, dtype: NumberType): ImageInfo => {
   };
 };
 
-class RawArrayLoader extends VolumeLoader {
+class RawArrayLoader implements VolumeLoader {
   data: RawArrayData;
   jsonInfo: RawArrayInfo;
 
   constructor(rawData: RawArrayData, rawDataInfo: RawArrayInfo) {
-    super();
     this.jsonInfo = rawDataInfo;
     this.data = rawData;
     // check consistent dims
@@ -125,7 +124,7 @@ class RawArrayLoader extends VolumeLoader {
     return { imageInfo: convertImageInfo(this.jsonInfo, this.data.dtype), loadSpec };
   }
 
-  loadRawChannelData(
+  loadData(
     imageInfo: ImageInfo,
     loadSpec: LoadSpec,
     onUpdateMetadata: (imageInfo: undefined, loadSpec: LoadSpec) => void,
@@ -159,6 +158,18 @@ class RawArrayLoader extends VolumeLoader {
     }
 
     return Promise.resolve();
+  }
+
+  setPrefetchPriority() {
+    // noop
+  }
+
+  syncMultichannelLoading() {
+    // noop
+  }
+
+  updateFetchOptions() {
+    // noop
   }
 }
 
