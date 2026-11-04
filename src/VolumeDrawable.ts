@@ -661,7 +661,7 @@ export default class VolumeDrawable {
   // Save a channel's isosurface as a triangle mesh to either STL or GLTF2 format.  File will be named automatically, using image name and channel name.
   // @param {string} type Either 'GLTF' or 'STL'
   saveChannelIsosurface(channelIndex: number, type: string): void {
-    this.meshVolume.saveChannelIsosurface(channelIndex, type, this.volume.name);
+    this.meshVolume.saveChannelIsosurface(channelIndex, type, this.volume.imageInfo.name);
   }
 
   // Hide or display volume data for a channel
