@@ -971,9 +971,6 @@ function playTimeSeries(onNewFrameCallback: () => void) {
   if (myState.isPlaying) {
     return;
   }
-  if (myState.currentFrame >= getNumberOfTimesteps() - 1) {
-    myState.currentFrame = -1;
-  }
   window.clearTimeout(myState.timerId);
   setSyncMultichannelLoading(true);
   myState.isPlaying = true;
