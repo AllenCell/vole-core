@@ -277,7 +277,6 @@ export default class Volume extends EventDispatcher<VolumeEvents> {
   setLoader(loader: VolumeLoader, spec?: Partial<LoadSpec>): void {
     const infoSpec = { ...this.loadSpecRequired, ...spec };
     this.loader = loader;
-    // TODO pass in load specs here?
     const { loadSpec, imageInfo } = loader.getImageInfo(infoSpec);
     this.imageInfo.imageInfo = imageInfo;
     this.imageMetadata = createDefaultMetadata(imageInfo);
