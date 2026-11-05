@@ -29,9 +29,8 @@ export const swapRemove = <T>(arr: T[], index: number) => {
     return;
   }
 
-  const { length } = arr;
   const replace = arr.pop();
-  if (replace !== undefined && index < length) {
+  if (replace !== undefined && index < arr.length - 1) {
     arr[index] = replace;
   }
 };
