@@ -97,11 +97,13 @@ class ChannelAssembler {
   }
 
   private getParams(id: LocalChunkId): CopyChunkParams {
+    const [, , chunkZ, chunkY, chunkX] = this.dims.chunkShape;
     const chunkDims = getChunkDims(id, this.dims);
     const [, , z, y, x] = id.tczyx;
     const offset = chunkToVoxel([x, y, z], this.dims);
     return {
-      srcShape: [chunkDims.x, chunkDims.y, chunkDims.z],
+      srcShape: [chunkX, chunkY, chunkZ],
+      copySize: [chunkDims.x, chunkDims.y, chunkDims.z],
       destShape: this.shape,
       offset,
     };
