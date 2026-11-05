@@ -71,8 +71,8 @@ function* iterRegion({ min, max }: Region): Generator<XYZ> {
 }
 
 const chunkReceivedIndex = ([x, y, z]: XYZ, { min, max }: Region): number => {
-  const [, sizeY, sizeZ] = subtract(max, min);
-  return sizeY * sizeZ * z + sizeY * y + x;
+  const [sizeX, sizeY] = subtract(max, min);
+  return x + y * sizeX + z * sizeY * sizeX;
 };
 
 // MARK: Channel assembler
