@@ -1055,8 +1055,8 @@ export class View3d extends EventDispatcher<View3dEvents> {
   /**
    * Reset the camera to its default position
    */
-  resetCamera(): void {
-    const center = this.image?.getModelCenter().multiplyScalar(5);
+  resetCamera(onRegionCenter = true): void {
+    const center = onRegionCenter ? this.image?.getModelCenter() : undefined;
 
     this.canvas3d.resetCamera(center);
     this.image?.onResetCamera();

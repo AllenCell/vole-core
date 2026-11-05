@@ -299,13 +299,11 @@ export class ThreeJsPanel {
   }
 
   resetPerspectiveCamera(center = new Vector3(0)): void {
-    console.log(center);
     this.perspectiveCamera.position.copy(center);
     this.perspectiveCamera.position.z += DEFAULT_PERSPECTIVE_CAMERA_DISTANCE;
     this.perspectiveCamera.up.x = 0.0;
     this.perspectiveCamera.up.y = 1.0;
     this.perspectiveCamera.up.z = 0.0;
-    console.log(this.perspectiveCamera.position);
   }
 
   resetOrthographicCameraX(center = new Vector3(0)): void {
@@ -318,14 +316,14 @@ export class ThreeJsPanel {
   resetOrthographicCameraY(center = new Vector3(0)): void {
     this.orthographicCameraY.position.copy(center);
     this.orthographicCameraY.position.y += 2.0;
-    this.orthographicCameraX.up = new Vector3(0.0, 0.0, 1.0);
+    this.orthographicCameraY.up = new Vector3(0.0, 0.0, 1.0);
     this.orthographicCameraY.lookAt(center);
   }
 
   resetOrthographicCameraZ(center = new Vector3(0)): void {
     this.orthographicCameraZ.position.copy(center);
     this.orthographicCameraZ.position.z += 2.0;
-    this.orthographicCameraX.up = new Vector3(0.0, 1.0, 0.0);
+    this.orthographicCameraZ.up = new Vector3(0.0, 1.0, 0.0);
     this.orthographicCameraZ.lookAt(center);
   }
 
@@ -357,6 +355,11 @@ export class ThreeJsPanel {
     } else if (this.camera === this.tripleCamera) {
       this.resetTripleCamera();
     }
+
+    if (center !== undefined) {
+      this.controls.target = center;
+    }
+    this.controls.update();
   }
 
   setupAxisHelper(): void {
