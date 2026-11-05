@@ -366,6 +366,14 @@ export default class VolumeDrawable {
     this.pickRendering?.updateSettings(this.settings, SettingsFlags.ROI | SettingsFlags.VIEW);
   }
 
+  getModelCenter(): Vector3 {
+    const { normPhysicalSize, normRegionSize } = this.volume;
+    const scale = normPhysicalSize.clone().multiply(normRegionSize).multiply(this.settings.scale);
+    // center of the clip bounds, in the volume's normalized [-0.5, 0.5] local space
+    const boundsCenter = this.settings.bounds.bmin.clone().add(this.settings.bounds.bmax).multiplyScalar(0.5);
+    return boundsCenter.multiply(scale).add(this.childObjectsGroup.position);
+  }
+
   private modeStringToAxis(mode: string): Axis {
     const modeToAxis = {
       X: Axis.X,
