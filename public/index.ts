@@ -1180,13 +1180,13 @@ async function loadVolume(name: string, loadSpec: LoadSpec, loader: IVolumeLoade
   goToZSlice(Math.floor(volume.imageInfo.subregionSize.z / 2));
 }
 
-async function loadTestData(name: string, testdata: TestDataSpec) {
+async function loadTestData(name: string, testdata: TestDataSpec): Promise<void> {
   myState.loader = await createLoader(testdata);
 
   const loadSpec = new LoadSpec();
   myState.totalFrames = testdata.times;
   const loader = myState.loader[Math.max(myState.scene, myState.loader.length - 1)];
-  loadVolume(name, loadSpec, loader);
+  return loadVolume(name, loadSpec, loader);
 }
 
 function gammaSliderToImageValues(sliderValues: [number, number, number]): [number, number, number] {
@@ -1570,7 +1570,16 @@ function main() {
   setupColorizeControls();
   setupGui();
 
-  loadTestData((testDataSelect as HTMLSelectElement)?.value, TEST_DATA[(testDataSelect as HTMLSelectElement)?.value]);
+  loadTestData(
+    (testDataSelect as HTMLSelectElement)?.value,
+    TEST_DATA[(testDataSelect as HTMLSelectElement)?.value]
+  ).then(() => {
+    for (let i = 0; i < myState.channelGui.length; i++) {
+      if (myState.channelGui[i].enabled) {
+        view3D.setVolumeChannelEnabled(myState.volume, i, true);
+      }
+    }
+  });
 }
 
 document.body.onload = () => {
