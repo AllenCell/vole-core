@@ -82,10 +82,11 @@ export class TaskPool {
 
   private submitTasks() {
     let i = 0;
-    while (i < this.queue.length) {
+    iterTasks: while (i < this.queue.length) {
       const task = this.queue[i];
       const borrowedBuffers: ArrayBuffer[] = [];
       const args: unknown[] = [];
+      console.log(task);
       // Handle borrowed buffers
       for (const arg of task.args) {
         if (BorrowGuard.isBorrowGuard(arg)) {
@@ -93,7 +94,7 @@ export class TaskPool {
           // Task is not ready -- some resource it depends on is in use by another task
           if (array === undefined) {
             i++;
-            continue;
+            continue iterTasks;
           }
           args.push(markBorrowed(array));
           borrowedBuffers.push(array.buffer);
@@ -101,6 +102,7 @@ export class TaskPool {
           args.push(arg);
         }
       }
+      console.log(args);
 
       const worker = this.idleWorkers.pop();
       if (worker === undefined) {
