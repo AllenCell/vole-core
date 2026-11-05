@@ -253,7 +253,7 @@ export default class AdapterLoader extends ThreadableVolumeLoader implements IDa
       this.removeChannelRequests(channel);
     }
     this.currentExtent = {
-      t,
+      t: loadSpec.time,
       c: loadSpec.channels ?? [],
       chunks: nextChunks,
       multiscale: levelToLoad,
