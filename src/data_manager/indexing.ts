@@ -1,11 +1,16 @@
 import { ARRAY_CONSTRUCTORS, type NumberType, type TypedArray } from "../types.js";
 
 export type CopyChunkParams = {
-  /** Dimensions of the source array, in majority-increasing order. */
+  /** Dimensions of the source array. */
   srcShape: number[];
-  /** Dimensions of the destination array, in majority-increasing order. */
+  /** Dimensions of the destination array. */
   destShape: number[];
-  /** Offset at which to copy the source chunk in the destination array per dimension. */
+  /**
+   * Size of the region of the source chunk to copy into the destination array. Regions always start at
+   * `[0, 0, 0, ...]`. Must be smaller than `srcShape` in every dimensinon.
+   */
+  copySize: number[];
+  /** Offset to copy the source chunk to in the destination array per dimension. */
   offset: number[];
   /** Order of dimensions in the destination array, assuming source dimension order is `[0, 1, 2, ... ]`. */
   dimensionOrder?: number[];
@@ -19,7 +24,7 @@ export class ChunkIndexError extends Error {
 
 const last = <T>(arr: T[]): T => arr[arr.length - 1];
 
-const validateCopyChunkParams = ({ srcShape, destShape, offset, dimensionOrder }: CopyChunkParams): void => {
+const validateCopyChunkParams = ({ srcShape, destShape, copySize, offset, dimensionOrder }: CopyChunkParams): void => {
   const srcDims = srcShape.length;
   const destDims = destShape.length;
   if (destDims !== srcDims) {
@@ -32,18 +37,29 @@ const validateCopyChunkParams = ({ srcShape, destShape, offset, dimensionOrder }
       `offset dimensionality ${offset.length} does not match source chunk dimensionality ${srcDims}`
     );
   }
+  if (copySize.length !== srcDims) {
+    throw new ChunkIndexError(
+      `copy size dimensionality ${copySize.length} does not match source chunk dimensionality ${srcDims}`
+    );
+  }
   if (dimensionOrder !== undefined && dimensionOrder.length !== srcDims) {
     const { length } = dimensionOrder;
     throw new ChunkIndexError(
       `dimension order dimensionality (${length}) does not match source chunk dimensionality (${srcDims})`
     );
   }
+  srcShape.forEach((srcDim, idx) => {
+    const size = copySize[idx];
+    if (size > srcDim) {
+      throw new ChunkIndexError(`copy size is larger than source chunk in dimension ${idx} (${size} vs ${srcDim})`);
+    }
+  });
   destShape.forEach((destDim, idx) => {
-    const srcDim = srcShape[idx];
+    const size = copySize[idx];
     const offsetI = offset[idx];
-    if (srcDim + offsetI > destDim) {
+    if (size + offsetI > destDim) {
       throw new ChunkIndexError(
-        `dimension ${idx} out of bounds (destination length ${destDim} vs. source length ${srcDim} + offset ${offsetI})`
+        `dimension ${idx} out of bounds (destination length ${destDim} vs. copy size ${size} + offset ${offsetI})`
       );
     }
   });
@@ -109,7 +125,7 @@ export const copyChunk = (src: TypedArray, dest: TypedArray, params: CopyChunkPa
   const srcStrides = shapeToStrides(params.srcShape, src.length, "source");
   let destStrides = shapeToStrides(params.destShape, dest.length, "destination");
   let destStart = destStrides.map((stride, i) => stride * params.offset[i]);
-  let counts = [...params.srcShape];
+  let counts = [...params.copySize];
 
   // Resolve dimension order
   if (params.dimensionOrder) {
@@ -123,7 +139,13 @@ export const copyChunk = (src: TypedArray, dest: TypedArray, params: CopyChunkPa
 
   // Remove dims where `src` covers the whole domain in `dest`, so they get copied in one contiguous `set` call
   let lastStart = 0;
-  while (last(srcStrides) === last(destStrides) && lastStart === 0) {
+  // (only possible while the copied region spans the whole source dimension, so the source stays contiguous)
+  while (
+    srcStrides.length > 0 &&
+    last(srcStrides) === last(destStrides) &&
+    lastStart === 0 &&
+    params.copySize[srcStrides.length - 1] === params.srcShape[srcStrides.length - 1]
+  ) {
     srcStrides.pop();
     destStrides.pop();
     counts.pop();
@@ -139,13 +161,10 @@ export const copyChunk = (src: TypedArray, dest: TypedArray, params: CopyChunkPa
   }
 
   const srcStride = last(srcStrides);
-  let srcStart = 0;
-  let srcEnd = srcStride;
+  const srcIndexes = indexes(Array(srcStrides.length).fill(0), srcStrides, counts);
   for (const destIndex of indexes(destStart, destStrides, counts)) {
-    const slice = src.subarray(srcStart, srcEnd);
-    dest.set(slice, destIndex);
-    srcStart = srcEnd;
-    srcEnd += srcStride;
+    const srcStart = srcIndexes.next().value as number;
+    dest.set(src.subarray(srcStart, srcStart + srcStride), destIndex);
   }
 };
 
@@ -158,6 +177,7 @@ export const reorderChunk = (src: TypedArray, shape: number[], order: number[], 
   const params = {
     srcShape: shape,
     destShape: shape,
+    copySize: shape,
     dimensionOrder: order,
     offset: Array(shape.length).fill(0),
   };
