@@ -920,17 +920,6 @@ function showChannelUI(volume: Volume) {
   }
 }
 
-function shuffle<T>(arr: T[]): T[] {
-  const indexes = Array.from({ length: arr.length }, (_, i) => i);
-  const result: T[] = [];
-  while (indexes.length > 0) {
-    const rand = Math.floor(Math.random() * indexes.length);
-    const [index] = indexes.splice(rand, 1);
-    result.push(arr[index]);
-  }
-  return result;
-}
-
 function loadImageData(jsonData: ImageInfo, volumeData: Uint8Array<ArrayBuffer>[]) {
   const vol = new Volume(jsonData);
   myState.volume = vol;
