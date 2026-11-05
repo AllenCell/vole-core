@@ -101,12 +101,12 @@ class ChannelAssembler {
     const [shapeX, shapeY, shapeZ] = this.shape;
     const chunkDims = getChunkDims(id, this.dims);
     const [, , z, y, x] = id.tczyx;
-    const offset = chunkToVoxel([x, y, z], this.dims);
+    const [offsetX, offsetY, offsetZ] = chunkToVoxel([x, y, z], this.dims);
     return {
       srcShape: [chunkZ, chunkY, chunkX],
       copySize: [chunkDims.z, chunkDims.y, chunkDims.x],
       destShape: [shapeZ, shapeY, shapeX],
-      offset,
+      offset: [offsetZ, offsetY, offsetX],
     };
   }
 
@@ -245,6 +245,7 @@ export default class AdapterLoader extends ThreadableVolumeLoader implements IDa
       }
 
       this.channels = nextChannels;
+      return;
     }
 
     // We have to completely replace all channels.
