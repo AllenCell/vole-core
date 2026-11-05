@@ -1,4 +1,4 @@
-import { Color, type Data3DTexture, Vector3 } from "three";
+import { Color, Vector3 } from "three";
 import GUI from "lil-gui";
 
 import { colormaps as colorizercolormaps, features as colorizerfeatures } from "./colorizer.js";
@@ -26,11 +26,11 @@ import { State, TestDataSpec } from "./types.js";
 import VolumeLoaderContext from "../src/workers/VolumeLoaderContext.js";
 import { DATARANGE_UINT8, ColorizeFeature, type NumberType } from "../src/types.js";
 import { RawArrayLoaderOptions } from "../src/loaders/RawArrayLoader.js";
-import DataManager, { IDataSubscriber } from "../src/data_manager/data_manager.js";
+import DataManager from "../src/data_manager/data_manager.js";
 import { OMEZarrSource } from "../src/data_manager/sources/index.js";
-import { ChunkId, ChunkPriority, ChunkPriorityLevel } from "../src/data_manager/types.js";
 import { ThreeInterface } from "../src/data_manager/device_interface.js";
 import { TaskPool } from "../src/data_manager/task_pool/task_pool.js";
+import AdapterLoader from "../src/data_manager/adapter_loader.js";
 
 const CACHE_MAX_SIZE = 1_000_000_000;
 const CONCURRENCY_LIMIT = 8;
@@ -82,10 +82,15 @@ const TEST_DATA: Record<string, TestDataSpec> = {
   },
   zarrVariance: {
     type: VolumeFileFormat.ZARR,
-    url: [
-      "https://animatedcell-test-data.s3.us-west-2.amazonaws.com/variance/1.zarr",
-      "https://animatedcell-test-data.s3.us-west-2.amazonaws.com/variance/2.zarr",
-    ],
+    // url: [
+    //   "https://animatedcell-test-data.s3.us-west-2.amazonaws.com/variance/1.zarr",
+    //   "https://animatedcell-test-data.s3.us-west-2.amazonaws.com/variance/2.zarr",
+    // ],
+    url: "https://animatedcell-test-data.s3.us-west-2.amazonaws.com/variance/1.zarr",
+  },
+  alextest: {
+    type: VolumeFileFormat.ZARR,
+    url: "https://vast-files.int.allencell.org/users/alex.khang/repos/bioio_conversion/H2B_640_CAAX_488_20250904_flat_colony_1.ome.zarr/",
   },
   zarrNucmorph0: {
     type: VolumeFileFormat.ZARR,
@@ -914,68 +919,6 @@ function showChannelUI(volume: Volume) {
   }
 }
 
-function shuffle<T>(arr: T[]): T[] {
-  const indexes = Array.from({ length: arr.length }, (_, i) => i);
-  const result: T[] = [];
-  while (indexes.length > 0) {
-    const rand = Math.floor(Math.random() * indexes.length);
-    const [index] = indexes.splice(rand, 1);
-    result.push(arr[index]);
-  }
-  return result;
-}
-
-async function testDataManager() {
-  const pool = new TaskPool(new URL("./test_worker.js", import.meta.url));
-  const dataManager = new DataManager(new ThreeInterface());
-  const zarrSource = await OMEZarrSource.new(
-    // "https://animatedcell-test-data.s3.us-west-2.amazonaws.com/variance/1.zarr"
-    "https://vast-files.int.allencell.org/users/alex.khang/repos/bioio_conversion/H2B_640_CAAX_488_20250904_flat_colony_1.ome.zarr/",
-    { pool }
-  );
-  const sourceId = dataManager.addSource(zarrSource);
-  const mockSubscriber: IDataSubscriber<Data3DTexture> = {
-    onChunkLoaded: (id, chunk) => console.log("load", id, chunk),
-    onChunkOnGpu: (id, texture) => console.log("on device", id, texture),
-  };
-  dataManager.subscribeToSource(mockSubscriber, sourceId);
-
-  const dims = zarrSource.getDims();
-  const multiscale = dims.length - 2;
-  const levelDims = dims[multiscale];
-  const [_dt, _dc, dz, dy, dx] = levelDims.shape;
-  const [_ct, _cc, cz, cy, cx] = levelDims.chunkShape;
-  const chunksX = Math.ceil(dx / cx);
-  const chunksY = Math.ceil(dy / cy);
-  const chunksZ = Math.ceil(dz / cz);
-  console.log("dims", chunksX, chunksY, chunksZ);
-
-  const requests: [ChunkId, ChunkPriority][] = [];
-  for (let z = 0; z < chunksZ; z++) {
-    for (let y = 0; y < chunksY; y++) {
-      for (let x = 0; x < chunksX; x++) {
-        const id: ChunkId = {
-          source: sourceId,
-          multiscale,
-          tczyx: [0, 0, z, y, x],
-        };
-        const priority: ChunkPriority = {
-          level: ChunkPriorityLevel.VISIBLE,
-          score: (z + 1) * (y + 1) * (x + 1),
-        };
-        requests.push([id, priority]);
-      }
-    }
-  }
-
-  for (const [id, priority] of shuffle(requests)) {
-    console.log("request", id, priority);
-    dataManager.addChunkRequest(mockSubscriber, id, priority, true);
-  }
-
-  dataManager.update();
-}
-
 function loadImageData(jsonData: ImageInfo, volumeData: Uint8Array<ArrayBuffer>[]) {
   const vol = new Volume(jsonData);
   myState.volume = vol;
@@ -1172,9 +1115,22 @@ function createTestVolume(dtype: NumberType): RawArrayLoaderOptions {
   };
 }
 
+const pool = new TaskPool(new URL("./test_worker.js", import.meta.url));
+const dataManager = new DataManager(new ThreeInterface());
+
+async function createAdapterLoader(url: string): Promise<AdapterLoader> {
+  const source = await OMEZarrSource.new(url, { pool });
+  const sourceId = dataManager.addSource(source);
+  return new AdapterLoader(dataManager, sourceId, pool);
+}
+
 async function createLoader(data: TestDataSpec): Promise<IVolumeLoader[]> {
   if (data.type === "opencell") {
     return [new OpenCellLoader()];
+  }
+
+  if (data.type === VolumeFileFormat.ZARR && !Array.isArray(data.url)) {
+    return [await createAdapterLoader(data.url)];
   }
 
   await loaderContext.onOpen();
@@ -1224,13 +1180,13 @@ async function loadVolume(name: string, loadSpec: LoadSpec, loader: IVolumeLoade
   goToZSlice(Math.floor(volume.imageInfo.subregionSize.z / 2));
 }
 
-async function loadTestData(name: string, testdata: TestDataSpec) {
+async function loadTestData(name: string, testdata: TestDataSpec): Promise<void> {
   myState.loader = await createLoader(testdata);
 
   const loadSpec = new LoadSpec();
   myState.totalFrames = testdata.times;
   const loader = myState.loader[Math.max(myState.scene, myState.loader.length - 1)];
-  loadVolume(name, loadSpec, loader);
+  return loadVolume(name, loadSpec, loader);
 }
 
 function gammaSliderToImageValues(sliderValues: [number, number, number]): [number, number, number] {
@@ -1330,8 +1286,6 @@ function setupColorizeControls() {
 }
 
 function main() {
-  testDataManager();
-
   const el = document.getElementById("vol-e");
   if (!el) {
     return;
@@ -1616,7 +1570,16 @@ function main() {
   setupColorizeControls();
   setupGui();
 
-  loadTestData((testDataSelect as HTMLSelectElement)?.value, TEST_DATA[(testDataSelect as HTMLSelectElement)?.value]);
+  loadTestData(
+    (testDataSelect as HTMLSelectElement)?.value,
+    TEST_DATA[(testDataSelect as HTMLSelectElement)?.value]
+  ).then(() => {
+    for (let i = 0; i < myState.channelGui.length; i++) {
+      if (myState.channelGui[i].enabled) {
+        view3D.setVolumeChannelEnabled(myState.volume, i, true);
+      }
+    }
+  });
 }
 
 document.body.onload = () => {
