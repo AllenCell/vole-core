@@ -89,6 +89,10 @@ const TEST_DATA: Record<string, TestDataSpec> = {
     // ],
     url: "https://animatedcell-test-data.s3.us-west-2.amazonaws.com/variance/1.zarr",
   },
+  alextest: {
+    type: VolumeFileFormat.ZARR,
+    url: "https://vast-files.int.allencell.org/users/alex.khang/repos/bioio_conversion/H2B_640_CAAX_488_20250904_flat_colony_1.ome.zarr/",
+  },
   zarrNucmorph0: {
     type: VolumeFileFormat.ZARR,
     url: "https://animatedcell-test-data.s3.us-west-2.amazonaws.com/20200323_F01_001/P13-C4.zarr/",
