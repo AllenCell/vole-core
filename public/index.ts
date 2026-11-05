@@ -1,4 +1,4 @@
-import { Color, type Data3DTexture, Vector3 } from "three";
+import { Color, Vector3 } from "three";
 import GUI from "lil-gui";
 
 import { colormaps as colorizercolormaps, features as colorizerfeatures } from "./colorizer.js";
