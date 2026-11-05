@@ -86,7 +86,6 @@ export class TaskPool {
       const task = this.queue[i];
       const borrowedBuffers: ArrayBuffer[] = [];
       const args: unknown[] = [];
-      console.log(task);
       // Handle borrowed buffers
       for (const arg of task.args) {
         if (BorrowGuard.isBorrowGuard(arg)) {
@@ -102,7 +101,6 @@ export class TaskPool {
           args.push(arg);
         }
       }
-      console.log(args);
 
       const worker = this.idleWorkers.pop();
       if (worker === undefined) {
