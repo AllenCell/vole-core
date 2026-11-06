@@ -48,13 +48,49 @@ const allGlobalLoadingOptions = {
   throttleArrivingChannelData: true,
 };
 
+/**
+ * The map of all events fired by {@linkcode View3d}. See its documentation for details of event behavior.
+ *
+ * Retrieve the payload of a specific event using brackets and the event name, like so: `View3dEvents["render"]`.
+ */
 export type View3dEvents = {
   render: void;
   renderIteration: { iteration: number; isPathtrace: boolean };
 };
 
 /**
- * The viewport and context that
+ * The viewport and context that renders {@linkcode Volume}s.
+ *
+ * There are two ways to add its canvas to the document: pass a containing element on construction, or retrieve a DOM
+ * element after construction using {@linkcode getDOMElement}:
+ *
+ * ```typescript
+ * const container = document.querySelector("#viewer-container");
+ *
+ * // Pass a parent element...
+ * const view3d = new View3d({ parentElement: container });
+ *
+ * // ...or retrieve the viewer element after construction.
+ * const view3d = new View3d();
+ * const viewElement = view3d.getDOMElement();
+ * container.appendChild(viewElement);
+ * ```
+ *
+ * Once you've created a `View3d`, use {@linkcode addVolume}/{@linkcode removeVolume} to add/remove an image to render.
+ *
+ * Most other methods on `View3d` set rendering options or options on the current image.
+ *
+ * ## Events
+ *
+ * `View3d` is an {@linkcode EventDispatcher}. It fires the following events in response to canvas renders:
+ * - `render` is fired when the canvas re-renders for any reason, including camera moves, settings changes, data loads,
+ *   etc. It has no payload.
+ * - `renderIteration` is fired when the canvas renders in response to *either a render mode change or a new iteration
+ *   of the progressive path trace renderer*. It is useful for tracking the current path trace iteration count. Its
+ *   payload contains the following properties:
+ *     - `iteration` is the current number of iterations that the path trace renderer has accumulated, or `0` if the
+ *       view is not in path trace mode.
+ *     - `isPathtrace` is a `boolean` indicating whether the viewer is currently in path trace mode.
  */
 export class View3d extends EventDispatcher<View3dEvents> {
   private canvas3d: ThreeJsPanel;
