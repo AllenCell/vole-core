@@ -29,6 +29,7 @@ import VectorArrows3d from "./drawables/VectorArrows3d.js";
 import Spheres3d from "./drawables/spheres/Spheres3d.js";
 import type { VolumeDims } from "./VolumeDims.js";
 
+import EventDispatcher from "./EventDispatcher.js";
 export { createDefaultMetadata, type ImageInfo } from "./ImageInfo.js";
 export type { ControlPoint } from "./Lut.js";
 export type { CreateLoaderOptions } from "./loaders/index.js";
@@ -51,6 +52,7 @@ export {
   LoadSpec,
   VolumeMaker,
   VolumeCache,
+  EventDispatcher,
   RequestQueue,
   SubscribableRequestQueue,
   PrefetchDirection,
