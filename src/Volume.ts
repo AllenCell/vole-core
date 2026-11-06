@@ -13,6 +13,11 @@ import EventDispatcher from "./EventDispatcher.js";
 
 type VolumeEvent<T = void> = T & { volume: Volume };
 
+/**
+ * The map of all events fired by {@linkcode Volume}. See its documentation for details of event behavior.
+ *
+ * Retrieve the payload of a specific event using brackets and the event name, like so: `View3dEvents["loadEnd"]`.
+ */
 export type VolumeEvents = {
   loadStart: VolumeEvent;
   loadChannel: VolumeEvent<{ channelIndex: number }>;
@@ -24,8 +29,26 @@ export type VolumeEvents = {
 
 /**
  * A renderable multichannel volume image with 8-bits per channel intensity values.
- * @class
- * @param {ImageInfo} imageInfo
+ *
+ * ## Events
+ *
+ * `Volume` is an {@linkcode EventDispatcher}. It fires the following events:
+ * - `loadStart` is fired when the `Volume` begins loading new data for any reason, including explicit requests with
+ *   {@linkcode load} or automatic loads triggered by settings changes like time point, enabled channels, etc.
+ * - `loadChannel` is fired when a specific channel has finished loading. Its payload contains the numeric property
+ *   `channelIndex` that indicates the specific channel to which it applies.
+ * - `loadEnd` is fired when all channels in the `Volume` have finished loading.
+ * - `loadError` is fired when data loading fails with an error. Its payload contains the property `error`, containing
+ *   the error thrown during loading.
+ * - `channelAdded` is fired when a new channel is added to the `Volume`. Its payload contains the property
+ *   `channelIndex` containing the numeric index of the added channel.
+ * - `channelRemoved` is fired when a channel is removed from the `Volume`. Its payload contains the property
+ *   `channelIndex` containing the numeric index of the removed channel.
+ *
+ * In addition to any payload specified above, all events include the property `volume`, which points to the `Volume`
+ * that fired the event.
+ *
+ * TypeScript users can use the {@linkcode VolumeEvents} type to get the payload types of any of the above events.
  */
 export default class Volume extends EventDispatcher<VolumeEvents> {
   public imageInfo: CImageInfo;
