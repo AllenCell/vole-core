@@ -91,6 +91,8 @@ export type View3dEvents = {
  *     - `iteration` is the current number of iterations that the path trace renderer has accumulated, or `0` if the
  *       view is not in path trace mode.
  *     - `isPathtrace` is a `boolean` indicating whether the viewer is currently in path trace mode.
+ *
+ * TypeScript users can use the {@linkcode View3dEvents} type to get the payload types of any of the above events.
  */
 export class View3d extends EventDispatcher<View3dEvents> {
   private canvas3d: ThreeJsPanel;
