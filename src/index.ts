@@ -1,4 +1,4 @@
-import { RENDERMODE_PATHTRACE, RENDERMODE_RAYMARCH, View3d } from "./View3d.js";
+import { RENDERMODE_PATHTRACE, RENDERMODE_RAYMARCH, View3d, type View3dEvents } from "./View3d.js";
 import Volume, { type VolumeEvents } from "./Volume.js";
 import VolumeDrawable from "./VolumeDrawable.js";
 import Channel from "./Channel.js";
@@ -29,6 +29,7 @@ import VectorArrows3d from "./drawables/VectorArrows3d.js";
 import Spheres3d from "./drawables/spheres/Spheres3d.js";
 import type { VolumeDims } from "./VolumeDims.js";
 
+import EventDispatcher from "./EventDispatcher.js";
 export { createDefaultMetadata, type ImageInfo } from "./ImageInfo.js";
 export type { ControlPoint } from "./Lut.js";
 export type { CreateLoaderOptions } from "./loaders/index.js";
@@ -44,12 +45,14 @@ export {
   Spheres3d,
   remapControlPoints,
   View3d,
+  type View3dEvents,
   Volume,
   type VolumeEvents,
   VolumeDrawable,
   LoadSpec,
   VolumeMaker,
   VolumeCache,
+  EventDispatcher,
   RequestQueue,
   SubscribableRequestQueue,
   PrefetchDirection,
