@@ -49,14 +49,13 @@ float rand(vec2 co) {
   return fract(sin(dot(co, smallVal)) * bigVal);
 }
 
-vec4 luma2Alpha(vec4 color, float vmin, float vmax, float C) {
-  float x = dot(color.rgb, vec3(0.2125, 0.7154, 0.0721));
-  // float x = max(color[2], max(color[0],color[1]));
-  float xi = (x - vmin) / (vmax - vmin);
+vec4 applyGamma(vec4 color, float gammaMin, float gammaMax, float gammaScale) {
+  float x = color.a;
+  float xi = (x - gammaMin) / (gammaMax - gammaMin);
   xi = clamp(xi, 0.0, 1.0);
-  float y = pow(xi, C);
+  float y = pow(xi, gammaScale);
   y = clamp(y, 0.0, 1.0);
-  color[3] = y;
+  color.a = y;
   return color;
 }
 
@@ -111,8 +110,8 @@ vec4 sampleAtlasLinear(sampler2D tex, vec4 pos) {
   // take mask from 0..1 to alpha..1
   maskVal = mix(maskVal, 1.0, maskAlpha);
   vec4 retval = mix(slice0Color, slice1Color, t);
-  // only mask the rgb, not the alpha(?)
-  retval.rgb *= maskVal;
+  // darken RGB + mask alpha
+  retval *= maskVal;
   return bounds * retval;
 }
 
@@ -142,7 +141,7 @@ vec4 sampleAtlasNearest(sampler2D tex, vec4 pos) {
   // Apply mask
   float voxelMask = texture2D(textureAtlasMask, o).x;
   voxelMask = mix(voxelMask, 1.0, maskAlpha);
-  voxelColor.rgb *= voxelMask;
+  voxelColor *= voxelMask;
 
   return bounds * voxelColor;
 }
@@ -232,7 +231,7 @@ vec4 integrateVolume(
       col.xyz *= BRIGHTNESS;
       C = max(col, C);
     } else {
-      col = luma2Alpha(col, GAMMA_MIN, GAMMA_MAX, GAMMA_SCALE);
+      col = applyGamma(col, GAMMA_MIN, GAMMA_MAX, GAMMA_SCALE);
       col.xyz *= BRIGHTNESS;
       // for practical use the density only matters for regular volume integration
       col.w *= DENSITY;

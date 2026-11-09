@@ -36,6 +36,7 @@ uniform vec3 outlierColor;
 uniform uint outlierDrawMode;
 uniform vec3 outOfRangeColor;
 uniform uint outOfRangeDrawMode;
+uniform float objectOpacity;
 
 uniform uint highlightedId;
 
@@ -158,5 +159,8 @@ vec4 getObjectColor(ivec2 sUv, float opacity) {
 
 void main() {
   ivec2 vUv = ivec2(int(gl_FragCoord.x), int(gl_FragCoord.y));
-  gl_FragColor = getObjectColor(vUv, 1.0);
+  if (objectOpacity == 0.0) {
+    discard;
+  }
+  gl_FragColor = getObjectColor(vUv, objectOpacity);
 }

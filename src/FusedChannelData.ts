@@ -134,6 +134,7 @@ export default class FusedChannelData {
           value: null,
         },
         lutMinMax: { value: new Vector2(0, 255) },
+        opacity: { value: 1.0 },
         srcTexture: {
           value: null,
         },
@@ -187,6 +188,7 @@ export default class FusedChannelData {
         hideOutOfRange: { value: false },
         segIdToGlobalId: { value: initialSegIdToGlobalId },
         segIdOffset: { value: 0 },
+        objectOpacity: { value: 1.0 },
       },
       fragmentShader: fragShaderSrc,
       ...this.fuseMaterialProps,
@@ -295,6 +297,7 @@ export default class FusedChannelData {
         mat.uniforms.outlierDrawMode.value = feature.outlierDrawMode;
         mat.uniforms.outOfRangeDrawMode.value = feature.outOfRangeDrawMode;
         mat.uniforms.hideOutOfRange.value = feature.hideOutOfRange;
+        mat.uniforms.objectOpacity.value = combination[i].opacity;
 
         let globalIdLookupInfo = feature.frameToGlobalIdLookup.get(snap.frame);
         if (!globalIdLookupInfo) {
@@ -311,6 +314,7 @@ export default class FusedChannelData {
         // the lut texture is spanning only the data range of the channel, not the datatype range
         mat.uniforms.lutMinMax.value = new Vector2(snap.rawMin, snap.rawMax);
         mat.uniforms.lutSampler.value = snap.lutTexture;
+        mat.uniforms.opacity.value = combination[i].opacity;
       }
       this.fuseScene.add(new Mesh(this.fuseGeometry, mat));
     }

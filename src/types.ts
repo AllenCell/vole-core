@@ -143,6 +143,8 @@ export interface FuseChannel {
   lut: Uint8Array;
   // zero is a sentinel value to disable from fusion
   rgbColor: [number, number, number] | number;
+  /** Opacity, in a [0, 1] range. */
+  opacity: number;
   // if we are colorizing by feature, all the following inputs are needed
   feature?: ColorizeFeature;
 }
@@ -155,6 +157,8 @@ export interface VolumeChannelDisplayOptions {
   enabled?: boolean;
   /** RGB color array, with values in the range of [0, 255]. */
   color?: [number, number, number];
+  /** Opacity of the channel, in a [0, 1] range. */
+  opacity?: number;
   /** RGB color array for specular (highlight) color, with values in the range of [0, 255]. */
   specularColor?: [number, number, number];
   /** RGB color array for emissive (glow) color, with values in the range of [0, 255]. */
