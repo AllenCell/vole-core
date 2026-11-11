@@ -2,7 +2,7 @@ import { Box3, Vector3 } from "three";
 
 import Volume from "../Volume.js";
 import type { VolumeDims } from "../VolumeDims.js";
-import { CImageInfo, createDefaultMetadata, type ImageInfo } from "../ImageInfo.js";
+import type { ImageInfo } from "../ImageInfo.js";
 import type { TypedArray, NumberType } from "../types.js";
 import { MAX_ATLAS_EDGE } from "./VolumeLoaderUtils.js";
 import { PrefetchDirection } from "./zarr_utils/types.js";
@@ -103,9 +103,9 @@ export type RawChannelDataCallback = (
  * Loaders may keep state for reuse between volume creation and volume loading, and should be kept alive until volume
  * loading is complete. (See `createVolume`)
  */
-export abstract class VolumeLoader {
+export interface VolumeLoader {
   /** Use `VolumeDims` to further refine a `LoadSpec` for use in `createVolume` */
-  abstract getDims(loadSpec: LoadSpec): VolumeDims[];
+  getDims(loadSpec: LoadSpec): VolumeDims[];
 
   /**
    * Creates an `ImageInfo` object from a `LoadSpec`, which may be passed to the `Volume` constructor to create an
@@ -114,7 +114,7 @@ export abstract class VolumeLoader {
    * Also returns a new `LoadSpec` that may have been modified from the input `LoadSpec` to reflect the constraints or
    * abilities of the loader. This new `LoadSpec` should be used when constructing the `Volume`, _not_ the original.
    */
-  abstract getImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo;
+  getImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo;
 
   /**
    * Begins loading per-channel data for the volume specified by `imageInfo` and `loadSpec`.
@@ -128,7 +128,7 @@ export abstract class VolumeLoader {
    *
    * The returned promise should resolve when all data has been loaded, or reject if any error occurs while loading.
    */
-  abstract loadRawChannelData(
+  loadData(
     imageInfo: ImageInfo,
     loadSpec: LoadSpec,
     onUpdateVolumeMetadata: (imageInfo?: ImageInfo, loadSpec?: LoadSpec) => void,
@@ -136,9 +136,7 @@ export abstract class VolumeLoader {
   ): Promise<void>;
 
   /** Change which directions to prioritize when prefetching. Currently only implemented on `OMEZarrLoader`. */
-  setPrefetchPriority(_directions: PrefetchDirection[]): void {
-    // no-op by default
-  }
+  setPrefetchPriority(directions: PrefetchDirection[]): void;
 
   /**
    * By default channel data can arrive out of order and at different times.
@@ -147,59 +145,7 @@ export abstract class VolumeLoader {
    * to see all channels update at the same time.
    * @param sync Set true to force all requested channels to load at the same time
    */
-  syncMultichannelLoading(_sync: boolean): void {
-    // default behavior is async, to update channels as they arrive, depending on each
-    // loader's implementation details.
-  }
+  syncMultichannelLoading(sync: boolean): void;
 
-  updateFetchOptions(_options: Partial<ZarrLoaderFetchOptions>): void {
-    // no-op by default
-  }
-
-  /**
-   * Begin loading a volume's data, as specified in its `LoadSpec`.
-   *
-   * Pass a callback to respond when this request loads a new channel. This callback will execute after the one
-   * assigned in `createVolume`, if any.
-   *
-   * The returned `Promise` resolves once all channels load, or rejects with any error that occurs during loading.
-   */
-  // TODO make this return a promise that resolves when loading is done?
-  // TODO this is not cancellable in the sense that any async requests initiated here are not stored
-  // in a way that they can be interrupted.
-  // TODO explicitly passing a `LoadSpec` is now rarely useful. Remove?
-  async loadVolumeData(
-    volume: Volume,
-    loadSpecOverride?: LoadSpec,
-    onChannelLoaded?: PerChannelCallback
-  ): Promise<void> {
-    const onUpdateMetadata = (imageInfo?: ImageInfo, loadSpec?: LoadSpec): void => {
-      if (imageInfo) {
-        volume.imageInfo = new CImageInfo(imageInfo);
-        volume.imageMetadata = createDefaultMetadata(imageInfo);
-        volume.updateDimensions();
-        volume.updateChannelCount();
-      }
-      volume.loadSpec = { ...loadSpec, ...spec };
-    };
-
-    const onChannelData: RawChannelDataCallback = (channelIndices, dtypes, dataArrays, ranges, atlasDims) => {
-      for (let i = 0; i < channelIndices.length; i++) {
-        const channelIndex = channelIndices[i];
-        const dtype = dtypes[i];
-        const data = dataArrays[i];
-        const range = ranges[i];
-        const time = volume.loadSpec.time;
-        if (atlasDims) {
-          volume.setChannelDataFromAtlas(channelIndex, data, atlasDims[0], atlasDims[1], range, dtype, time);
-        } else {
-          volume.setChannelDataFromVolume(channelIndex, data, range, dtype, time);
-        }
-        onChannelLoaded?.(volume, channelIndex);
-      }
-    };
-
-    const spec = { ...volume.loadSpec, ...loadSpecOverride };
-    return this.loadRawChannelData(volume.imageInfo.imageInfo, spec, onUpdateMetadata, onChannelData);
-  }
+  updateFetchOptions(options: Partial<ZarrLoaderFetchOptions>): void;
 }
