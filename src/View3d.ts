@@ -28,7 +28,7 @@ import {
 } from "./types.js";
 import { IDrawableObject } from "./drawables/IDrawableObject.js";
 import { Axis } from "./types.js";
-import { PerChannelCallback } from "./loaders/IVolumeLoader.js";
+import { PerChannelCallback } from "./loaders/VolumeLoader.js";
 import { WorkerLoader } from "./workers/VolumeLoaderContext.js";
 import Line3d from "./drawables/lines/Line3d.js";
 import EventDispatcher from "./EventDispatcher.js";
