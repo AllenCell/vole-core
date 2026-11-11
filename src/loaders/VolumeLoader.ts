@@ -2,9 +2,9 @@ import { Box3, Vector3 } from "three";
 
 import Volume from "../Volume.js";
 import type { VolumeDims } from "../VolumeDims.js";
-import { CImageInfo, type ImageInfo } from "../ImageInfo.js";
+import { CImageInfo, createDefaultMetadata, type ImageInfo } from "../ImageInfo.js";
 import type { TypedArray, NumberType } from "../types.js";
-import { createDefaultMetadata, MAX_ATLAS_EDGE } from "./VolumeLoaderUtils.js";
+import { MAX_ATLAS_EDGE } from "./VolumeLoaderUtils.js";
 import { PrefetchDirection } from "./zarr_utils/types.js";
 import type { ZarrLoaderFetchOptions } from "./OmeZarrLoader.js";
 
@@ -105,7 +105,7 @@ export type RawChannelDataCallback = (
  */
 export abstract class VolumeLoader {
   /** Use `VolumeDims` to further refine a `LoadSpec` for use in `createVolume` */
-  abstract loadDims(loadSpec: LoadSpec): Promise<VolumeDims[]>;
+  abstract getDims(loadSpec: LoadSpec): VolumeDims[];
 
   /**
    * Creates an `ImageInfo` object from a `LoadSpec`, which may be passed to the `Volume` constructor to create an
@@ -114,7 +114,7 @@ export abstract class VolumeLoader {
    * Also returns a new `LoadSpec` that may have been modified from the input `LoadSpec` to reflect the constraints or
    * abilities of the loader. This new `LoadSpec` should be used when constructing the `Volume`, _not_ the original.
    */
-  abstract createImageInfo(loadSpec: LoadSpec): Promise<LoadedVolumeInfo>;
+  abstract getImageInfo(loadSpec: LoadSpec): LoadedVolumeInfo;
 
   /**
    * Begins loading per-channel data for the volume specified by `imageInfo` and `loadSpec`.
@@ -154,14 +154,6 @@ export abstract class VolumeLoader {
 
   updateFetchOptions(_options: Partial<ZarrLoaderFetchOptions>): void {
     // no-op by default
-  }
-
-  async createVolume(loadSpec: LoadSpec, onChannelLoaded?: PerChannelCallback): Promise<Volume> {
-    const { imageInfo, loadSpec: adjustedLoadSpec } = await this.createImageInfo(loadSpec);
-    const vol = new Volume(imageInfo, adjustedLoadSpec, this);
-    vol.channelLoadCallback = onChannelLoaded;
-    vol.imageMetadata = createDefaultMetadata(imageInfo);
-    return vol;
   }
 
   /**

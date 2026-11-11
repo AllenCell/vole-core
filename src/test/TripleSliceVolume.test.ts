@@ -68,6 +68,7 @@ import type { ImageInfo } from "../ImageInfo.js";
 import TripleSliceVolume from "../TripleSliceVolume.js";
 import Volume from "../Volume.js";
 import { SettingsFlags, VolumeRenderSettings } from "../VolumeRenderSettings.js";
+import type { VolumeLoader } from "../loaders/VolumeLoader.js";
 
 const imageInfo: ImageInfo = {
   name: "anisotropic",
@@ -93,6 +94,18 @@ const imageInfo: ImageInfo = {
   },
 };
 
+function createTestLoader(): VolumeLoader {
+  return {
+    getDims: vi.fn(() => imageInfo.multiscaleLevelDims),
+    getImageInfo: vi.fn((loadSpec) => ({ imageInfo, loadSpec })),
+    loadVolumeData: vi.fn(),
+    setPrefetchPriority: vi.fn(),
+    syncMultichannelLoading: vi.fn(),
+    loadRawChannelData: vi.fn(),
+    updateFetchOptions: vi.fn(),
+  };
+}
+
 function projectionPlane(projection: Object3D): Object3D {
   return projection.children.find((child) => child.name === "Plane")!;
 }
@@ -100,7 +113,7 @@ function projectionPlane(projection: Object3D): Object3D {
 describe("TripleSliceVolume", () => {
   it("initializes each projection plane with its axis-specific dimensions", () => {
     // Arrange
-    const volume = new Volume(imageInfo);
+    const volume = new Volume(createTestLoader());
 
     // Act
     const renderer = new TripleSliceVolume(volume, new VolumeRenderSettings(volume));
@@ -119,7 +132,7 @@ describe("TripleSliceVolume", () => {
 
   it("ignores the complete alignment transform in the fixed projection layout", () => {
     // Arrange
-    const volume = new Volume(imageInfo);
+    const volume = new Volume(createTestLoader());
     const settings = new VolumeRenderSettings(volume);
     settings.translation = new Vector3(0.25, -0.5, 0.75);
     settings.rotation = new Euler(0.1, 0.2, 0.3);

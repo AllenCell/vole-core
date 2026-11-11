@@ -26,7 +26,7 @@ export interface State {
   timerId: number;
   scene: number;
 
-  loader: VolumeLoader[];
+  loader?: VolumeLoader[];
 
   density: number;
   maskAlpha: number;
