@@ -1,6 +1,14 @@
 import { deserializeError } from "serialize-error";
 import SlotMap from "../slot_map.js";
-import type { Task, TaskHandle, WorkerResponse, WorkerRequest, TaskArgs } from "./types.js";
+import type {
+  Task,
+  TaskHandle,
+  WorkerResponse,
+  WorkerRequest,
+  TaskArgs,
+  WorkerReturnResponse,
+  WorkerSuspendResponse,
+} from "./types.js";
 import { BorrowGuard, markBorrowed } from "./borrow_guard.js";
 
 export const taskHandle = <T extends Task>(
@@ -20,9 +28,15 @@ type WaitingTask<In extends unknown[], Out> = {
   args: In;
 };
 
+const isReturnResponse = <T extends Task>(
+  response: WorkerResponse<T>
+): response is WorkerSuspendResponse & WorkerReturnResponse<T> => {
+  return (response as WorkerReturnResponse<T>).id !== undefined;
+};
+
 export class TaskPool {
   private workerCount = 0;
-  private idleWorkers: Worker[] = [];
+  private idleWorkers: { worker: Worker; runningTasks: number }[] = [];
   private promises: SlotMap<StoredPromise> = new SlotMap();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private queue: WaitingTask<any[], any>[] = [];
@@ -32,7 +46,7 @@ export class TaskPool {
     public maxWorkers = navigator.hardwareConcurrency ?? 4
   ) {}
 
-  private handleWorkerMessage(message: WorkerResponse<Task<string, unknown[], unknown>>) {
+  private handleWorkerReturn(message: WorkerReturnResponse) {
     const promise = this.promises.remove(message.id);
     if (promise === undefined) {
       console.error(
@@ -67,15 +81,52 @@ export class TaskPool {
     const worker = new Worker(this.workerPath, { type: "module" });
     let ready = false;
     worker.onmessage = (message) => {
-      this.idleWorkers.push(worker);
+      const response = message.data as WorkerResponse;
+
+      const { runningTasks } = response;
+      if (runningTasks === 0) {
+        this.idleWorkers.push({ worker, runningTasks });
+      } else {
+        this.idleWorkers.unshift({ worker, runningTasks });
+      }
+
       if (!ready) {
         ready = true;
         this.submitTasks();
+      } else if (isReturnResponse(response)) {
+        this.handleWorkerReturn(response);
       } else {
-        this.handleWorkerMessage(message.data);
+        this.submitTasks();
       }
     };
     this.workerCount += 1;
+  }
+
+  private getWorker(): Worker | undefined {
+    if (this.idleWorkers.length === 0) {
+      // We're out of workers! We should probably have more of them
+      if (this.workerCount < this.maxWorkers) {
+        this.addWorker();
+      }
+      return undefined;
+    }
+
+    if (this.idleWorkers[this.idleWorkers.length - 1].runningTasks === 0) {
+      const { worker } = this.idleWorkers.pop()!;
+      return worker;
+    }
+
+    let workerEntry = this.idleWorkers[0];
+    let workerIndex = 0;
+    for (let i = 1; i < this.idleWorkers.length; i++) {
+      if (this.idleWorkers[i].runningTasks < workerEntry.runningTasks) {
+        workerEntry = this.idleWorkers[i];
+        workerIndex = i;
+      }
+    }
+
+    this.idleWorkers.splice(workerIndex, 1);
+    return workerEntry.worker;
   }
 
   private submitTasks() {
@@ -100,12 +151,9 @@ export class TaskPool {
         }
       }
 
-      const worker = this.idleWorkers.pop();
+      const worker = this.getWorker();
       if (worker === undefined) {
         // We have a ready task but we're out of workers to run it on
-        if (this.workerCount < this.maxWorkers) {
-          this.addWorker();
-        }
         return;
       }
 
