@@ -57,7 +57,7 @@ export type WorkerRequest<T extends Task = Task> = {
   args: Parameters<T>;
 };
 
-export type WorkerResponse<T extends Task = Task> = {
+export type WorkerReturnResponse<T extends Task = Task> = {
   id: number;
   task: T["taskId"];
   borrows: TypedArray[];
@@ -71,3 +71,11 @@ export type WorkerResponse<T extends Task = Task> = {
       result: ErrorObject;
     }
 );
+
+export type WorkerSuspendResponse = {
+  runningTasks: number;
+};
+
+export type WorkerResponse<T extends Task = Task> =
+  | WorkerSuspendResponse
+  | (WorkerSuspendResponse & WorkerReturnResponse<T>);
