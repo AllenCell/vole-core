@@ -21,10 +21,8 @@ export function remapUri(url: string): string {
     // remap gs://bucket/key to https://storage.googleapis.com/bucket/key
     newUrl = newUrl.replace(GCS_URL_PREFIX, "https://storage.googleapis.com/");
   } else if (newUrl.startsWith(VAST_FILES_PREFIX)) {
-    // remap /allen/aics/... to https://vast-files.int.allencell.org/...
     newUrl = newUrl.replace(VAST_FILES_PREFIX, VAST_FILES_URL);
   } else if (newUrl.startsWith(FMS_FILES_PREFIX)) {
-    // remap /allen/programs/allencell/data/proj0/... to https://s3.us-west-2.amazonaws.com/production.files.allencell.org/...
     newUrl = newUrl.replace(FMS_FILES_PREFIX, FMS_FILES_URL);
   }
 
