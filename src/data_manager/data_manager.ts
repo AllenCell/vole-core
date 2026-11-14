@@ -1,12 +1,4 @@
-import type {
-  ChunkId,
-  ChunkPriority,
-  ChunkEntry,
-  DataManagerLimits,
-  LocalChunkId,
-  Chunk,
-  DeviceInterface,
-} from "./types.js";
+import type { ChunkId, ChunkPriority, ChunkEntry, DataManagerLimits, LocalChunkId, Chunk } from "./types.js";
 import {
   chunkIdToString,
   ChunkState,
@@ -23,6 +15,8 @@ import {
 import type { NumberType, TypedArray } from "../types.js";
 import PriorityQueue from "./priority_queue.js";
 import { VolumeDims } from "../VolumeDims.js";
+import type { DeviceInterface } from "./device_interface.js";
+import { dataTypeToSize } from "./utils.js";
 
 const SUBSCRIBER_ID = Symbol("DataManager.subscriberId");
 
@@ -58,17 +52,6 @@ const swapRemove = <T>(arr: T[], index: number) => {
   if (replace !== undefined && index < length) {
     arr[index] = replace;
   }
-};
-
-const dataTypeToByteLength: { [T in NumberType]: number } = {
-  int8: 1,
-  int16: 2,
-  int32: 4,
-  uint8: 1,
-  uint16: 2,
-  uint32: 4,
-  float32: 4,
-  float64: 8,
 };
 
 type ChunkQueue = PriorityQueue<ChunkPriority, string>;
@@ -208,7 +191,7 @@ export default class DataManager<Dev, Tex> {
       return 0;
     }
     const { x, y, z, dataType } = dims;
-    return x * y * z * dataTypeToByteLength[dataType];
+    return x * y * z * dataTypeToSize[dataType];
   }
 
   /**
