@@ -1,12 +1,13 @@
-import type { IChunkSource, IDataSubscriber } from "../data_manager/data_manager.js";
+import type { IDataSubscriber } from "../data_manager/data_manager.js";
 import DataManager from "../data_manager/data_manager.js";
 import type { DeviceInterface } from "../data_manager/device_interface.js";
+import type { ChunkSource } from "../data_manager/sources/chunk_source.js";
 import { type ChunkPriority, ChunkPriorityLevel } from "../data_manager/types.js";
 import type { TypedArray, NumberType } from "../types.js";
 
 const mockSource = () => {
   return {
-    getDims: vi.fn<IChunkSource["getDims"]>(() => [
+    getDims: vi.fn<ChunkSource["getDims"]>(() => [
       {
         shape: [7, 7, 7, 7, 7],
         spacing: [1, 1, 1, 1, 1],
@@ -16,13 +17,23 @@ const mockSource = () => {
         timeUnit: "second",
       },
     ]),
-    getChunk: vi.fn<IChunkSource["getChunk"]>(async ({ tczyx }) => {
-      const length = tczyx.slice(2).reduce((len, coord) => (coord >= 3 ? len : len * 2), 1);
+    getKey: vi.fn<ChunkSource["getKey"]>(async (id) => {
+      const length = id.tczyx.slice(2).reduce((len, coord) => (coord >= 3 ? len : len * 2), 1);
       const data = new Uint8Array(length).fill(0);
-      data.set(tczyx);
-      return { data, dtype: "uint8" };
+      data.set(id.tczyx);
+      return [{ data, dtype: "uint8", id }];
     }),
-  } satisfies IChunkSource;
+    getMeta: vi.fn<ChunkSource["getMeta"]>(() => ({
+      channelNames: ["one", "two", "three"],
+      transform: {
+        translation: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+      },
+    })),
+    chunkIdToStorageId: vi.fn<ChunkSource["chunkIdToStorageId"]>((id) => id),
+    storageIdToChunkIds: vi.fn<ChunkSource["storageIdToChunkIds"]>((id) => [id]),
+  } satisfies ChunkSource;
 };
 
 type MockTex = {
@@ -69,7 +80,7 @@ describe("request priority", () => {
     queue(2, 2);
     manager.update();
 
-    const getCalls = sourceMock.getChunk.mock.calls;
+    const getCalls = sourceMock.getKey.mock.calls;
     expect(getCalls[0][0].tczyx[4]).toEqual(2);
     expect(getCalls[1][0].tczyx[4]).toEqual(0);
     expect(getCalls[2][0].tczyx[4]).toEqual(1);
@@ -87,7 +98,7 @@ describe("request priority", () => {
     queue(1, { level: ChunkPriorityLevel.VISIBLE, score: 0 });
     manager.update();
 
-    const getCalls = sourceMock.getChunk.mock.calls;
+    const getCalls = sourceMock.getKey.mock.calls;
     expect(getCalls[0][0].tczyx[4]).toEqual(1);
     expect(getCalls[1][0].tczyx[4]).toEqual(0);
   });

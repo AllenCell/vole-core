@@ -28,7 +28,9 @@ export function parseHexColor(color: string | undefined): [number, number, numbe
 }
 
 /** Extracts channel names from a `ZarrSource`. Handles missing `omeroMetadata`. Does *not* resolve name collisions. */
-export function getSourceChannelMeta(src: ZarrSource): {
+export function getSourceChannelMeta(
+  src: Pick<ZarrSource, "axesTCZYX" | "omeroMetadata" | "channelOffset" | "scaleLevels">
+): {
   names: string[];
   colors: ([number, number, number] | undefined)[];
 } {
