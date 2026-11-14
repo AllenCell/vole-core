@@ -128,7 +128,14 @@ export class OMEZarrSource implements ChunkSource {
     const multiscale = this.scaleLevels[key.multiscale];
     const [keyT, keyC, idZ, idY, idX] = key.tczyx;
 
-    // If this chunk contains more than one timepoint and/or channel, we need to know how to separate them
+    // If this chunk contains more than one timepoint and/or channel, we need to know how to separate them.
+    // TODO this source doesn't know how to reorder the chunk it receives, and will fail when...
+    //   1. The T and/or C dimension is ordered after at least one spatial dimension (e.g. ZCYX)
+    //   2. At least one spatial dimension that comes before T or C (e.g. Z in ZCYX) has chunk shape > 1
+    //   3. At least one of T or C that comes after a spatial dimension (e.g. C in ZCYX) has chunk shape > 1
+    // For absolute maximum robustness, this method would recognize that case and call `reorderChunk` before separating
+    //   chunks. I haven't implemented this because I could find no zarrs that actually fit these nonstandard
+    //   conditions, but if we encounter one in the future, this is the spot to add support for it.
     const [shapeT, shapeC] = orderByTCZYX(multiscale.chunks, this.axesTCZYX, 1);
     const [sizeT, sizeC] = orderByTCZYX(multiscale.shape, this.axesTCZYX, 1);
     // Does C come before T in the dimension order?
