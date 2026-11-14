@@ -10,7 +10,7 @@ type BorrowGuardEvents = { restored: void };
  * Wraps a `TypedArray` that may be temporarily transferred to a worker for processing.
  *
  * A `TypedArray` guarded by this class must be accessed through the `get` method, which returns `undefined` when the
- * buffer is on a worker. The guard will trigger the `"restored"` event when it is returned to the main thread.
+ * buffer is on a worker. The guard will trigger the `restored` event when it is returned to the main thread.
  */
 export class BorrowGuard<T extends TypedArray = TypedArray> extends EventDispatcher<BorrowGuardEvents> {
   private [guardMarker] = true as const;

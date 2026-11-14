@@ -3,10 +3,14 @@ import type { ErrorObject } from "serialize-error";
 import type { TypedArray, NumberType } from "../../types.js";
 import type { BorrowGuard } from "./borrow_guard.js";
 
+export type TaskResult<Out> =
+  | { result: Out; transfer: Transferable[] }
+  | Promise<{ result: Out; transfer: Transferable[] }>;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Task<Id extends string = string, In extends any[] = any[], Out = any> = {
   taskId: Id;
-  (...args: In): { result: Out; transfer: Transferable[] };
+  (...args: In): TaskResult<Out>;
 };
 
 export type TaskHandle<In extends unknown[], Out> = {
@@ -53,17 +57,25 @@ export type WorkerRequest<T extends Task = Task> = {
   args: Parameters<T>;
 };
 
-export type WorkerResponse<T extends Task = Task> = {
+export type WorkerReturnResponse<T extends Task = Task> = {
   id: number;
   task: T["taskId"];
   borrows: TypedArray[];
 } & (
   | {
       error: false;
-      result: ReturnType<T>["result"];
+      result: Awaited<ReturnType<T>>["result"];
     }
   | {
       error: true;
       result: ErrorObject;
     }
 );
+
+export type WorkerSuspendResponse = {
+  runningTasks: number;
+};
+
+export type WorkerResponse<T extends Task = Task> =
+  | WorkerSuspendResponse
+  | (WorkerSuspendResponse & WorkerReturnResponse<T>);

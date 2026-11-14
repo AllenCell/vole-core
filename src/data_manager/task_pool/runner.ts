@@ -2,7 +2,14 @@ import { serializeError } from "serialize-error";
 
 import type { TypedArray, NumberType } from "../../types.js";
 import { getBorrowed } from "./borrow_guard.js";
-import type { Task, WorkerRequest, WorkerResponse } from "./types.js";
+import type {
+  Task,
+  TaskResult,
+  WorkerRequest,
+  WorkerResponse,
+  WorkerReturnResponse,
+  WorkerSuspendResponse,
+} from "./types.js";
 
 /**
  * Combines a `string` task `id` and a `handler` into a `Task` that can be registered and called with a `TaskPool`.
@@ -35,7 +42,7 @@ import type { Task, WorkerRequest, WorkerResponse } from "./types.js";
  */
 export const task = <Id extends string, In extends unknown[], Out>(
   id: Id,
-  handler: (...args: In) => { result: Out; transfer: Transferable[] }
+  handler: (...args: In) => TaskResult<Out>
 ): Task<Id, In, Out> => {
   const task = handler as Task<Id, In, Out>;
   task.taskId = id;
@@ -44,8 +51,9 @@ export const task = <Id extends string, In extends unknown[], Out>(
 
 export const initWorker = (tasks: Task[]) => {
   const handlers = new Map(tasks.map((task) => [task.taskId, task]));
+  let runningTasks = 0;
 
-  const runTask = ({ id, task, args }: WorkerRequest): [WorkerResponse, Transferable[]] => {
+  const runTask = async ({ id, task, args }: WorkerRequest): Promise<[WorkerReturnResponse, Transferable[]]> => {
     const handler = handlers.get(task);
 
     // Extract borrowed `TypedArray`s, which must be returned to the main thread on completion
@@ -61,24 +69,37 @@ export const initWorker = (tasks: Task[]) => {
       return arg;
     });
 
+    // Bail if there's no handler registered for this task type
     if (handler === undefined) {
       const result = serializeError(new Error(`TaskPool: tried to run nonexistent task ${task}`));
       return [{ id, task, borrows, result, error: true }, borrowedBuffers];
     }
 
+    // Queue a (JS) task to check if this task finishes or suspends
+    let taskRunning = true;
+    self.setTimeout(() => {
+      if (taskRunning) {
+        self.postMessage({ runningTasks } satisfies WorkerSuspendResponse);
+      }
+    }, 0);
+
     try {
-      const { result, transfer } = handler(...processedArgs);
+      const { result, transfer } = await handler(...processedArgs);
+      taskRunning = false;
       return [{ id, task, borrows, result, error: false }, [...borrowedBuffers, ...transfer]];
     } catch (e) {
+      taskRunning = false;
       const result = serializeError(e);
       return [{ id, task, borrows, result, error: true }, borrowedBuffers];
     }
   };
 
-  self.onmessage = ({ data }: MessageEvent<WorkerRequest>) => {
-    const [result, transfer] = runTask(data);
-    self.postMessage(result, { transfer });
+  self.onmessage = async ({ data }: MessageEvent<WorkerRequest>) => {
+    runningTasks++;
+    const [result, transfer] = await runTask(data);
+    runningTasks--;
+    self.postMessage({ ...result, runningTasks } satisfies WorkerResponse, { transfer });
   };
 
-  self.postMessage(null);
+  self.postMessage({ runningTasks: 0 } satisfies WorkerSuspendResponse);
 };

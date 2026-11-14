@@ -17,6 +17,8 @@ import {
 import { unitNameToSymbol } from "../../loaders/VolumeLoaderUtils.js";
 import type { Chunk, LocalChunkId } from "../types.js";
 import type { NumberType, TypedArray } from "../../types.js";
+import type { TaskPool } from "../task_pool/task_pool.js";
+import { withWorkerCodec } from "./ome_zarr/with_threaded_codecs.js";
 
 const PLACEHOLDER_NAME = "zarr source";
 const PLACEHOLDER_SCENE_INDEX = 0;
@@ -34,8 +36,8 @@ export class OMEZarrSource implements ChunkSource {
     public readonly axesTCZYX: [number, number, number, number, number]
   ) {}
 
-  static async new(url: string): Promise<OMEZarrSource> {
-    const store = new zarr.FetchStore(url);
+  static async new(url: string, options?: { pool?: TaskPool }): Promise<OMEZarrSource> {
+    const store = zarr.extendStore(new zarr.FetchStore(url), (s) => withWorkerCodec(s, { pool: options?.pool }));
     const root = zarr.root(store);
 
     const group = await zarr.open(root, { kind: "group" });
