@@ -1,4 +1,4 @@
-import { PriorityQueue } from "../data_manager/priority_queue.js";
+import PriorityQueue from "../data_manager/priority_queue.js";
 
 const ENTRY_COUNT = 100;
 
