@@ -18,6 +18,7 @@ import type { DeviceInterface } from "./device_interface.js";
 import { dataTypeToSize } from "./utils.js";
 import { ChunkSource, type VolumeMetadata, type ExtVolumeDims } from "./sources/chunk_source.js";
 import SlotMap from "./slot_map.js";
+import { BorrowGuard } from "./task_pool/borrow_guard.js";
 
 const SUBSCRIBER_ID = Symbol("DataManager.subscriberId");
 
@@ -146,7 +147,6 @@ export default class DataManager<Dev, Tex> {
           this.tryAbortRequest(entry.data.requestId);
         }
         break;
-      case ChunkState.WORKER:
     }
   }
 
@@ -335,8 +335,14 @@ export default class DataManager<Dev, Tex> {
       }
 
       const { x, y, z, dataType } = dims;
-      const { memory } = loadEntry.data as { memory: TypedArray };
-      const texture = this.deviceInterface.createTexture(memory, dataType, [x, y, z], deviceHandle);
+      const { memory } = loadEntry.data as { memory: BorrowGuard };
+
+      const array = memory.get();
+      if (array === undefined) {
+        continue;
+      }
+
+      const texture = this.deviceInterface.createTexture(array, dataType, [x, y, z], deviceHandle);
 
       this.sources[loadId.source].subscribers.forEach((s) => s.onChunkOnGpu?.(loadId, texture));
 
@@ -386,7 +392,6 @@ export default class DataManager<Dev, Tex> {
           this.tryAbortRequest(evictEntry.data.requestId);
           break;
         default:
-          // TODO `WORKER` state may be weird to manage here
           console.error(
             `chunk ${evictKey} queued for eviction in an invalid state (expected "memory", found ${evictEntry.data.state})`
           );
@@ -493,8 +498,8 @@ export default class DataManager<Dev, Tex> {
   private onChunkLoad(source: number, chunk: Chunk<NumberType>) {
     const globalId = { ...chunk.id, source };
     const key = chunkIdToString(globalId);
-    const { data: memory, dtype } = chunk;
-    if (memory.byteLength > this.limits.size) {
+    const { data: array, dtype } = chunk;
+    if (array.byteLength > this.limits.size) {
       console.error(`received chunk ${key} which is larger than the cache limit`);
       return;
     }
@@ -503,6 +508,7 @@ export default class DataManager<Dev, Tex> {
       console.error(`received chunk ${key} with invalid source id ${source}`);
       return;
     }
+    const memory = new BorrowGuard(array);
     const data = { state: ChunkState.MEMORY as const, memory, dtype };
 
     let chunkEntry = this.chunks.get(key);
@@ -580,8 +586,8 @@ export default class DataManager<Dev, Tex> {
     this.updateChunkPriority(chunkKey, chunkEntry);
   }
 
-  /** Get a chunk's data buffer, if it is in memory. */
-  getChunkBuffer(chunkId: ChunkId): TypedArray<NumberType> | undefined {
+  /** Get a chunk's data buffer wrapped in a `BorrowGuard`, if it is in memory. */
+  getChunkGuard(chunkId: ChunkId): BorrowGuard | undefined {
     const key = chunkIdToString(chunkId);
     const entry = this.chunks.get(key);
     if (entry === undefined) {
@@ -593,6 +599,15 @@ export default class DataManager<Dev, Tex> {
     }
 
     return undefined;
+  }
+
+  /**
+   * Get a chunk's data buffer, if it is in memory and not in use on a worker.
+   *
+   * Shorthand for `dataManager.getChunkGuard(chunkId)?.get();`
+   */
+  getChunkBuffer(chunkId: ChunkId): TypedArray | undefined {
+    return this.getChunkGuard(chunkId)?.get();
   }
 
   /** Get a chunk's texture, if it is on the GPU. */
