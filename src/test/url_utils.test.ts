@@ -31,6 +31,12 @@ describe("remapUrl", () => {
     expect(remapUri("/allen/aics/example/data.zarr")).toBe("https://vast-files.int.allencell.org/example/data.zarr");
   });
 
+  it("maps FMS file paths", () => {
+    expect(remapUri("/allen/programs/allencell/data/proj0/folder/some-data.ome.zarr")).toBe(
+      "https://s3.us-west-2.amazonaws.com/production.files.allencell.org/folder/some-data.ome.zarr"
+    );
+  });
+
   it("maps example Human Organ Atlas GCS URL", () => {
     expect(
       remapUri(
