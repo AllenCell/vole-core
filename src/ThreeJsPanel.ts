@@ -81,6 +81,7 @@ export class ThreeJsPanel {
 
   private meshRenderTarget: WebGLRenderTarget;
   private meshRenderToBuffer: RenderToBuffer;
+  private backgroundScene = new Scene();
 
   public animateFuncs: AnimateFunction[];
   public postMeshRenderFuncs: AnimateFunction[];
@@ -881,6 +882,13 @@ export class ThreeJsPanel {
       this.renderer.render(this.scene, this.camera);
 
       // Step 4: Render the mesh render target out to the screen.
+      this.meshRenderToBuffer.material.uniforms.image.value = this.meshRenderTarget.texture;
+      this.meshRenderToBuffer.render(this.renderer);
+    } else {
+      // Use the same render-target clear and canvas copy as other modes, without rendering their mesh layers.
+      this.renderer.setRenderTarget(this.meshRenderTarget);
+      this.renderer.render(this.backgroundScene, this.camera);
+      this.renderer.autoClear = false;
       this.meshRenderToBuffer.material.uniforms.image.value = this.meshRenderTarget.texture;
       this.meshRenderToBuffer.render(this.renderer);
     }
