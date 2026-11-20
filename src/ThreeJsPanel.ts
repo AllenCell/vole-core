@@ -298,43 +298,33 @@ export class ThreeJsPanel {
     this.perspectiveCamera.updateProjectionMatrix();
   }
 
-  resetPerspectiveCamera(): void {
-    this.perspectiveCamera.position.x = 0.0;
-    this.perspectiveCamera.position.y = 0.0;
-    this.perspectiveCamera.position.z = DEFAULT_PERSPECTIVE_CAMERA_DISTANCE;
+  resetPerspectiveCamera(center = new Vector3(0)): void {
+    this.perspectiveCamera.position.copy(center);
+    this.perspectiveCamera.position.z += DEFAULT_PERSPECTIVE_CAMERA_DISTANCE;
     this.perspectiveCamera.up.x = 0.0;
     this.perspectiveCamera.up.y = 1.0;
     this.perspectiveCamera.up.z = 0.0;
   }
 
-  resetOrthographicCameraX(): void {
-    this.orthographicCameraX.position.x = 2.0;
-    this.orthographicCameraX.position.y = 0.0;
-    this.orthographicCameraX.position.z = 0.0;
-    this.orthographicCameraX.up.x = 0.0;
-    this.orthographicCameraX.up.y = 0.0;
-    this.orthographicCameraX.up.z = 1.0;
-    this.orthographicCameraX.lookAt(new Vector3(0, 0, 0));
+  resetOrthographicCameraX(center = new Vector3(0)): void {
+    this.orthographicCameraX.position.copy(center);
+    this.orthographicCameraX.position.x += 2.0;
+    this.orthographicCameraX.up = new Vector3(0.0, 0.0, 1.0);
+    this.orthographicCameraX.lookAt(center);
   }
 
-  resetOrthographicCameraY(): void {
-    this.orthographicCameraY.position.x = 0.0;
-    this.orthographicCameraY.position.y = 2.0;
-    this.orthographicCameraY.position.z = 0.0;
-    this.orthographicCameraY.up.x = 0.0;
-    this.orthographicCameraY.up.y = 0.0;
-    this.orthographicCameraY.up.z = 1.0;
-    this.orthographicCameraY.lookAt(new Vector3(0, 0, 0));
+  resetOrthographicCameraY(center = new Vector3(0)): void {
+    this.orthographicCameraY.position.copy(center);
+    this.orthographicCameraY.position.y += 2.0;
+    this.orthographicCameraY.up = new Vector3(0.0, 0.0, 1.0);
+    this.orthographicCameraY.lookAt(center);
   }
 
-  resetOrthographicCameraZ(): void {
-    this.orthographicCameraZ.position.x = 0.0;
-    this.orthographicCameraZ.position.y = 0.0;
-    this.orthographicCameraZ.position.z = 2.0;
-    this.orthographicCameraZ.up.x = 0.0;
-    this.orthographicCameraZ.up.y = 1.0;
-    this.orthographicCameraZ.up.z = 0.0;
-    this.orthographicCameraZ.lookAt(new Vector3(0, 0, 0));
+  resetOrthographicCameraZ(center = new Vector3(0)): void {
+    this.orthographicCameraZ.position.copy(center);
+    this.orthographicCameraZ.position.z += 2.0;
+    this.orthographicCameraZ.up = new Vector3(0.0, 1.0, 0.0);
+    this.orthographicCameraZ.lookAt(center);
   }
 
   private resetTripleCamera(): void {
@@ -352,35 +342,24 @@ export class ThreeJsPanel {
     return this.renderer.xr.enabled;
   }
 
-  resetToPerspectiveCamera(): void {
-    const aspect = this.getWidth() / this.getHeight();
-
-    this.perspectiveCamera = new PerspectiveCamera(
-      this.fov,
-      aspect,
-      DEFAULT_PERSPECTIVE_CAMERA_NEAR,
-      DEFAULT_PERSPECTIVE_CAMERA_FAR
-    );
-    this.resetPerspectiveCamera();
-    this.switchViewMode("3D");
-    this.controls.object = this.perspectiveCamera;
-    this.controls.enabled = true;
+  resetCamera(center?: Vector3): void {
     this.controls.reset();
-  }
-
-  resetCamera(): void {
     if (this.camera === this.perspectiveCamera) {
-      this.resetPerspectiveCamera();
+      this.resetPerspectiveCamera(center);
     } else if (this.camera === this.orthographicCameraX) {
-      this.resetOrthographicCameraX();
+      this.resetOrthographicCameraX(center);
     } else if (this.camera === this.orthographicCameraY) {
-      this.resetOrthographicCameraY();
+      this.resetOrthographicCameraY(center);
     } else if (this.camera === this.orthographicCameraZ) {
-      this.resetOrthographicCameraZ();
+      this.resetOrthographicCameraZ(center);
     } else if (this.camera === this.tripleCamera) {
       this.resetTripleCamera();
     }
-    this.controls.reset();
+
+    if (center !== undefined) {
+      this.controls.target = center;
+    }
+    this.controls.update();
   }
 
   setupAxisHelper(): void {
